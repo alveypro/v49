@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏢 机构级V13系统 - 专业股票分析平台</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 10px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+        }
+        .btn:hover {
+            background: #5a6fd8;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .feature {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .code {
+            background: #333;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏢 机构级V13系统</h1>
+            <p>专业股票分析平台 | 机构级数据架构 | 超级选股引擎</p>
+        </div>
+        
+        <div class="features">
+            <div class="feature">
+                <h3>🏢 机构级数据</h3>
+                <p>基于Tushare Pro的真实数据源，覆盖全市场5000+股票</p>
+            </div>
+            <div class="feature">
+                <h3>🚀 超级选股引擎</h3>
+                <p>10种差异化投资策略，智能筛选优质股票</p>
+            </div>
+            <div class="feature">
+                <h3>📊 13个核心模块</h3>
+                <p>全方位股票分析功能，从技术分析到价值投资</p>
+            </div>
+            <div class="feature">
+                <h3>⚡ 高性能架构</h3>
+                <p>优化的数据缓存和API调用，响应速度快</p>
+            </div>
+        </div>
+        
+        <h2>📥 快速开始</h2>
+        <div class="code">
+git clone https://github.com/maowillpi/mcc.git
+cd mcc
+pip install -r requirements.txt
+echo "你的Tushare_Pro_Token" > .tushare_token
+cd versions/v068/src
+streamlit run "机构级V13系统_v068_永久版.py" --server.port 8501
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="https://github.com/maowillpi/mcc" class="btn">🔗 GitHub 仓库</a>
+            <a href="https://github.com/maowillpi/mcc/releases" class="btn">📦 下载发布版</a>
+        </div>
+        
+        <div style="text-align: center; margin-top: 40px; color: #666;">
+            <p>🏢 机构级V13系统 | 专业股票分析平台 | 让投资更智能</p>
+        </div>
+    </div>
+</body>
+</html>
