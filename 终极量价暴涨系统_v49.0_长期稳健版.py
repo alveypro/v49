@@ -150,6 +150,7 @@ DEFAULT_PERMANENT_DB_PATH = os.path.join(BASE_DIR, "permanent_stock_database.db"
 DEFAULT_TUSHARE_TOKEN = ""
 DEFAULT_UPDATE_PASSWORD = ""
 DEFAULT_BACKTEST_PASSWORD = ""
+DEFAULT_MAX_SCAN_CONCURRENCY = 1
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 def _load_config() -> Dict[str, Any]:
@@ -168,6 +169,7 @@ PERMANENT_DB_PATH = os.getenv("PERMANENT_DB_PATH") or _CONFIG.get("PERMANENT_DB_
 TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN") or _CONFIG.get("TUSHARE_TOKEN") or DEFAULT_TUSHARE_TOKEN
 UPDATE_PASSWORD = os.getenv("UPDATE_PASSWORD") or _CONFIG.get("UPDATE_PASSWORD") or DEFAULT_UPDATE_PASSWORD
 BACKTEST_PASSWORD = os.getenv("BACKTEST_PASSWORD") or _CONFIG.get("BACKTEST_PASSWORD") or DEFAULT_BACKTEST_PASSWORD
+MAX_SCAN_CONCURRENCY = int(os.getenv("MAX_SCAN_CONCURRENCY") or _CONFIG.get("MAX_SCAN_CONCURRENCY") or DEFAULT_MAX_SCAN_CONCURRENCY)
 SIM_TRADING_DB_PATH = os.path.join(BASE_DIR, "sim_trading.db")
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -177,6 +179,39 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return default
+
+
+def _acquire_scan_slot(task_key: str, max_age_sec: int = 7200) -> Optional[str]:
+    """Acquire a scan slot across sessions. Returns lock path or None if busy."""
+    lock_dir = os.path.join(BASE_DIR, ".locks")
+    try:
+        os.makedirs(lock_dir, exist_ok=True)
+    except Exception:
+        return None
+    for i in range(1, max(1, MAX_SCAN_CONCURRENCY) + 1):
+        lock_path = os.path.join(lock_dir, f"{task_key}_{i}.lock")
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(time.time()).encode("utf-8"))
+            os.close(fd)
+            return lock_path
+        except FileExistsError:
+            try:
+                age = time.time() - os.path.getmtime(lock_path)
+                if age > max_age_sec:
+                    os.remove(lock_path)
+                    continue
+            except Exception:
+                pass
+    return None
+
+
+def _release_scan_slot(lock_path: Optional[str]) -> None:
+    if lock_path and os.path.exists(lock_path):
+        try:
+            os.remove(lock_path)
+        except Exception:
+            pass
 
 
 def _get_latest_prices(ts_codes: List[str], db_path: str = PERMANENT_DB_PATH) -> Dict[str, Dict[str, Any]]:
@@ -6441,261 +6476,268 @@ def main():
             st.markdown("---")
             
             if st.button("🚀 开始扫描（v4.0潜伏为王）", type="primary", use_container_width=True, key="scan_btn_v4"):
-                with st.spinner(f"🔍 正在扫描全市场股票..."):
+                lock_path = _acquire_scan_slot("scan")
+                if not lock_path:
+                    st.warning("⚠️ 当前已有扫描在运行，请稍后重试")
+                else:
                     try:
-                        # 获取数据
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        
-                        # 🔥 构建查询条件（对齐v6.0逻辑）
-                        if scan_all_v4 and cap_min_v4 == 0 and cap_max_v4 == 0:
-                            # 真正的全市场扫描（无市值限制）
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn)
-                            st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
-                        else:
-                            # 按市值筛选
-                            cap_min_wan = cap_min_v4 * 10000 if cap_min_v4 > 0 else 0
-                            cap_max_wan = cap_max_v4 * 10000 if cap_max_v4 > 0 else 999999999
-                            
-                            # 🔍 先统计数据库中所有股票的市值情况
-                            total_query = """
-                                SELECT 
-                                    COUNT(*) as total,
-                                    COUNT(CASE WHEN circ_mv IS NOT NULL AND circ_mv > 0 THEN 1 END) as has_mv,
-                                    MIN(circ_mv)/10000 as min_mv,
-                                    MAX(circ_mv)/10000 as max_mv
-                                FROM stock_basic
-                            """
-                            total_stats = pd.read_sql_query(total_query, conn)
-                            
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.circ_mv >= ?
-                                AND sb.circ_mv <= ?
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
-                            
-                            # 显示详细的统计信息
-                            with st.expander("📊 数据库统计信息", expanded=False):
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    st.metric("数据库总股票数", f"{total_stats['total'].iloc[0]}只")
-                                with col2:
-                                    st.metric("有市值数据", f"{total_stats['has_mv'].iloc[0]}只")
-                                with col3:
-                                    st.metric("市值范围", f"{total_stats['min_mv'].iloc[0]:.1f}-{total_stats['max_mv'].iloc[0]:.1f}亿")
+                        with st.spinner(f"🔍 正在扫描全市场股票..."):
+                            try:
+                                # 获取数据
+                                conn = sqlite3.connect(PERMANENT_DB_PATH)
                                 
-                                st.info(f"🔍 查询条件：{cap_min_wan}万元 ≤ 市值 ≤ {cap_max_wan}万元（即{cap_min_v4}亿-{cap_max_v4}亿）")
-                            
-                            st.info(f"📊 市值筛选模式：找到{len(stocks_df)}只股票（{cap_min_v4 if cap_min_v4 > 0 else 0}-{cap_max_v4 if cap_max_v4 > 0 else '不限'}亿）")
-                        
-                        if stocks_df.empty:
-                            st.error(f"❌ 未找到符合条件的股票，请检查是否已更新市值数据")
-                            st.info("💡 提示：请先到Tab1（数据中心）点击「更新市值数据」")
-                            conn.close()
-                        else:
-                            # 显示市值范围确认
-                            if len(stocks_df) > 0:
-                                actual_min_mv = stocks_df['circ_mv'].min() / 10000
-                                actual_max_mv = stocks_df['circ_mv'].max() / 10000
-                                st.success(f"✅ 实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元，开始八维评分...")
-                            
-                            # 评分结果列表
-                            results = []
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
-                                
-                                # 更新进度
-                                progress = (idx + 1) / len(stocks_df)
-                                progress_bar.progress(progress)
-                                status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
-                                
-                                try:
-                                    # 获取该股票的历史数据
-                                    data_query = """
-                                        SELECT trade_date, close_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
+                                # 🔥 构建查询条件（对齐v6.0逻辑）
+                                if scan_all_v4 and cap_min_v4 == 0 and cap_max_v4 == 0:
+                                    # 真正的全市场扫描（无市值限制）
+                                    query = """
+                                        SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                        FROM stock_basic sb
+                                        ORDER BY sb.circ_mv DESC
                                     """
-                                    stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                    stocks_df = pd.read_sql_query(query, conn)
+                                    st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
+                                else:
+                                    # 按市值筛选
+                                    cap_min_wan = cap_min_v4 * 10000 if cap_min_v4 > 0 else 0
+                                    cap_max_wan = cap_max_v4 * 10000 if cap_max_v4 > 0 else 999999999
                                     
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
+                                    # 🔍 先统计数据库中所有股票的市值情况
+                                    total_query = """
+                                        SELECT 
+                                            COUNT(*) as total,
+                                            COUNT(CASE WHEN circ_mv IS NOT NULL AND circ_mv > 0 THEN 1 END) as has_mv,
+                                            MIN(circ_mv)/10000 as min_mv,
+                                            MAX(circ_mv)/10000 as max_mv
+                                        FROM stock_basic
+                                    """
+                                    total_stats = pd.read_sql_query(total_query, conn)
+                                    
+                                    query = """
+                                        SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                        FROM stock_basic sb
+                                        WHERE sb.circ_mv >= ?
+                                        AND sb.circ_mv <= ?
+                                        ORDER BY sb.circ_mv DESC
+                                    """
+                                    stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                                    
+                                    # 显示详细的统计信息
+                                    with st.expander("📊 数据库统计信息", expanded=False):
+                                        col1, col2, col3 = st.columns(3)
+                                        with col1:
+                                            st.metric("数据库总股票数", f"{total_stats['total'].iloc[0]}只")
+                                        with col2:
+                                            st.metric("有市值数据", f"{total_stats['has_mv'].iloc[0]}只")
+                                        with col3:
+                                            st.metric("市值范围", f"{total_stats['min_mv'].iloc[0]:.1f}-{total_stats['max_mv'].iloc[0]:.1f}亿")
                                         
-                                        # 使用v4.0评分器
-                                        score_result = vp_analyzer.evaluator_v4.evaluate_stock_v4(stock_data)
+                                        st.info(f"🔍 查询条件：{cap_min_wan}万元 ≤ 市值 ≤ {cap_max_wan}万元（即{cap_min_v4}亿-{cap_max_v4}亿）")
+                                    
+                                    st.info(f"📊 市值筛选模式：找到{len(stocks_df)}只股票（{cap_min_v4 if cap_min_v4 > 0 else 0}-{cap_max_v4 if cap_max_v4 > 0 else '不限'}亿）")
+                                
+                                if stocks_df.empty:
+                                    st.error(f"❌ 未找到符合条件的股票，请检查是否已更新市值数据")
+                                    st.info("💡 提示：请先到Tab1（数据中心）点击「更新市值数据」")
+                                    conn.close()
+                                else:
+                                    # 显示市值范围确认
+                                    if len(stocks_df) > 0:
+                                        actual_min_mv = stocks_df['circ_mv'].min() / 10000
+                                        actual_max_mv = stocks_df['circ_mv'].max() / 10000
+                                        st.success(f"✅ 实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元，开始八维评分...")
+                                    
+                                    # 评分结果列表
+                                    results = []
+                                    
+                                    # 进度条
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+                                    
+                                    for idx, row in stocks_df.iterrows():
+                                        ts_code = row['ts_code']
+                                        stock_name = row['name']
                                         
-                                        if score_result and score_result.get('final_score', 0) >= score_threshold_v4:
-                                            dim_scores = score_result.get('dimension_scores', {})
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': row['industry'],
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '潜伏价值': f"{dim_scores.get('潜伏价值', 0):.1f}",
-                                                '底部特征': f"{dim_scores.get('底部特征', 0):.1f}",
-                                                '量价配合': f"{dim_scores.get('量价配合', 0):.1f}",
-                                                'MACD趋势': f"{dim_scores.get('MACD趋势', 0):.1f}",
-                                                '均线多头': f"{dim_scores.get('均线多头', 0):.1f}",
-                                                '主力行为': f"{dim_scores.get('主力行为', 0):.1f}",
-                                                '启动确认': f"{dim_scores.get('启动确认', 0):.1f}",
-                                                '涨停基因': f"{dim_scores.get('涨停基因', 0):.1f}",
-                                                '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
-                                                '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
-                                                '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '推荐理由': score_result.get('description', ''),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v4}分）")
-                                
-                                # 转换为DataFrame
-                                results_df = pd.DataFrame(results)
-                                
-                                # 保存到session_state
-                                st.session_state['v4_scan_results'] = results_df
-                                
-                                # 显示统计
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("推荐股票", f"{len(results)}只")
-                                with col2:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col3:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col4:
-                                    grade_s = sum(1 for g in results_df['评级'] if g == 'S')
-                                    grade_a = sum(1 for g in results_df['评级'] if g == 'A')
-                                    st.metric("S+A级", f"{grade_s+grade_a}只")
-                                
-                                st.markdown("---")
-                                st.subheader("🏆 推荐股票列表（v4.0潜伏为王·8维评分）")
-                                
-                                # 选择显示模式
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    ["📊 完整评分", "🎯 核心指标", "💡 简洁模式"],
-                                    horizontal=True,
-                                    key="v4_view_mode"
-                                )
-                                
-                                # 根据模式选择列
-                                if view_mode == "📊 完整评分":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '潜伏价值', '底部特征', '量价配合', 'MACD趋势', 
-                                                   '均线多头', '主力行为', '启动确认', '涨停基因',
-                                                   '最新价格', '止损价', '止盈价', '推荐理由']
-                                elif view_mode == "🎯 核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '潜伏价值', '底部特征', '最新价格', '止损价', '止盈价', '推荐理由']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '评级', '最新价格', '推荐理由']
-                                
-                                display_df = results_df[display_cols]
-                                
-                                # 显示表格（添加颜色）
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v4.0潜伏为王评分（100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="S:顶级 A:优质 B:良好 C:合格",
-                                            width="small"
-                                        ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
-                                            help="智能分析推荐原因",
-                                            width="large"
+                                        # 更新进度
+                                        progress = (idx + 1) / len(stocks_df)
+                                        progress_bar.progress(progress)
+                                        status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
+                                        
+                                        try:
+                                            # 获取该股票的历史数据
+                                            data_query = """
+                                                SELECT trade_date, close_price, vol, pct_chg
+                                                FROM daily_trading_data
+                                                WHERE ts_code = ?
+                                                ORDER BY trade_date DESC
+                                                LIMIT 120
+                                            """
+                                            stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                            
+                                            if len(stock_data) >= 60:
+                                                # 添加name列用于ST检查
+                                                stock_data['name'] = stock_name
+                                                
+                                                # 使用v4.0评分器
+                                                score_result = vp_analyzer.evaluator_v4.evaluate_stock_v4(stock_data)
+                                                
+                                                if score_result and score_result.get('final_score', 0) >= score_threshold_v4:
+                                                    dim_scores = score_result.get('dimension_scores', {})
+                                                    results.append({
+                                                        '股票代码': ts_code,
+                                                        '股票名称': stock_name,
+                                                        '行业': row['industry'],
+                                                        '流通市值': f"{row['circ_mv']/10000:.1f}亿",
+                                                        '综合评分': f"{score_result['final_score']:.1f}",
+                                                        '评级': score_result.get('grade', '-'),
+                                                        '潜伏价值': f"{dim_scores.get('潜伏价值', 0):.1f}",
+                                                        '底部特征': f"{dim_scores.get('底部特征', 0):.1f}",
+                                                        '量价配合': f"{dim_scores.get('量价配合', 0):.1f}",
+                                                        'MACD趋势': f"{dim_scores.get('MACD趋势', 0):.1f}",
+                                                        '均线多头': f"{dim_scores.get('均线多头', 0):.1f}",
+                                                        '主力行为': f"{dim_scores.get('主力行为', 0):.1f}",
+                                                        '启动确认': f"{dim_scores.get('启动确认', 0):.1f}",
+                                                        '涨停基因': f"{dim_scores.get('涨停基因', 0):.1f}",
+                                                        '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
+                                                        '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
+                                                        '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
+                                                        '推荐理由': score_result.get('description', ''),
+                                                        '原始数据': score_result
+                                                    })
+                                        
+                                        except Exception as e:
+                                            logger.warning(f"评分失败 {ts_code}: {e}")
+                                            continue
+                                    
+                                    progress_bar.empty()
+                                    status_text.empty()
+                                    conn.close()
+                                    
+                                    # 显示结果
+                                    if results:
+                                        st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v4}分）")
+                                        
+                                        # 转换为DataFrame
+                                        results_df = pd.DataFrame(results)
+                                        
+                                        # 保存到session_state
+                                        st.session_state['v4_scan_results'] = results_df
+                                        
+                                        # 显示统计
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        with col1:
+                                            st.metric("推荐股票", f"{len(results)}只")
+                                        with col2:
+                                            avg_score = results_df['综合评分'].astype(float).mean()
+                                            st.metric("平均评分", f"{avg_score:.1f}分")
+                                        with col3:
+                                            max_score = results_df['综合评分'].astype(float).max()
+                                            st.metric("最高评分", f"{max_score:.1f}分")
+                                        with col4:
+                                            grade_s = sum(1 for g in results_df['评级'] if g == 'S')
+                                            grade_a = sum(1 for g in results_df['评级'] if g == 'A')
+                                            st.metric("S+A级", f"{grade_s+grade_a}只")
+                                        
+                                        st.markdown("---")
+                                        st.subheader("🏆 推荐股票列表（v4.0潜伏为王·8维评分）")
+                                        
+                                        # 选择显示模式
+                                        view_mode = st.radio(
+                                            "显示模式",
+                                            ["📊 完整评分", "🎯 核心指标", "💡 简洁模式"],
+                                            horizontal=True,
+                                            key="v4_view_mode"
                                         )
-                                    }
-                                )
-                                
-                                # 操作建议
-                                st.markdown("---")
-                                st.info("""
-                                ### 💡 v4.0策略操作建议（潜伏为王）
-                                
-                                **🎯 核心理念**: 在启动前潜伏，而不是启动后追高
-                                
-                                **📊 评级说明**:
-                                - **S级(≥80分)**: 🔥 完美潜伏机会，重点关注，建议仓位18-20%
-                                - **A级(70-79分)**: ⭐ 优质潜伏标的，积极关注，建议仓位15-18%
-                                - **B级(60-69分)**: 💡 良好机会，谨慎关注，建议仓位10-15%
-                                - **C级(50-59分)**: 📊 合格标的，保持观察，建议仓位5-10%
-                                
-                                **⏰ 持仓周期**: 5天（数据验证的黄金周期）
-                                
-                                **💰 止盈止损**:
-                                - 止损：严格执行-3%止损，或跌破止损价
-                                - 止盈：达到+4%或止盈价时分批止盈
-                                
-                                **📈 仓位管理**:
-                                - 单只股票：不超过20%仓位
-                                - 总仓位：最多持有3-5只
-                                - 分批建仓：首次50%，确认后加仓50%
-                                
-                                **⚠️ 风险提示**:
-                                - 本策略经2000只股票、274个真实信号验证，胜率56.6%
-                                - 严格执行纪律，不追涨不抄底
-                                - 设置好止损，控制单笔亏损<3%
-                                """)
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop('原始数据', axis=1)
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label="📥 导出完整结果（CSV）",
-                                    data=csv,
-                                    file_name=f"核心策略_V4_潜伏为王_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v4}分的股票\n\n**建议：**\n1. 降低评分阈值到50-55分\n2. 扩大市值范围\n3. 增加候选股票数量")
-                    
-                    except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
+                                        
+                                        # 根据模式选择列
+                                        if view_mode == "📊 完整评分":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '潜伏价值', '底部特征', '量价配合', 'MACD趋势', 
+                                                           '均线多头', '主力行为', '启动确认', '涨停基因',
+                                                           '最新价格', '止损价', '止盈价', '推荐理由']
+                                        elif view_mode == "🎯 核心指标":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '潜伏价值', '底部特征', '最新价格', '止损价', '止盈价', '推荐理由']
+                                        else:  # 简洁模式
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
+                                                           '评级', '最新价格', '推荐理由']
+                                        
+                                        display_df = results_df[display_cols]
+                                        
+                                        # 显示表格（添加颜色）
+                                        st.dataframe(
+                                            display_df,
+                                            use_container_width=True,
+                                            hide_index=True,
+                                            column_config={
+                                                "综合评分": st.column_config.NumberColumn(
+                                                    "综合评分",
+                                                    help="v4.0潜伏为王评分（100分制）",
+                                                    format="%.1f分"
+                                                ),
+                                                "评级": st.column_config.TextColumn(
+                                                    "评级",
+                                                    help="S:顶级 A:优质 B:良好 C:合格",
+                                                    width="small"
+                                                ),
+                                                "推荐理由": st.column_config.TextColumn(
+                                                    "推荐理由",
+                                                    help="智能分析推荐原因",
+                                                    width="large"
+                                                )
+                                            }
+                                        )
+                                        
+                                        # 操作建议
+                                        st.markdown("---")
+                                        st.info("""
+                                        ### 💡 v4.0策略操作建议（潜伏为王）
+                                        
+                                        **🎯 核心理念**: 在启动前潜伏，而不是启动后追高
+                                        
+                                        **📊 评级说明**:
+                                        - **S级(≥80分)**: 🔥 完美潜伏机会，重点关注，建议仓位18-20%
+                                        - **A级(70-79分)**: ⭐ 优质潜伏标的，积极关注，建议仓位15-18%
+                                        - **B级(60-69分)**: 💡 良好机会，谨慎关注，建议仓位10-15%
+                                        - **C级(50-59分)**: 📊 合格标的，保持观察，建议仓位5-10%
+                                        
+                                        **⏰ 持仓周期**: 5天（数据验证的黄金周期）
+                                        
+                                        **💰 止盈止损**:
+                                        - 止损：严格执行-3%止损，或跌破止损价
+                                        - 止盈：达到+4%或止盈价时分批止盈
+                                        
+                                        **📈 仓位管理**:
+                                        - 单只股票：不超过20%仓位
+                                        - 总仓位：最多持有3-5只
+                                        - 分批建仓：首次50%，确认后加仓50%
+                                        
+                                        **⚠️ 风险提示**:
+                                        - 本策略经2000只股票、274个真实信号验证，胜率56.6%
+                                        - 严格执行纪律，不追涨不抄底
+                                        - 设置好止损，控制单笔亏损<3%
+                                        """)
+                                        
+                                        # 导出功能
+                                        st.markdown("---")
+                                        export_df = results_df.drop('原始数据', axis=1)
+                                        csv = _df_to_csv_bytes(export_df)
+                                        st.download_button(
+                                            label="📥 导出完整结果（CSV）",
+                                            data=csv,
+                                            file_name=f"核心策略_V4_潜伏为王_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                            mime="text/csv; charset=utf-8"
+                                        )
+                                        
+                                    else:
+                                        st.warning(f"⚠️ 未找到≥{score_threshold_v4}分的股票\n\n**建议：**\n1. 降低评分阈值到50-55分\n2. 扩大市值范围\n3. 增加候选股票数量")
+                            
+                            except Exception as e:
+                                st.error(f"❌ 扫描失败: {e}")
+                                import traceback
+                                st.code(traceback.format_exc())
+                        
+                    finally:
+                        _release_scan_slot(lock_path)
             # 显示之前的扫描结果
             if 'v4_scan_results' in st.session_state:
                 st.markdown("---")
@@ -6851,197 +6893,204 @@ def main():
             st.markdown("---")
             
             if st.button("🚀 开始扫描（v5.0启动确认型）", type="primary", use_container_width=True, key="scan_btn_v5"):
-                with st.spinner("正在扫描..."):
+                lock_path = _acquire_scan_slot("scan")
+                if not lock_path:
+                    st.warning("⚠️ 当前已有扫描在运行，请稍后重试")
+                else:
                     try:
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        
-                        # 市值转换（用户输入的是亿元，数据库中是万元）
-                        cap_min_wan = cap_min_v5 * 10000  # 转换为万元
-                        cap_max_wan = cap_max_v5 * 10000  # 转换为万元
-                        
-                        # 查询符合市值条件的股票（扫描全市场）
-                        query = """
-                            SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                            FROM stock_basic sb
-                            WHERE sb.circ_mv >= ?
-                            AND sb.circ_mv <= ?
-                            ORDER BY RANDOM()
-                        """
-                        stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
-                        
-                        if stocks_df.empty:
-                            st.error(f"❌ 未找到符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，请检查是否已更新市值数据")
-                            st.info("💡 提示：请先到Tab5（数据中心）点击「更新市值数据」")
-                            conn.close()
-                        else:
-                            st.success(f"✅ 找到 {len(stocks_df)} 只符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，开始评分...")
-                            
-                            # 显示市值范围确认
-                            if len(stocks_df) > 0:
-                                actual_min_mv = stocks_df['circ_mv'].min() / 10000
-                                actual_max_mv = stocks_df['circ_mv'].max() / 10000
-                                st.info(f"📊 实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元")
-                            
-                            # 评分结果列表
-                            results = []
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
+                        with st.spinner("正在扫描..."):
+                            try:
+                                conn = sqlite3.connect(PERMANENT_DB_PATH)
                                 
-                                # 更新进度
-                                progress = (idx + 1) / len(stocks_df)
-                                progress_bar.progress(progress)
-                                status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
+                                # 市值转换（用户输入的是亿元，数据库中是万元）
+                                cap_min_wan = cap_min_v5 * 10000  # 转换为万元
+                                cap_max_wan = cap_max_v5 * 10000  # 转换为万元
                                 
-                                try:
-                                    # 获取该股票的历史数据
-                                    data_query = """
-                                        SELECT trade_date, close_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                    """
-                                    stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                # 查询符合市值条件的股票（扫描全市场）
+                                query = """
+                                    SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                    FROM stock_basic sb
+                                    WHERE sb.circ_mv >= ?
+                                    AND sb.circ_mv <= ?
+                                    ORDER BY RANDOM()
+                                """
+                                stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                                
+                                if stocks_df.empty:
+                                    st.error(f"❌ 未找到符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，请检查是否已更新市值数据")
+                                    st.info("💡 提示：请先到Tab5（数据中心）点击「更新市值数据」")
+                                    conn.close()
+                                else:
+                                    st.success(f"✅ 找到 {len(stocks_df)} 只符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，开始评分...")
                                     
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
+                                    # 显示市值范围确认
+                                    if len(stocks_df) > 0:
+                                        actual_min_mv = stocks_df['circ_mv'].min() / 10000
+                                        actual_max_mv = stocks_df['circ_mv'].max() / 10000
+                                        st.info(f"📊 实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元")
+                                    
+                                    # 评分结果列表
+                                    results = []
+                                    
+                                    # 进度条
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+                                    
+                                    for idx, row in stocks_df.iterrows():
+                                        ts_code = row['ts_code']
+                                        stock_name = row['name']
                                         
-                                        # 使用v5.0评分器（v5.0的方法名仍然是evaluate_stock_v4）
-                                        score_result = vp_analyzer.evaluator_v5.evaluate_stock_v4(stock_data)
+                                        # 更新进度
+                                        progress = (idx + 1) / len(stocks_df)
+                                        progress_bar.progress(progress)
+                                        status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
                                         
-                                        if score_result and score_result.get('final_score', 0) >= score_threshold_v5:
-                                            dim_scores = score_result.get('dimension_scores', {})
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': row['industry'],
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '启动确认': f"{dim_scores.get('启动确认', 0):.1f}",
-                                                '主力行为': f"{dim_scores.get('主力行为', 0):.1f}",
-                                                '涨停基因': f"{dim_scores.get('涨停基因', 0):.1f}",
-                                                'MACD趋势': f"{dim_scores.get('MACD趋势', 0):.1f}",
-                                                '量价配合': f"{dim_scores.get('量价配合', 0):.1f}",
-                                                '均线多头': f"{dim_scores.get('均线多头', 0):.1f}",
-                                                '潜伏价值': f"{dim_scores.get('潜伏价值', 0):.1f}",
-                                                '底部特征': f"{dim_scores.get('底部特征', 0):.1f}",
-                                                '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
-                                                '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
-                                                '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '推荐理由': score_result.get('description', ''),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v5}分）")
-                                
-                                # 转换为DataFrame
-                                results_df = pd.DataFrame(results)
-                                
-                                # 保存到session_state
-                                st.session_state['v5_scan_results'] = results_df
-                                
-                                # 显示统计
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("推荐股票", f"{len(results)}只")
-                                with col2:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col3:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col4:
-                                    grade_s = sum(1 for g in results_df['评级'] if g == 'S')
-                                    grade_a = sum(1 for g in results_df['评级'] if g == 'A')
-                                    st.metric("S+A级", f"{grade_s+grade_a}只")
-                                
-                                st.markdown("---")
-                                st.subheader("🏆 推荐股票列表（v5.0启动确认·8维评分）")
-                                
-                                # 选择显示模式
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    ["📊 完整评分", "🎯 核心指标", "💡 简洁模式"],
-                                    horizontal=True,
-                                    key="v5_view_mode"
-                                )
-                                
-                                # 根据模式选择列
-                                if view_mode == "📊 完整评分":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '启动确认', '主力行为', '涨停基因', 'MACD趋势', 
-                                                   '量价配合', '均线多头', '潜伏价值', '底部特征',
-                                                   '最新价格', '止损价', '止盈价', '推荐理由']
-                                elif view_mode == "🎯 核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '启动确认', '主力行为', '最新价格', '止损价', '止盈价', '推荐理由']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '评级', '最新价格', '推荐理由']
-                                
-                                display_df = results_df[display_cols]
-                                
-                                # 显示表格
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v5.0启动确认评分（100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="S:顶级 A:优质 B:良好 C:合格",
-                                            width="small"
-                                        ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
-                                            help="智能分析推荐原因",
-                                            width="large"
+                                        try:
+                                            # 获取该股票的历史数据
+                                            data_query = """
+                                                SELECT trade_date, close_price, vol, pct_chg
+                                                FROM daily_trading_data
+                                                WHERE ts_code = ?
+                                                ORDER BY trade_date DESC
+                                                LIMIT 120
+                                            """
+                                            stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                            
+                                            if len(stock_data) >= 60:
+                                                # 添加name列用于ST检查
+                                                stock_data['name'] = stock_name
+                                                
+                                                # 使用v5.0评分器（v5.0的方法名仍然是evaluate_stock_v4）
+                                                score_result = vp_analyzer.evaluator_v5.evaluate_stock_v4(stock_data)
+                                                
+                                                if score_result and score_result.get('final_score', 0) >= score_threshold_v5:
+                                                    dim_scores = score_result.get('dimension_scores', {})
+                                                    results.append({
+                                                        '股票代码': ts_code,
+                                                        '股票名称': stock_name,
+                                                        '行业': row['industry'],
+                                                        '流通市值': f"{row['circ_mv']/10000:.1f}亿",
+                                                        '综合评分': f"{score_result['final_score']:.1f}",
+                                                        '评级': score_result.get('grade', '-'),
+                                                        '启动确认': f"{dim_scores.get('启动确认', 0):.1f}",
+                                                        '主力行为': f"{dim_scores.get('主力行为', 0):.1f}",
+                                                        '涨停基因': f"{dim_scores.get('涨停基因', 0):.1f}",
+                                                        'MACD趋势': f"{dim_scores.get('MACD趋势', 0):.1f}",
+                                                        '量价配合': f"{dim_scores.get('量价配合', 0):.1f}",
+                                                        '均线多头': f"{dim_scores.get('均线多头', 0):.1f}",
+                                                        '潜伏价值': f"{dim_scores.get('潜伏价值', 0):.1f}",
+                                                        '底部特征': f"{dim_scores.get('底部特征', 0):.1f}",
+                                                        '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
+                                                        '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
+                                                        '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
+                                                        '推荐理由': score_result.get('description', ''),
+                                                        '原始数据': score_result
+                                                    })
+                                        
+                                        except Exception as e:
+                                            logger.warning(f"评分失败 {ts_code}: {e}")
+                                            continue
+                                    
+                                    progress_bar.empty()
+                                    status_text.empty()
+                                    conn.close()
+                                    
+                                    # 显示结果
+                                    if results:
+                                        st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v5}分）")
+                                        
+                                        # 转换为DataFrame
+                                        results_df = pd.DataFrame(results)
+                                        
+                                        # 保存到session_state
+                                        st.session_state['v5_scan_results'] = results_df
+                                        
+                                        # 显示统计
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        with col1:
+                                            st.metric("推荐股票", f"{len(results)}只")
+                                        with col2:
+                                            avg_score = results_df['综合评分'].astype(float).mean()
+                                            st.metric("平均评分", f"{avg_score:.1f}分")
+                                        with col3:
+                                            max_score = results_df['综合评分'].astype(float).max()
+                                            st.metric("最高评分", f"{max_score:.1f}分")
+                                        with col4:
+                                            grade_s = sum(1 for g in results_df['评级'] if g == 'S')
+                                            grade_a = sum(1 for g in results_df['评级'] if g == 'A')
+                                            st.metric("S+A级", f"{grade_s+grade_a}只")
+                                        
+                                        st.markdown("---")
+                                        st.subheader("🏆 推荐股票列表（v5.0启动确认·8维评分）")
+                                        
+                                        # 选择显示模式
+                                        view_mode = st.radio(
+                                            "显示模式",
+                                            ["📊 完整评分", "🎯 核心指标", "💡 简洁模式"],
+                                            horizontal=True,
+                                            key="v5_view_mode"
                                         )
-                                    }
-                                )
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop('原始数据', axis=1)
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label="📥 导出完整结果（CSV）",
-                                    data=csv,
-                                    file_name=f"核心策略_V5_启动确认_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v5}分的股票\n\n**建议：**\n1. 降低评分阈值到50-55分\n2. 扩大市值范围")
-                    
-                    except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
+                                        
+                                        # 根据模式选择列
+                                        if view_mode == "📊 完整评分":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '启动确认', '主力行为', '涨停基因', 'MACD趋势', 
+                                                           '量价配合', '均线多头', '潜伏价值', '底部特征',
+                                                           '最新价格', '止损价', '止盈价', '推荐理由']
+                                        elif view_mode == "🎯 核心指标":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '启动确认', '主力行为', '最新价格', '止损价', '止盈价', '推荐理由']
+                                        else:  # 简洁模式
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
+                                                           '评级', '最新价格', '推荐理由']
+                                        
+                                        display_df = results_df[display_cols]
+                                        
+                                        # 显示表格
+                                        st.dataframe(
+                                            display_df,
+                                            use_container_width=True,
+                                            hide_index=True,
+                                            column_config={
+                                                "综合评分": st.column_config.NumberColumn(
+                                                    "综合评分",
+                                                    help="v5.0启动确认评分（100分制）",
+                                                    format="%.1f分"
+                                                ),
+                                                "评级": st.column_config.TextColumn(
+                                                    "评级",
+                                                    help="S:顶级 A:优质 B:良好 C:合格",
+                                                    width="small"
+                                                ),
+                                                "推荐理由": st.column_config.TextColumn(
+                                                    "推荐理由",
+                                                    help="智能分析推荐原因",
+                                                    width="large"
+                                                )
+                                            }
+                                        )
+                                        
+                                        # 导出功能
+                                        st.markdown("---")
+                                        export_df = results_df.drop('原始数据', axis=1)
+                                        csv = _df_to_csv_bytes(export_df)
+                                        st.download_button(
+                                            label="📥 导出完整结果（CSV）",
+                                            data=csv,
+                                            file_name=f"核心策略_V5_启动确认_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                            mime="text/csv; charset=utf-8"
+                                        )
+                                        
+                                    else:
+                                        st.warning(f"⚠️ 未找到≥{score_threshold_v5}分的股票\n\n**建议：**\n1. 降低评分阈值到50-55分\n2. 扩大市值范围")
+                            
+                            except Exception as e:
+                                st.error(f"❌ 扫描失败: {e}")
+                                import traceback
+                                st.code(traceback.format_exc())
+                        
+                    finally:
+                        _release_scan_slot(lock_path)
             # 显示之前的扫描结果
             if 'v5_scan_results' in st.session_state:
                 st.markdown("---")
@@ -7184,222 +7233,229 @@ def main():
             
             # 扫描按钮
             if st.button("🔥 开始扫描（v6.0巅峰版）", type="primary", use_container_width=True, key="scan_v6_tab1"):
-                with st.spinner("⚡ v6.0巅峰版全市场扫描中...（三级过滤+严格评分）"):
+                lock_path = _acquire_scan_slot("scan")
+                if not lock_path:
+                    st.warning("⚠️ 当前已有扫描在运行，请稍后重试")
+                else:
                     try:
-                        # 获取股票列表
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        
-                        # 构建查询条件
-                        if scan_all_stocks:
-                            # 全市场扫描
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn)
-                            st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
-                        else:
-                            # 按市值筛选
-                            cap_min_wan = cap_min_v6_tab1 * 10000 if cap_min_v6_tab1 > 0 else 0
-                            cap_max_wan = cap_max_v6_tab1 * 10000 if cap_max_v6_tab1 > 0 else 999999999
-                            
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.circ_mv >= ?
-                                AND sb.circ_mv <= ?
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
-                        
-                        if len(stocks_df) == 0:
-                            st.error(f"❌ 未找到符合市值条件（{cap_min_v6_tab1}-{cap_max_v6_tab1}亿）的股票")
-                            conn.close()
-                        else:
-                            st.info(f"✅ 找到 {len(stocks_df)} 只符合市值条件的股票，开始三级过滤...")
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            results = []
-                            filter_failed_count = 0
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
+                        with st.spinner("⚡ v6.0巅峰版全市场扫描中...（三级过滤+严格评分）"):
+                            try:
+                                # 获取股票列表
+                                conn = sqlite3.connect(PERMANENT_DB_PATH)
                                 
-                                # 更新进度
-                                progress = (idx + 1) / len(stocks_df)
-                                progress_bar.progress(progress)
-                                status_text.text(f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}")
-                                
-                                try:
-                                    # 获取该股票的历史数据
-                                    data_query = """
-                                        SELECT trade_date, close_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
+                                # 构建查询条件
+                                if scan_all_stocks:
+                                    # 全市场扫描
+                                    query = """
+                                        SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                        FROM stock_basic sb
+                                        ORDER BY sb.circ_mv DESC
                                     """
-                                    stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                    stocks_df = pd.read_sql_query(query, conn)
+                                    st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
+                                else:
+                                    # 按市值筛选
+                                    cap_min_wan = cap_min_v6_tab1 * 10000 if cap_min_v6_tab1 > 0 else 0
+                                    cap_max_wan = cap_max_v6_tab1 * 10000 if cap_max_v6_tab1 > 0 else 999999999
                                     
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
+                                    query = """
+                                        SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                        FROM stock_basic sb
+                                        WHERE sb.circ_mv >= ?
+                                        AND sb.circ_mv <= ?
+                                        ORDER BY sb.circ_mv DESC
+                                    """
+                                    stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                                
+                                if len(stocks_df) == 0:
+                                    st.error(f"❌ 未找到符合市值条件（{cap_min_v6_tab1}-{cap_max_v6_tab1}亿）的股票")
+                                    conn.close()
+                                else:
+                                    st.info(f"✅ 找到 {len(stocks_df)} 只符合市值条件的股票，开始三级过滤...")
+                                    
+                                    # 进度条
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+                                    
+                                    results = []
+                                    filter_failed_count = 0
+                                    
+                                    for idx, row in stocks_df.iterrows():
+                                        ts_code = row['ts_code']
+                                        stock_name = row['name']
                                         
-                                        # 使用v6.0巅峰版评分器
-                                        score_result = vp_analyzer.evaluator_v6.evaluate_stock_v6(stock_data, ts_code)
+                                        # 更新进度
+                                        progress = (idx + 1) / len(stocks_df)
+                                        progress_bar.progress(progress)
+                                        status_text.text(f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}")
                                         
-                                        # 检查是否通过必要条件
-                                        if score_result.get('filter_failed', False):
-                                            filter_failed_count += 1
+                                        try:
+                                            # 获取该股票的历史数据
+                                            data_query = """
+                                                SELECT trade_date, close_price, vol, pct_chg
+                                                FROM daily_trading_data
+                                                WHERE ts_code = ?
+                                                ORDER BY trade_date DESC
+                                                LIMIT 120
+                                            """
+                                            stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                            
+                                            if len(stock_data) >= 60:
+                                                # 添加name列用于ST检查
+                                                stock_data['name'] = stock_name
+                                                
+                                                # 使用v6.0巅峰版评分器
+                                                score_result = vp_analyzer.evaluator_v6.evaluate_stock_v6(stock_data, ts_code)
+                                                
+                                                # 检查是否通过必要条件
+                                                if score_result.get('filter_failed', False):
+                                                    filter_failed_count += 1
+                                                    continue
+                                                
+                                                if score_result and score_result.get('final_score', 0) >= score_threshold_v6_tab1:
+                                                    dim_scores = score_result.get('dimension_scores', {})
+                                                    results.append({
+                                                        '股票代码': ts_code,
+                                                        '股票名称': stock_name,
+                                                        '行业': row['industry'],
+                                                        '流通市值': f"{row['circ_mv']/10000:.1f}亿",
+                                                        '综合评分': f"{score_result['final_score']:.1f}",
+                                                        '评级': score_result.get('grade', '-'),
+                                                        '资金流向': f"{dim_scores.get('资金流向', 0):.1f}",
+                                                        '板块热度': f"{dim_scores.get('板块热度', 0):.1f}",
+                                                        '短期动量': f"{dim_scores.get('短期动量', 0):.1f}",
+                                                        '龙头属性': f"{dim_scores.get('龙头属性', 0):.1f}",
+                                                        '相对强度': f"{dim_scores.get('相对强度', 0):.1f}",
+                                                        '技术突破': f"{dim_scores.get('技术突破', 0):.1f}",
+                                                        '安全边际': f"{dim_scores.get('安全边际', 0):.1f}",
+                                                        '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
+                                                        '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
+                                                        '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
+                                                        '推荐理由': score_result.get('description', ''),
+                                                        '协同组合': score_result.get('synergy_combo', '无'),
+                                                        '原始数据': score_result
+                                                    })
+                                        
+                                        except Exception as e:
+                                            logger.warning(f"评分失败 {ts_code}: {e}")
                                             continue
+                                    
+                                    progress_bar.empty()
+                                    status_text.empty()
+                                    conn.close()
+                                    
+                                    # 显示结果
+                                    st.markdown("---")
+                                    st.markdown(f"### 📊 三级过滤结果")
+                                    
+                                    col1, col2, col3, col4 = st.columns(4)
+                                    with col1:
+                                        st.metric("候选股票", f"{len(stocks_df)}只")
+                                    with col2:
+                                        st.metric("必要条件淘汰", f"{filter_failed_count}只", 
+                                                 delta=f"{filter_failed_count/len(stocks_df)*100:.1f}%")
+                                    with col3:
+                                        passed_count = len(stocks_df) - filter_failed_count
+                                        st.metric("进入评分", f"{passed_count}只",
+                                                 delta=f"{passed_count/len(stocks_df)*100:.1f}%")
+                                    with col4:
+                                        st.metric("最终筛选", f"{len(results)}只",
+                                                 delta=f"{len(results)/len(stocks_df)*100:.2f}%")
+                                    
+                                    if results:
+                                        st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v6_tab1}分）")
                                         
-                                        if score_result and score_result.get('final_score', 0) >= score_threshold_v6_tab1:
-                                            dim_scores = score_result.get('dimension_scores', {})
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': row['industry'],
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '资金流向': f"{dim_scores.get('资金流向', 0):.1f}",
-                                                '板块热度': f"{dim_scores.get('板块热度', 0):.1f}",
-                                                '短期动量': f"{dim_scores.get('短期动量', 0):.1f}",
-                                                '龙头属性': f"{dim_scores.get('龙头属性', 0):.1f}",
-                                                '相对强度': f"{dim_scores.get('相对强度', 0):.1f}",
-                                                '技术突破': f"{dim_scores.get('技术突破', 0):.1f}",
-                                                '安全边际': f"{dim_scores.get('安全边际', 0):.1f}",
-                                                '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
-                                                '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
-                                                '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '推荐理由': score_result.get('description', ''),
-                                                '协同组合': score_result.get('synergy_combo', '无'),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            st.markdown("---")
-                            st.markdown(f"### 📊 三级过滤结果")
-                            
-                            col1, col2, col3, col4 = st.columns(4)
-                            with col1:
-                                st.metric("候选股票", f"{len(stocks_df)}只")
-                            with col2:
-                                st.metric("必要条件淘汰", f"{filter_failed_count}只", 
-                                         delta=f"{filter_failed_count/len(stocks_df)*100:.1f}%")
-                            with col3:
-                                passed_count = len(stocks_df) - filter_failed_count
-                                st.metric("进入评分", f"{passed_count}只",
-                                         delta=f"{passed_count/len(stocks_df)*100:.1f}%")
-                            with col4:
-                                st.metric("最终筛选", f"{len(results)}只",
-                                         delta=f"{len(results)/len(stocks_df)*100:.2f}%")
-                            
-                            if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v6_tab1}分）")
-                                
-                                # 转换为DataFrame
-                                results_df = pd.DataFrame(results)
-                                
-                                # 保存到session_state
-                                st.session_state['v6_scan_results_tab1'] = results_df
-                                
-                                # 显示统计
-                                st.markdown("---")
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("推荐股票", f"{len(results)}只")
-                                with col2:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col3:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col4:
-                                    grade_s = sum(1 for g in results_df['评级'] if g == 'S')
-                                    grade_a = sum(1 for g in results_df['评级'] if g == 'A')
-                                    st.metric("S+A级", f"{grade_s+grade_a}只")
-                                
-                                st.markdown("---")
-                                st.subheader("🏆 推荐股票列表（v6.0巅峰版·七维评分）")
-                                
-                                # 选择显示模式
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    ["📊 完整评分", "🎯 核心指标", "📝 简洁模式"],
-                                    horizontal=True,
-                                    key="view_mode_v6_tab1"
-                                )
-                                
-                                if view_mode == "📊 完整评分":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金流向', '板块热度', '短期动量', '龙头属性', '相对强度', '技术突破', '安全边际',
-                                                   '最新价格', '止损价', '止盈价', '推荐理由', '协同组合']
-                                elif view_mode == "🎯 核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金流向', '板块热度', '龙头属性', '最新价格', '止损价', '止盈价', '推荐理由']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '评级', '最新价格', '推荐理由', '协同组合']
-                                
-                                display_df = results_df[display_cols]
-                                
-                                # 显示表格
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v6.0巅峰版评分（100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="S:顶级 A:优质 B:良好 C:合格",
-                                            width="small"
-                                        ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
-                                            help="智能分析推荐原因",
-                                            width="large"
+                                        # 转换为DataFrame
+                                        results_df = pd.DataFrame(results)
+                                        
+                                        # 保存到session_state
+                                        st.session_state['v6_scan_results_tab1'] = results_df
+                                        
+                                        # 显示统计
+                                        st.markdown("---")
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        with col1:
+                                            st.metric("推荐股票", f"{len(results)}只")
+                                        with col2:
+                                            avg_score = results_df['综合评分'].astype(float).mean()
+                                            st.metric("平均评分", f"{avg_score:.1f}分")
+                                        with col3:
+                                            max_score = results_df['综合评分'].astype(float).max()
+                                            st.metric("最高评分", f"{max_score:.1f}分")
+                                        with col4:
+                                            grade_s = sum(1 for g in results_df['评级'] if g == 'S')
+                                            grade_a = sum(1 for g in results_df['评级'] if g == 'A')
+                                            st.metric("S+A级", f"{grade_s+grade_a}只")
+                                        
+                                        st.markdown("---")
+                                        st.subheader("🏆 推荐股票列表（v6.0巅峰版·七维评分）")
+                                        
+                                        # 选择显示模式
+                                        view_mode = st.radio(
+                                            "显示模式",
+                                            ["📊 完整评分", "🎯 核心指标", "📝 简洁模式"],
+                                            horizontal=True,
+                                            key="view_mode_v6_tab1"
                                         )
-                                    }
-                                )
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop('原始数据', axis=1)
-                                csv = export_df.to_csv(index=False, encoding='utf-8-sig')
-                                st.download_button(
-                                    label="📥 导出完整结果（CSV）",
-                                    data=csv,
-                                    file_name=f"v6.0_巅峰版_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv"
-                                )
-                                
-                            else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v6_tab1}分的股票\n\n**说明：**\nv6.0巅峰版使用极度严格的三级过滤标准，只选市场最强的1-3%。\n\n**建议：**\n1. 降低评分阈值到80分\n2. 扩大市值范围到50-2000亿\n3. 这是正常现象，说明当前市场没有符合顶级标准的股票")
-                    
-                    except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
+                                        
+                                        if view_mode == "📊 完整评分":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '资金流向', '板块热度', '短期动量', '龙头属性', '相对强度', '技术突破', '安全边际',
+                                                           '最新价格', '止损价', '止盈价', '推荐理由', '协同组合']
+                                        elif view_mode == "🎯 核心指标":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '资金流向', '板块热度', '龙头属性', '最新价格', '止损价', '止盈价', '推荐理由']
+                                        else:  # 简洁模式
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
+                                                           '评级', '最新价格', '推荐理由', '协同组合']
+                                        
+                                        display_df = results_df[display_cols]
+                                        
+                                        # 显示表格
+                                        st.dataframe(
+                                            display_df,
+                                            use_container_width=True,
+                                            hide_index=True,
+                                            column_config={
+                                                "综合评分": st.column_config.NumberColumn(
+                                                    "综合评分",
+                                                    help="v6.0巅峰版评分（100分制）",
+                                                    format="%.1f分"
+                                                ),
+                                                "评级": st.column_config.TextColumn(
+                                                    "评级",
+                                                    help="S:顶级 A:优质 B:良好 C:合格",
+                                                    width="small"
+                                                ),
+                                                "推荐理由": st.column_config.TextColumn(
+                                                    "推荐理由",
+                                                    help="智能分析推荐原因",
+                                                    width="large"
+                                                )
+                                            }
+                                        )
+                                        
+                                        # 导出功能
+                                        st.markdown("---")
+                                        export_df = results_df.drop('原始数据', axis=1)
+                                        csv = export_df.to_csv(index=False, encoding='utf-8-sig')
+                                        st.download_button(
+                                            label="📥 导出完整结果（CSV）",
+                                            data=csv,
+                                            file_name=f"v6.0_巅峰版_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                            mime="text/csv"
+                                        )
+                                        
+                                    else:
+                                        st.warning(f"⚠️ 未找到≥{score_threshold_v6_tab1}分的股票\n\n**说明：**\nv6.0巅峰版使用极度严格的三级过滤标准，只选市场最强的1-3%。\n\n**建议：**\n1. 降低评分阈值到80分\n2. 扩大市值范围到50-2000亿\n3. 这是正常现象，说明当前市场没有符合顶级标准的股票")
+                            
+                            except Exception as e:
+                                st.error(f"❌ 扫描失败: {e}")
+                                import traceback
+                                st.code(traceback.format_exc())
+                        
+                    finally:
+                        _release_scan_slot(lock_path)
             # 显示之前的扫描结果
             if 'v6_scan_results_tab1' in st.session_state:
                 st.markdown("---")
@@ -7556,246 +7612,253 @@ def main():
             
             # 扫描按钮
             if st.button("🚀 开始智能扫描（v7.0）", type="primary", use_container_width=True, key="scan_v7_tab1"):
-                with st.spinner("🌟 v7.0终极智能系统扫描中...（识别环境→计算情绪→分析行业→动态评分→三层过滤）"):
+                lock_path = _acquire_scan_slot("scan")
+                if not lock_path:
+                    st.warning("⚠️ 当前已有扫描在运行，请稍后重试")
+                else:
                     try:
-                        # 重置v7.0缓存
-                        if hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
-                            vp_analyzer.evaluator_v7.reset_cache()
-                        
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        
-                        # 构建查询条件
-                        if scan_all_v7 and cap_min_v7 == 0 and cap_max_v7 == 0:
-                            # 真正的全市场扫描
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn)
-                            st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
-                        else:
-                            # 按市值筛选
-                            cap_min_wan = cap_min_v7 * 10000 if cap_min_v7 > 0 else 0
-                            cap_max_wan = cap_max_v7 * 10000 if cap_max_v7 > 0 else 999999999
-                            
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                AND sb.circ_mv >= ?
-                                AND sb.circ_mv <= ?
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
-                        
-                        if len(stocks_df) == 0:
-                            st.error(f"❌ 未找到符合条件的股票")
-                            conn.close()
-                        else:
-                            st.info(f"✅ 找到 {len(stocks_df)} 只候选股票，开始智能评分...")
-                            
-                            # 显示市场环境信息
-                            if show_details and hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
-                                market_regime = vp_analyzer.evaluator_v7.market_analyzer.identify_market_regime()
-                                market_sentiment = vp_analyzer.evaluator_v7.market_analyzer.calculate_market_sentiment()
-                                hot_industries = vp_analyzer.evaluator_v7.industry_analyzer.get_hot_industries(top_n=5)
+                        with st.spinner("🌟 v7.0终极智能系统扫描中...（识别环境→计算情绪→分析行业→动态评分→三层过滤）"):
+                            try:
+                                # 重置v7.0缓存
+                                if hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
+                                    vp_analyzer.evaluator_v7.reset_cache()
                                 
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    st.metric("🌡️ 市场环境", market_regime)
-                                with col2:
-                                    sentiment_emoji = "😊" if market_sentiment > 0.3 else "😐" if market_sentiment > -0.3 else "😟"
-                                    st.metric(f"{sentiment_emoji} 市场情绪", f"{market_sentiment:.2f}")
-                                with col3:
-                                    st.metric("🔥 热门行业", f"Top{len(hot_industries)}")
+                                conn = sqlite3.connect(PERMANENT_DB_PATH)
                                 
-                                with st.expander("📊 查看热门行业详情"):
-                                    for i, ind in enumerate(hot_industries, 1):
-                                        heat = vp_analyzer.evaluator_v7.industry_analyzer.sector_performance.get(ind, {}).get('heat', 0)
-                                        st.text(f"{i}. {ind} (热度: {heat:.2f})")
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            results = []
-                            filter_failed = 0
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
-                                industry = row['industry']
-                                
-                                # 更新进度
-                                progress = (idx + 1) / len(stocks_df)
-                                progress_bar.progress(progress)
-                                status_text.text(f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}")
-                                
-                                try:
-                                    # 获取该股票的历史数据
-                                    data_query = """
-                                        SELECT trade_date, close_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
+                                # 构建查询条件
+                                if scan_all_v7 and cap_min_v7 == 0 and cap_max_v7 == 0:
+                                    # 真正的全市场扫描
+                                    query = """
+                                        SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                        FROM stock_basic sb
+                                        WHERE sb.industry IS NOT NULL
+                                        ORDER BY sb.circ_mv DESC
                                     """
-                                    stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                    stocks_df = pd.read_sql_query(query, conn)
+                                    st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
+                                else:
+                                    # 按市值筛选
+                                    cap_min_wan = cap_min_v7 * 10000 if cap_min_v7 > 0 else 0
+                                    cap_max_wan = cap_max_v7 * 10000 if cap_max_v7 > 0 else 999999999
                                     
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
+                                    query = """
+                                        SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                        FROM stock_basic sb
+                                        WHERE sb.industry IS NOT NULL
+                                        AND sb.circ_mv >= ?
+                                        AND sb.circ_mv <= ?
+                                        ORDER BY sb.circ_mv DESC
+                                    """
+                                    stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                                
+                                if len(stocks_df) == 0:
+                                    st.error(f"❌ 未找到符合条件的股票")
+                                    conn.close()
+                                else:
+                                    st.info(f"✅ 找到 {len(stocks_df)} 只候选股票，开始智能评分...")
+                                    
+                                    # 显示市场环境信息
+                                    if show_details and hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
+                                        market_regime = vp_analyzer.evaluator_v7.market_analyzer.identify_market_regime()
+                                        market_sentiment = vp_analyzer.evaluator_v7.market_analyzer.calculate_market_sentiment()
+                                        hot_industries = vp_analyzer.evaluator_v7.industry_analyzer.get_hot_industries(top_n=5)
                                         
-                                        # 使用v7.0评分器
-                                        score_result = vp_analyzer.evaluator_v7.evaluate_stock_v7(
-                                            stock_data=stock_data,
-                                            ts_code=ts_code,
-                                            industry=industry
-                                        )
+                                        col1, col2, col3 = st.columns(3)
+                                        with col1:
+                                            st.metric("🌡️ 市场环境", market_regime)
+                                        with col2:
+                                            sentiment_emoji = "😊" if market_sentiment > 0.3 else "😐" if market_sentiment > -0.3 else "😟"
+                                            st.metric(f"{sentiment_emoji} 市场情绪", f"{market_sentiment:.2f}")
+                                        with col3:
+                                            st.metric("🔥 热门行业", f"Top{len(hot_industries)}")
                                         
-                                        if not score_result['success']:
-                                            filter_failed += 1
+                                        with st.expander("📊 查看热门行业详情"):
+                                            for i, ind in enumerate(hot_industries, 1):
+                                                heat = vp_analyzer.evaluator_v7.industry_analyzer.sector_performance.get(ind, {}).get('heat', 0)
+                                                st.text(f"{i}. {ind} (热度: {heat:.2f})")
+                                    
+                                    # 进度条
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+                                    
+                                    results = []
+                                    filter_failed = 0
+                                    
+                                    for idx, row in stocks_df.iterrows():
+                                        ts_code = row['ts_code']
+                                        stock_name = row['name']
+                                        industry = row['industry']
+                                        
+                                        # 更新进度
+                                        progress = (idx + 1) / len(stocks_df)
+                                        progress_bar.progress(progress)
+                                        status_text.text(f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}")
+                                        
+                                        try:
+                                            # 获取该股票的历史数据
+                                            data_query = """
+                                                SELECT trade_date, close_price, vol, pct_chg
+                                                FROM daily_trading_data
+                                                WHERE ts_code = ?
+                                                ORDER BY trade_date DESC
+                                                LIMIT 120
+                                            """
+                                            stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                            
+                                            if len(stock_data) >= 60:
+                                                # 添加name列用于ST检查
+                                                stock_data['name'] = stock_name
+                                                
+                                                # 使用v7.0评分器
+                                                score_result = vp_analyzer.evaluator_v7.evaluate_stock_v7(
+                                                    stock_data=stock_data,
+                                                    ts_code=ts_code,
+                                                    industry=industry
+                                                )
+                                                
+                                                if not score_result['success']:
+                                                    filter_failed += 1
+                                                    continue
+                                                
+                                                if score_result['final_score'] >= score_threshold_v7:
+                                                    dim_scores = score_result.get('dimension_scores', {})
+                                                    results.append({
+                                                        '股票代码': ts_code,
+                                                        '股票名称': stock_name,
+                                                        '行业': industry,
+                                                        '流通市值': f"{row['circ_mv']/10000:.1f}亿",
+                                                        '综合评分': f"{score_result['final_score']:.1f}",
+                                                        '评级': score_result.get('grade', '-'),
+                                                        '市场环境': score_result.get('market_regime', '-'),
+                                                        '行业热度': f"{score_result.get('industry_heat', 0):.2f}",
+                                                        '行业排名': f"#{score_result.get('industry_rank', 0)}" if score_result.get('industry_rank', 0) > 0 else "未进Top8",
+                                                        '行业加分': f"+{score_result.get('bonus_score', 0)}分",
+                                                        '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
+                                                        '智能止损': f"{score_result.get('stop_loss', 0):.2f}元",
+                                                        '智能止盈': f"{score_result.get('take_profit', 0):.2f}元",
+                                                        '推荐理由': score_result.get('signal_reasons', ''),
+                                                        '原始数据': score_result
+                                                    })
+                                        
+                                        except Exception as e:
+                                            logger.warning(f"评分失败 {ts_code}: {e}")
                                             continue
+                                    
+                                    progress_bar.empty()
+                                    status_text.empty()
+                                    conn.close()
+                                    
+                                    # 显示结果
+                                    st.markdown("---")
+                                    st.markdown(f"### 📊 智能扫描结果")
+                                    
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("候选股票", f"{len(stocks_df)}只")
+                                    with col2:
+                                        st.metric("过滤淘汰", f"{filter_failed}只", 
+                                                 delta=f"{filter_failed/len(stocks_df)*100:.1f}%")
+                                    with col3:
+                                        st.metric("最终推荐", f"{len(results)}只",
+                                                 delta=f"{len(results)/len(stocks_df)*100:.2f}%")
+                                    
+                                    if results:
+                                        st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v7}分）")
                                         
-                                        if score_result['final_score'] >= score_threshold_v7:
-                                            dim_scores = score_result.get('dimension_scores', {})
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': industry,
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '市场环境': score_result.get('market_regime', '-'),
-                                                '行业热度': f"{score_result.get('industry_heat', 0):.2f}",
-                                                '行业排名': f"#{score_result.get('industry_rank', 0)}" if score_result.get('industry_rank', 0) > 0 else "未进Top8",
-                                                '行业加分': f"+{score_result.get('bonus_score', 0)}分",
-                                                '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
-                                                '智能止损': f"{score_result.get('stop_loss', 0):.2f}元",
-                                                '智能止盈': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '推荐理由': score_result.get('signal_reasons', ''),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            st.markdown("---")
-                            st.markdown(f"### 📊 智能扫描结果")
-                            
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("候选股票", f"{len(stocks_df)}只")
-                            with col2:
-                                st.metric("过滤淘汰", f"{filter_failed}只", 
-                                         delta=f"{filter_failed/len(stocks_df)*100:.1f}%")
-                            with col3:
-                                st.metric("最终推荐", f"{len(results)}只",
-                                         delta=f"{len(results)/len(stocks_df)*100:.2f}%")
-                            
-                            if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v7}分）")
-                                
-                                # 转换为DataFrame
-                                results_df = pd.DataFrame(results)
-                                
-                                # 保存到session_state
-                                st.session_state['v7_scan_results_tab1'] = results_df
-                                
-                                # 显示统计
-                                st.markdown("---")
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col2:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col3:
-                                    # 统计5星和4星
-                                    grade_5 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐⭐' in str(g))
-                                    grade_4 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐' in str(g) and '⭐⭐⭐⭐⭐' not in str(g))
-                                    st.metric("5+4星", f"{grade_5+grade_4}只")
-                                with col4:
-                                    # 统计热门行业股票
-                                    hot_count = sum(1 for r in results_df['行业排名'] if '#' in str(r) and int(str(r).replace('#', '')) <= 5)
-                                    st.metric("热门行业", f"{hot_count}只")
-                                
-                                st.markdown("---")
-                                st.subheader("🏆 智能推荐股票列表（v7.0·动态权重）")
-                                
-                                # 选择显示模式
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    ["📊 完整信息", "🎯 核心指标", "📝 简洁模式"],
-                                    horizontal=True,
-                                    key="view_mode_v7_tab1"
-                                )
-                                
-                                if view_mode == "📊 完整信息":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '市场环境', '行业热度', '行业排名', '行业加分',
-                                                   '最新价格', '智能止损', '智能止盈', '推荐理由']
-                                elif view_mode == "🎯 核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '行业热度', '行业排名', '最新价格', '智能止损', '智能止盈']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '评级', '最新价格', '推荐理由']
-                                
-                                display_df = results_df[display_cols]
-                                
-                                # 显示表格
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v7.0动态评分（100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="⭐⭐⭐⭐⭐:极力推荐 ⭐⭐⭐⭐:强烈推荐",
-                                            width="medium"
-                                        ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
-                                            help="智能分析推荐原因",
-                                            width="large"
+                                        # 转换为DataFrame
+                                        results_df = pd.DataFrame(results)
+                                        
+                                        # 保存到session_state
+                                        st.session_state['v7_scan_results_tab1'] = results_df
+                                        
+                                        # 显示统计
+                                        st.markdown("---")
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        with col1:
+                                            avg_score = results_df['综合评分'].astype(float).mean()
+                                            st.metric("平均评分", f"{avg_score:.1f}分")
+                                        with col2:
+                                            max_score = results_df['综合评分'].astype(float).max()
+                                            st.metric("最高评分", f"{max_score:.1f}分")
+                                        with col3:
+                                            # 统计5星和4星
+                                            grade_5 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐⭐' in str(g))
+                                            grade_4 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐' in str(g) and '⭐⭐⭐⭐⭐' not in str(g))
+                                            st.metric("5+4星", f"{grade_5+grade_4}只")
+                                        with col4:
+                                            # 统计热门行业股票
+                                            hot_count = sum(1 for r in results_df['行业排名'] if '#' in str(r) and int(str(r).replace('#', '')) <= 5)
+                                            st.metric("热门行业", f"{hot_count}只")
+                                        
+                                        st.markdown("---")
+                                        st.subheader("🏆 智能推荐股票列表（v7.0·动态权重）")
+                                        
+                                        # 选择显示模式
+                                        view_mode = st.radio(
+                                            "显示模式",
+                                            ["📊 完整信息", "🎯 核心指标", "📝 简洁模式"],
+                                            horizontal=True,
+                                            key="view_mode_v7_tab1"
                                         )
-                                    }
-                                )
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop('原始数据', axis=1)
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label="📥 导出完整结果（CSV）",
-                                    data=csv,
-                                    file_name=f"核心策略_V7_智能选股_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v7}分的股票\n\n**说明：**\nv7.0使用动态权重+三层过滤，门槛会根据市场环境自动调整。\n\n**建议：**\n1. 降低评分阈值到60分\n2. 查看市场环境信息，了解当前市场状态\n3. 当前可能不是最佳入场时机")
-                    
-                    except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
+                                        
+                                        if view_mode == "📊 完整信息":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '市场环境', '行业热度', '行业排名', '行业加分',
+                                                           '最新价格', '智能止损', '智能止盈', '推荐理由']
+                                        elif view_mode == "🎯 核心指标":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '行业热度', '行业排名', '最新价格', '智能止损', '智能止盈']
+                                        else:  # 简洁模式
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
+                                                           '评级', '最新价格', '推荐理由']
+                                        
+                                        display_df = results_df[display_cols]
+                                        
+                                        # 显示表格
+                                        st.dataframe(
+                                            display_df,
+                                            use_container_width=True,
+                                            hide_index=True,
+                                            column_config={
+                                                "综合评分": st.column_config.NumberColumn(
+                                                    "综合评分",
+                                                    help="v7.0动态评分（100分制）",
+                                                    format="%.1f分"
+                                                ),
+                                                "评级": st.column_config.TextColumn(
+                                                    "评级",
+                                                    help="⭐⭐⭐⭐⭐:极力推荐 ⭐⭐⭐⭐:强烈推荐",
+                                                    width="medium"
+                                                ),
+                                                "推荐理由": st.column_config.TextColumn(
+                                                    "推荐理由",
+                                                    help="智能分析推荐原因",
+                                                    width="large"
+                                                )
+                                            }
+                                        )
+                                        
+                                        # 导出功能
+                                        st.markdown("---")
+                                        export_df = results_df.drop('原始数据', axis=1)
+                                        csv = _df_to_csv_bytes(export_df)
+                                        st.download_button(
+                                            label="📥 导出完整结果（CSV）",
+                                            data=csv,
+                                            file_name=f"核心策略_V7_智能选股_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                            mime="text/csv; charset=utf-8"
+                                        )
+                                        
+                                    else:
+                                        st.warning(f"⚠️ 未找到≥{score_threshold_v7}分的股票\n\n**说明：**\nv7.0使用动态权重+三层过滤，门槛会根据市场环境自动调整。\n\n**建议：**\n1. 降低评分阈值到60分\n2. 查看市场环境信息，了解当前市场状态\n3. 当前可能不是最佳入场时机")
+                            
+                            except Exception as e:
+                                st.error(f"❌ 扫描失败: {e}")
+                                import traceback
+                                st.code(traceback.format_exc())
+                        
+                    finally:
+                        _release_scan_slot(lock_path)
             # 显示之前的扫描结果
             if 'v7_scan_results_tab1' in st.session_state:
                 st.markdown("---")
@@ -7966,414 +8029,421 @@ def main():
             
             # 扫描按钮
             if st.button("🚀 开始终极扫描（v8.0）", type="primary", use_container_width=True, key="scan_v8_tab1"):
-                with st.spinner("🚀🚀🚀 v8.0终极进化版扫描中...（三级市场过滤→18维度评分→ATR风控→凯利仓位）"):
+                lock_path = _acquire_scan_slot("scan")
+                if not lock_path:
+                    st.warning("⚠️ 当前已有扫描在运行，请稍后重试")
+                else:
                     try:
-                        # 重置v8.0缓存
-                        if hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
-                            vp_analyzer.evaluator_v8.reset_cache()
-                        
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        
-                        # 🔥 先进行三级市场过滤
-                        st.info("🌡️ 正在进行三级市场过滤（择时系统）...")
-                        
-                        # 获取大盘指数数据（上证指数）
-                        # 优先使用 daily_trading_history，如不存在则回退 daily_trading_data
-                        index_queries = [
-                            """
-                            SELECT trade_date, close_price as close, vol as volume
-                            FROM daily_trading_history
-                            WHERE ts_code = '000001.SH'
-                            ORDER BY trade_date DESC
-                            LIMIT 120
-                            """,
-                            """
-                            SELECT trade_date, close_price as close, vol as volume
-                            FROM daily_trading_data
-                            WHERE ts_code = '000001.SH'
-                            ORDER BY trade_date DESC
-                            LIMIT 120
-                            """
-                        ]
-                        index_data = pd.DataFrame()
-                        last_err = None
-                        for iq in index_queries:
+                        with st.spinner("🚀🚀🚀 v8.0终极进化版扫描中...（三级市场过滤→18维度评分→ATR风控→凯利仓位）"):
                             try:
-                                index_data = pd.read_sql_query(iq, conn)
-                                if len(index_data) > 0:
-                                    break
-                            except Exception as e:
-                                last_err = e
-                                continue
-                        if len(index_data) >= 60:
-                            # 确保按时间正序，避免ATR/均线等计算错位
-                            if 'trade_date' in index_data.columns:
-                                index_data = index_data.sort_values('trade_date').reset_index(drop=True)
-                            market_filter = vp_analyzer.evaluator_v8.market_filter
-                            market_status = market_filter.comprehensive_filter(index_data)
-                            
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                trend_status = market_status.get('trend', {})
-                                st.metric("📊 市场趋势", 
-                                         f"{trend_status.get('trend', '未知')}")
-                            with col2:
-                                sentiment_status = market_status.get('sentiment', {})
-                                sentiment_val = sentiment_status.get('sentiment_score', 0)
-                                st.metric("😊 市场情绪", 
-                                         f"{sentiment_val:.2f}",
-                                         delta="健康" if sentiment_val > -0.2 else "警告")
-                            with col3:
-                                volume_status = market_status.get('volume', {})
-                                st.metric("🔥 市场热度", 
-                                         f"{volume_status.get('volume_status', '未知')}")
-                        else:
-                            if last_err:
-                                st.warning(f"⚠️ 大盘数据不足或表不存在，跳过市场过滤（{last_err}）")
-                            else:
-                                st.warning("⚠️ 大盘数据不足，跳过市场过滤")
-                            market_status = {'can_trade': True, 'position_multiplier': 1.0, 'reason': '数据不足，默认可交易'}
-                        
-                        if not market_status['can_trade']:
-                            st.warning(f"""
-                            ⚠️ **市场环境不佳，建议观望！**
-                            
-                            **未通过原因：**
-                            {market_status.get('reason', '综合评估不通过')}
-                            
-                            **v8.0择时系统建议：**
-                            当前市场环境不适合激进操作，建议：
-                            1. 空仓观望，等待更好时机
-                            2. 关注市场转势信号
-                            3. 可以小仓位试探（不超过20%）
-                            
-                            💡 强行扫描请继续，但风险自负！
-                            """)
-                            
-                            if not st.checkbox("⚠️ 我理解风险，继续扫描", key="force_scan_v8"):
-                                st.stop()
-                        else:
-                            st.success("✅ 市场环境通过三级过滤，可以安全选股！")
-                        
-                        # 构建查询条件
-                        if scan_all_v8 and cap_min_v8 == 0 and cap_max_v8 == 0:
-                            # 真正的全市场扫描
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn)
-                            st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
-                        else:
-                            # 按市值筛选
-                            cap_min_wan = cap_min_v8 * 10000 if cap_min_v8 > 0 else 0
-                            cap_max_wan = cap_max_v8 * 10000 if cap_max_v8 > 0 else 999999999
-                            
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                AND sb.circ_mv >= ?
-                                AND sb.circ_mv <= ?
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
-                        
-                        if len(stocks_df) == 0:
-                            st.error(f"❌ 未找到符合条件的股票")
-                            conn.close()
-                        else:
-                            st.info(f"✅ 找到 {len(stocks_df)} 只候选股票，开始18维度智能评分...")
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            results = []
-                            filter_failed = 0
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
-                                industry = row['industry']
+                                # 重置v8.0缓存
+                                if hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
+                                    vp_analyzer.evaluator_v8.reset_cache()
                                 
-                                # 更新进度
-                                progress = (idx + 1) / len(stocks_df)
-                                progress_bar.progress(progress)
-                                status_text.text(f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}")
+                                conn = sqlite3.connect(PERMANENT_DB_PATH)
                                 
-                                try:
-                                    # 获取该股票的历史数据
-                                    data_queries = [
-                                        """
-                                        SELECT trade_date, close_price, high_price, low_price, vol, pct_chg
-                                        FROM daily_trading_history
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                        """,
-                                        """
-                                        SELECT trade_date, close_price, high_price, low_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                        """
-                                    ]
-                                    stock_data = pd.DataFrame()
-                                    last_stock_err = None
-                                    for dq in data_queries:
-                                        try:
-                                            stock_data = pd.read_sql_query(dq, conn, params=(ts_code,))
-                                            if len(stock_data) > 0:
-                                                break
-                                        except Exception as e:
-                                            last_stock_err = e
-                                            continue
+                                # 🔥 先进行三级市场过滤
+                                st.info("🌡️ 正在进行三级市场过滤（择时系统）...")
+                                
+                                # 获取大盘指数数据（上证指数）
+                                # 优先使用 daily_trading_history，如不存在则回退 daily_trading_data
+                                index_queries = [
+                                    """
+                                    SELECT trade_date, close_price as close, vol as volume
+                                    FROM daily_trading_history
+                                    WHERE ts_code = '000001.SH'
+                                    ORDER BY trade_date DESC
+                                    LIMIT 120
+                                    """,
+                                    """
+                                    SELECT trade_date, close_price as close, vol as volume
+                                    FROM daily_trading_data
+                                    WHERE ts_code = '000001.SH'
+                                    ORDER BY trade_date DESC
+                                    LIMIT 120
+                                    """
+                                ]
+                                index_data = pd.DataFrame()
+                                last_err = None
+                                for iq in index_queries:
+                                    try:
+                                        index_data = pd.read_sql_query(iq, conn)
+                                        if len(index_data) > 0:
+                                            break
+                                    except Exception as e:
+                                        last_err = e
+                                        continue
+                                if len(index_data) >= 60:
+                                    # 确保按时间正序，避免ATR/均线等计算错位
+                                    if 'trade_date' in index_data.columns:
+                                        index_data = index_data.sort_values('trade_date').reset_index(drop=True)
+                                    market_filter = vp_analyzer.evaluator_v8.market_filter
+                                    market_status = market_filter.comprehensive_filter(index_data)
                                     
-                                    if len(stock_data) >= 60:
-                                        # 确保按时间正序，避免ATR/止损止盈错位
-                                        if 'trade_date' in stock_data.columns:
-                                            stock_data = stock_data.sort_values('trade_date').reset_index(drop=True)
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
-                                        
-                                        # 使用v8.0评分器
-                                        score_result = vp_analyzer.evaluator_v8.evaluate_stock_v8(
-                                            stock_data=stock_data,
-                                            ts_code=ts_code,
-                                            index_data=index_data if 'index_data' in locals() else None
-                                        )
-                                        
-                                        if not score_result['success']:
-                                            filter_failed += 1
-                                            continue
-                                        
-                                        # 评分区间过滤
-                                        min_thr, max_thr = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
-                                        if min_thr <= score_result['final_score'] <= max_thr:
-                                            # 计算凯利仓位（如果启用）
-                                            kelly_position = ""
-                                            if enable_kelly and 'win_rate' in score_result and 'win_loss_ratio' in score_result:
-                                                kelly_pct = vp_analyzer.evaluator_v8._calculate_kelly_position(
-                                                    score_result['win_rate'],
-                                                    score_result['win_loss_ratio']
-                                                )
-                                                kelly_position = f"{kelly_pct*100:.1f}%"
-                                            
-                                            close_col = 'close_price' if 'close_price' in stock_data.columns else 'close'
-                                            latest_price = stock_data[close_col].iloc[-1]
-                                            
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': industry,
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '星级': f"{score_result.get('star_rating', 0)}⭐" if score_result.get('star_rating', 0) else "-",
-                                                '建议仓位': f"{score_result.get('position_suggestion', 0)*100:.0f}%" if score_result.get('position_suggestion') else "-",
-                                                '预期胜率': f"{score_result.get('win_rate', 0)*100:.1f}%" if 'win_rate' in score_result else "-",
-                                                '盈亏比': f"{score_result.get('win_loss_ratio', 0):.2f}" if 'win_loss_ratio' in score_result else "-",
-                                                '凯利仓位': kelly_position if enable_kelly else "-",
-                                                '最新价格': f"{latest_price:.2f}元",
-                                                'ATR值': f"{score_result.get('atr_stops', {}).get('atr_value', 0):.2f}" if score_result.get('atr_stops') else "-",
-                                                'ATR止损': (
-                                                    f"{score_result.get('atr_stops', {}).get('stop_loss', 0):.2f}元"
-                                                    if score_result.get('atr_stops') and score_result['atr_stops'].get('stop_loss') is not None
-                                                    else "-"
-                                                ),
-                                                'ATR止盈': (
-                                                    f"{score_result.get('atr_stops', {}).get('take_profit', 0):.2f}元"
-                                                    if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit') is not None
-                                                    else "-"
-                                                ),
-                                                'ATR移动止损': (
-                                                    f"{score_result.get('atr_stops', {}).get('trailing_stop', 0):.2f}元"
-                                                    if score_result.get('atr_stops') and score_result['atr_stops'].get('trailing_stop') is not None
-                                                    else "-"
-                                                ),
-                                                '止损幅度%': (
-                                                    f"{score_result.get('atr_stops', {}).get('stop_loss_pct', 0):.2f}%"
-                                                    if score_result.get('atr_stops') and score_result['atr_stops'].get('stop_loss_pct') is not None
-                                                    else "-"
-                                                ),
-                                                '止盈幅度%': (
-                                                    f"{score_result.get('atr_stops', {}).get('take_profit_pct', 0):.2f}%"
-                                                    if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit_pct') is not None
-                                                    else "-"
-                                                ),
-                                                '推荐理由': score_result.get('description', ''),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            st.markdown("---")
-                            st.markdown(f"### 📊 终极扫描结果（v8.0）")
-                            
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("候选股票", f"{len(stocks_df)}只")
-                            with col2:
-                                st.metric("过滤淘汰", f"{filter_failed}只", 
-                                         delta=f"{filter_failed/len(stocks_df)*100:.1f}%")
-                            with col3:
-                                st.metric("最终推荐", f"{len(results)}只",
-                                         delta=f"{len(results)/len(stocks_df)*100:.2f}%")
-                            
-                            # 分布提示 & 一键推荐阈值
-                            if len(results) > 0:
-                                try:
-                                    dist_scores = results_df['综合评分'].astype(float)
-                                    avg_score = dist_scores.mean()
-                                    median_score = dist_scores.median()
-                                    pct70 = (dist_scores >= 70).sum()
-                                    pct65 = (dist_scores >= 65).sum()
-                                    pct60 = (dist_scores >= 60).sum()
-                                    
-                                    st.info(f"""
-                                    **分布提示：**
-                                    - 平均分：{avg_score:.1f}，中位数：{median_score:.1f}
-                                    - ≥70分：{pct70} 只，≥65分：{pct65} 只，≥60分：{pct60} 只
-                                    
-                                    **推荐阈值：** {max(55, min(70, round(median_score)))} 分 （取中位数附近，范围[55,70]）
-                                    """)
-                                except Exception:
-                                    pass
-                            
-                            if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v8}分）")
-                                
-                                # 转换为DataFrame
-                                results_df = pd.DataFrame(results)
-                                
-                                # 保存到session_state
-                                st.session_state['v8_scan_results_tab1'] = results_df
-                                
-                                # 显示统计
-                                st.markdown("---")
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col2:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col3:
-                                    # 统计5星和4星
-                                    grade_5 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐⭐' in str(g))
-                                    grade_4 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐' in str(g) and '⭐⭐⭐⭐⭐' not in str(g))
-                                    st.metric("5+4星", f"{grade_5+grade_4}只")
-                                with col4:
-                                    # 平均凯利仓位
-                                    if enable_kelly:
-                                        kelly_series = results_df['凯利仓位'] if '凯利仓位' in results_df else pd.Series(dtype=float)
-                                        numeric_kelly = pd.to_numeric(
-                                            kelly_series.str.rstrip('%'),
-                                            errors='coerce'
-                                        ).dropna()
-                                        if len(numeric_kelly) > 0:
-                                            avg_kelly = numeric_kelly.mean()
-                                            st.metric("平均凯利仓位", f"{avg_kelly:.1f}%")
-                                        else:
-                                            st.metric("平均凯利仓位", "-")
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        trend_status = market_status.get('trend', {})
+                                        st.metric("📊 市场趋势", 
+                                                 f"{trend_status.get('trend', '未知')}")
+                                    with col2:
+                                        sentiment_status = market_status.get('sentiment', {})
+                                        sentiment_val = sentiment_status.get('sentiment_score', 0)
+                                        st.metric("😊 市场情绪", 
+                                                 f"{sentiment_val:.2f}",
+                                                 delta="健康" if sentiment_val > -0.2 else "警告")
+                                    with col3:
+                                        volume_status = market_status.get('volume', {})
+                                        st.metric("🔥 市场热度", 
+                                                 f"{volume_status.get('volume_status', '未知')}")
+                                else:
+                                    if last_err:
+                                        st.warning(f"⚠️ 大盘数据不足或表不存在，跳过市场过滤（{last_err}）")
                                     else:
-                                        st.metric("平均凯利仓位", "-")
+                                        st.warning("⚠️ 大盘数据不足，跳过市场过滤")
+                                    market_status = {'can_trade': True, 'position_multiplier': 1.0, 'reason': '数据不足，默认可交易'}
                                 
-                                st.markdown("---")
-                                st.subheader("🏆 终极推荐股票列表（v8.0·18维度）")
+                                if not market_status['can_trade']:
+                                    st.warning(f"""
+                                    ⚠️ **市场环境不佳，建议观望！**
+                                    
+                                    **未通过原因：**
+                                    {market_status.get('reason', '综合评估不通过')}
+                                    
+                                    **v8.0择时系统建议：**
+                                    当前市场环境不适合激进操作，建议：
+                                    1. 空仓观望，等待更好时机
+                                    2. 关注市场转势信号
+                                    3. 可以小仓位试探（不超过20%）
+                                    
+                                    💡 强行扫描请继续，但风险自负！
+                                    """)
+                                    
+                                    if not st.checkbox("⚠️ 我理解风险，继续扫描", key="force_scan_v8"):
+                                        st.stop()
+                                else:
+                                    st.success("✅ 市场环境通过三级过滤，可以安全选股！")
                                 
-                                # 选择显示模式
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    ["📊 完整信息", "🎯 核心指标", "📝 简洁模式"],
-                                    horizontal=True,
-                                    key="view_mode_v8_tab1"
-                                )
+                                # 构建查询条件
+                                if scan_all_v8 and cap_min_v8 == 0 and cap_max_v8 == 0:
+                                    # 真正的全市场扫描
+                                    query = """
+                                        SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                        FROM stock_basic sb
+                                        WHERE sb.industry IS NOT NULL
+                                        ORDER BY sb.circ_mv DESC
+                                    """
+                                    stocks_df = pd.read_sql_query(query, conn)
+                                    st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
+                                else:
+                                    # 按市值筛选
+                                    cap_min_wan = cap_min_v8 * 10000 if cap_min_v8 > 0 else 0
+                                    cap_max_wan = cap_max_v8 * 10000 if cap_max_v8 > 0 else 999999999
+                                    
+                                    query = """
+                                        SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                        FROM stock_basic sb
+                                        WHERE sb.industry IS NOT NULL
+                                        AND sb.circ_mv >= ?
+                                        AND sb.circ_mv <= ?
+                                        ORDER BY sb.circ_mv DESC
+                                    """
+                                    stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
                                 
-                                if view_mode == "📊 完整信息":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '星级', '建议仓位', '预期胜率', '盈亏比', '凯利仓位',
-                                                   '最新价格', 'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损', '止损幅度%', '止盈幅度%',
-                                                   '推荐理由']
-                                elif view_mode == "🎯 核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '综合评分', '评级', '星级',
-                                                   '建议仓位', '预期胜率', '凯利仓位', '最新价格',
-                                                   'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '综合评分', 
-                                                   '评级', '星级', '建议仓位', '最新价格', '推荐理由']
-                                
-                                display_df = results_df[display_cols]
-                                
-                                # 显示表格
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v8.0终极评分（18维度·100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="⭐⭐⭐⭐⭐:75+ ⭐⭐⭐⭐:65+ ⭐⭐⭐:55+ ⭐⭐:45+",
-                                            width="medium"
-                                        ),
-                                        "星级": st.column_config.TextColumn(
-                                            "星级",
-                                            help="星级×建议仓位：5⭐=25%, 4⭐=20%, 3⭐=15%, 2⭐=10%",
-                                            width="small"
-                                        ),
-                                        "建议仓位": st.column_config.TextColumn(
-                                            "建议仓位",
-                                            help="根据星级/评分建议的单票仓位",
-                                            width="small"
-                                        ),
-                                        "凯利仓位": st.column_config.TextColumn(
-                                            "凯利仓位",
-                                            help="凯利公式计算的最优仓位比例",
-                                            width="small"
-                                        ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
-                                            help="v8.0智能分析推荐原因",
-                                            width="large"
+                                if len(stocks_df) == 0:
+                                    st.error(f"❌ 未找到符合条件的股票")
+                                    conn.close()
+                                else:
+                                    st.info(f"✅ 找到 {len(stocks_df)} 只候选股票，开始18维度智能评分...")
+                                    
+                                    # 进度条
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+                                    
+                                    results = []
+                                    filter_failed = 0
+                                    
+                                    for idx, row in stocks_df.iterrows():
+                                        ts_code = row['ts_code']
+                                        stock_name = row['name']
+                                        industry = row['industry']
+                                        
+                                        # 更新进度
+                                        progress = (idx + 1) / len(stocks_df)
+                                        progress_bar.progress(progress)
+                                        status_text.text(f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}")
+                                        
+                                        try:
+                                            # 获取该股票的历史数据
+                                            data_queries = [
+                                                """
+                                                SELECT trade_date, close_price, high_price, low_price, vol, pct_chg
+                                                FROM daily_trading_history
+                                                WHERE ts_code = ?
+                                                ORDER BY trade_date DESC
+                                                LIMIT 120
+                                                """,
+                                                """
+                                                SELECT trade_date, close_price, high_price, low_price, vol, pct_chg
+                                                FROM daily_trading_data
+                                                WHERE ts_code = ?
+                                                ORDER BY trade_date DESC
+                                                LIMIT 120
+                                                """
+                                            ]
+                                            stock_data = pd.DataFrame()
+                                            last_stock_err = None
+                                            for dq in data_queries:
+                                                try:
+                                                    stock_data = pd.read_sql_query(dq, conn, params=(ts_code,))
+                                                    if len(stock_data) > 0:
+                                                        break
+                                                except Exception as e:
+                                                    last_stock_err = e
+                                                    continue
+                                            
+                                            if len(stock_data) >= 60:
+                                                # 确保按时间正序，避免ATR/止损止盈错位
+                                                if 'trade_date' in stock_data.columns:
+                                                    stock_data = stock_data.sort_values('trade_date').reset_index(drop=True)
+                                                # 添加name列用于ST检查
+                                                stock_data['name'] = stock_name
+                                                
+                                                # 使用v8.0评分器
+                                                score_result = vp_analyzer.evaluator_v8.evaluate_stock_v8(
+                                                    stock_data=stock_data,
+                                                    ts_code=ts_code,
+                                                    index_data=index_data if 'index_data' in locals() else None
+                                                )
+                                                
+                                                if not score_result['success']:
+                                                    filter_failed += 1
+                                                    continue
+                                                
+                                                # 评分区间过滤
+                                                min_thr, max_thr = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
+                                                if min_thr <= score_result['final_score'] <= max_thr:
+                                                    # 计算凯利仓位（如果启用）
+                                                    kelly_position = ""
+                                                    if enable_kelly and 'win_rate' in score_result and 'win_loss_ratio' in score_result:
+                                                        kelly_pct = vp_analyzer.evaluator_v8._calculate_kelly_position(
+                                                            score_result['win_rate'],
+                                                            score_result['win_loss_ratio']
+                                                        )
+                                                        kelly_position = f"{kelly_pct*100:.1f}%"
+                                                    
+                                                    close_col = 'close_price' if 'close_price' in stock_data.columns else 'close'
+                                                    latest_price = stock_data[close_col].iloc[-1]
+                                                    
+                                                    results.append({
+                                                        '股票代码': ts_code,
+                                                        '股票名称': stock_name,
+                                                        '行业': industry,
+                                                        '流通市值': f"{row['circ_mv']/10000:.1f}亿",
+                                                        '综合评分': f"{score_result['final_score']:.1f}",
+                                                        '评级': score_result.get('grade', '-'),
+                                                        '星级': f"{score_result.get('star_rating', 0)}⭐" if score_result.get('star_rating', 0) else "-",
+                                                        '建议仓位': f"{score_result.get('position_suggestion', 0)*100:.0f}%" if score_result.get('position_suggestion') else "-",
+                                                        '预期胜率': f"{score_result.get('win_rate', 0)*100:.1f}%" if 'win_rate' in score_result else "-",
+                                                        '盈亏比': f"{score_result.get('win_loss_ratio', 0):.2f}" if 'win_loss_ratio' in score_result else "-",
+                                                        '凯利仓位': kelly_position if enable_kelly else "-",
+                                                        '最新价格': f"{latest_price:.2f}元",
+                                                        'ATR值': f"{score_result.get('atr_stops', {}).get('atr_value', 0):.2f}" if score_result.get('atr_stops') else "-",
+                                                        'ATR止损': (
+                                                            f"{score_result.get('atr_stops', {}).get('stop_loss', 0):.2f}元"
+                                                            if score_result.get('atr_stops') and score_result['atr_stops'].get('stop_loss') is not None
+                                                            else "-"
+                                                        ),
+                                                        'ATR止盈': (
+                                                            f"{score_result.get('atr_stops', {}).get('take_profit', 0):.2f}元"
+                                                            if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit') is not None
+                                                            else "-"
+                                                        ),
+                                                        'ATR移动止损': (
+                                                            f"{score_result.get('atr_stops', {}).get('trailing_stop', 0):.2f}元"
+                                                            if score_result.get('atr_stops') and score_result['atr_stops'].get('trailing_stop') is not None
+                                                            else "-"
+                                                        ),
+                                                        '止损幅度%': (
+                                                            f"{score_result.get('atr_stops', {}).get('stop_loss_pct', 0):.2f}%"
+                                                            if score_result.get('atr_stops') and score_result['atr_stops'].get('stop_loss_pct') is not None
+                                                            else "-"
+                                                        ),
+                                                        '止盈幅度%': (
+                                                            f"{score_result.get('atr_stops', {}).get('take_profit_pct', 0):.2f}%"
+                                                            if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit_pct') is not None
+                                                            else "-"
+                                                        ),
+                                                        '推荐理由': score_result.get('description', ''),
+                                                        '原始数据': score_result
+                                                    })
+                                        
+                                        except Exception as e:
+                                            logger.warning(f"评分失败 {ts_code}: {e}")
+                                            continue
+                                    
+                                    progress_bar.empty()
+                                    status_text.empty()
+                                    conn.close()
+                                    
+                                    # 显示结果
+                                    st.markdown("---")
+                                    st.markdown(f"### 📊 终极扫描结果（v8.0）")
+                                    
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("候选股票", f"{len(stocks_df)}只")
+                                    with col2:
+                                        st.metric("过滤淘汰", f"{filter_failed}只", 
+                                                 delta=f"{filter_failed/len(stocks_df)*100:.1f}%")
+                                    with col3:
+                                        st.metric("最终推荐", f"{len(results)}只",
+                                                 delta=f"{len(results)/len(stocks_df)*100:.2f}%")
+                                    
+                                    # 分布提示 & 一键推荐阈值
+                                    if len(results) > 0:
+                                        try:
+                                            dist_scores = results_df['综合评分'].astype(float)
+                                            avg_score = dist_scores.mean()
+                                            median_score = dist_scores.median()
+                                            pct70 = (dist_scores >= 70).sum()
+                                            pct65 = (dist_scores >= 65).sum()
+                                            pct60 = (dist_scores >= 60).sum()
+                                            
+                                            st.info(f"""
+                                            **分布提示：**
+                                            - 平均分：{avg_score:.1f}，中位数：{median_score:.1f}
+                                            - ≥70分：{pct70} 只，≥65分：{pct65} 只，≥60分：{pct60} 只
+                                            
+                                            **推荐阈值：** {max(55, min(70, round(median_score)))} 分 （取中位数附近，范围[55,70]）
+                                            """)
+                                        except Exception:
+                                            pass
+                                    
+                                    if results:
+                                        st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v8}分）")
+                                        
+                                        # 转换为DataFrame
+                                        results_df = pd.DataFrame(results)
+                                        
+                                        # 保存到session_state
+                                        st.session_state['v8_scan_results_tab1'] = results_df
+                                        
+                                        # 显示统计
+                                        st.markdown("---")
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        with col1:
+                                            avg_score = results_df['综合评分'].astype(float).mean()
+                                            st.metric("平均评分", f"{avg_score:.1f}分")
+                                        with col2:
+                                            max_score = results_df['综合评分'].astype(float).max()
+                                            st.metric("最高评分", f"{max_score:.1f}分")
+                                        with col3:
+                                            # 统计5星和4星
+                                            grade_5 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐⭐' in str(g))
+                                            grade_4 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐' in str(g) and '⭐⭐⭐⭐⭐' not in str(g))
+                                            st.metric("5+4星", f"{grade_5+grade_4}只")
+                                        with col4:
+                                            # 平均凯利仓位
+                                            if enable_kelly:
+                                                kelly_series = results_df['凯利仓位'] if '凯利仓位' in results_df else pd.Series(dtype=float)
+                                                numeric_kelly = pd.to_numeric(
+                                                    kelly_series.str.rstrip('%'),
+                                                    errors='coerce'
+                                                ).dropna()
+                                                if len(numeric_kelly) > 0:
+                                                    avg_kelly = numeric_kelly.mean()
+                                                    st.metric("平均凯利仓位", f"{avg_kelly:.1f}%")
+                                                else:
+                                                    st.metric("平均凯利仓位", "-")
+                                            else:
+                                                st.metric("平均凯利仓位", "-")
+                                        
+                                        st.markdown("---")
+                                        st.subheader("🏆 终极推荐股票列表（v8.0·18维度）")
+                                        
+                                        # 选择显示模式
+                                        view_mode = st.radio(
+                                            "显示模式",
+                                            ["📊 完整信息", "🎯 核心指标", "📝 简洁模式"],
+                                            horizontal=True,
+                                            key="view_mode_v8_tab1"
                                         )
-                                    }
-                                )
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop('原始数据', axis=1)
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label="📥 导出完整结果（CSV）",
-                                    data=csv,
-                                    file_name=f"核心策略_V8_终极选股_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v8}分的股票\n\n**说明：**\nv8.0使用18维度评分+三级市场过滤，标准极其严格。\n\n**建议：**\n1. 降低评分阈值到70分\n2. 检查三级市场过滤状态\n3. 当前可能不是最佳入场时机")
-                    
-                    except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
+                                        
+                                        if view_mode == "📊 完整信息":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '星级', '建议仓位', '预期胜率', '盈亏比', '凯利仓位',
+                                                           '最新价格', 'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损', '止损幅度%', '止盈幅度%',
+                                                           '推荐理由']
+                                        elif view_mode == "🎯 核心指标":
+                                            display_cols = ['股票代码', '股票名称', '行业', '综合评分', '评级', '星级',
+                                                           '建议仓位', '预期胜率', '凯利仓位', '最新价格',
+                                                           'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损']
+                                        else:  # 简洁模式
+                                            display_cols = ['股票代码', '股票名称', '行业', '综合评分', 
+                                                           '评级', '星级', '建议仓位', '最新价格', '推荐理由']
+                                        
+                                        display_df = results_df[display_cols]
+                                        
+                                        # 显示表格
+                                        st.dataframe(
+                                            display_df,
+                                            use_container_width=True,
+                                            hide_index=True,
+                                            column_config={
+                                                "综合评分": st.column_config.NumberColumn(
+                                                    "综合评分",
+                                                    help="v8.0终极评分（18维度·100分制）",
+                                                    format="%.1f分"
+                                                ),
+                                                "评级": st.column_config.TextColumn(
+                                                    "评级",
+                                                    help="⭐⭐⭐⭐⭐:75+ ⭐⭐⭐⭐:65+ ⭐⭐⭐:55+ ⭐⭐:45+",
+                                                    width="medium"
+                                                ),
+                                                "星级": st.column_config.TextColumn(
+                                                    "星级",
+                                                    help="星级×建议仓位：5⭐=25%, 4⭐=20%, 3⭐=15%, 2⭐=10%",
+                                                    width="small"
+                                                ),
+                                                "建议仓位": st.column_config.TextColumn(
+                                                    "建议仓位",
+                                                    help="根据星级/评分建议的单票仓位",
+                                                    width="small"
+                                                ),
+                                                "凯利仓位": st.column_config.TextColumn(
+                                                    "凯利仓位",
+                                                    help="凯利公式计算的最优仓位比例",
+                                                    width="small"
+                                                ),
+                                                "推荐理由": st.column_config.TextColumn(
+                                                    "推荐理由",
+                                                    help="v8.0智能分析推荐原因",
+                                                    width="large"
+                                                )
+                                            }
+                                        )
+                                        
+                                        # 导出功能
+                                        st.markdown("---")
+                                        export_df = results_df.drop('原始数据', axis=1)
+                                        csv = _df_to_csv_bytes(export_df)
+                                        st.download_button(
+                                            label="📥 导出完整结果（CSV）",
+                                            data=csv,
+                                            file_name=f"核心策略_V8_终极选股_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                            mime="text/csv; charset=utf-8"
+                                        )
+                                        
+                                    else:
+                                        st.warning(f"⚠️ 未找到≥{score_threshold_v8}分的股票\n\n**说明：**\nv8.0使用18维度评分+三级市场过滤，标准极其严格。\n\n**建议：**\n1. 降低评分阈值到70分\n2. 检查三级市场过滤状态\n3. 当前可能不是最佳入场时机")
+                            
+                            except Exception as e:
+                                st.error(f"❌ 扫描失败: {e}")
+                                import traceback
+                                st.code(traceback.format_exc())
+                        
+                    finally:
+                        _release_scan_slot(lock_path)
             # 显示之前的扫描结果
             if 'v8_scan_results_tab1' in st.session_state:
                 st.markdown("---")
@@ -8434,197 +8504,204 @@ def main():
             
             st.markdown("---")
             if st.button("⚡ 开始扫描（v6.0超短线）", type="primary", use_container_width=True, key="scan_btn_v6"):
-                with st.spinner("正在扫描..."):
+                lock_path = _acquire_scan_slot("scan")
+                if not lock_path:
+                    st.warning("⚠️ 当前已有扫描在运行，请稍后重试")
+                else:
                     try:
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        
-                        # 市值转换（用户输入的是亿元，数据库中是万元）
-                        cap_min_wan = cap_min_v6 * 10000  # 转换为万元
-                        cap_max_wan = cap_max_v6 * 10000  # 转换为万元
-                        
-                        # 查询符合市值条件的股票（扫描全市场）
-                        query = """
-                            SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                            FROM stock_basic sb
-                            WHERE sb.circ_mv >= ?
-                            AND sb.circ_mv <= ?
-                            ORDER BY RANDOM()
-                        """
-                        stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
-                        
-                        if stocks_df.empty:
-                            st.error(f"❌ 未找到符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，请检查是否已更新市值数据")
-                            st.info("💡 提示：请先到Tab5（数据中心）点击「更新市值数据」")
-                            conn.close()
-                        else:
-                            st.success(f"✅ 找到 {len(stocks_df)} 只符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，开始评分...")
-                            
-                            # 显示市值范围确认
-                            if len(stocks_df) > 0:
-                                actual_min_mv = stocks_df['circ_mv'].min() / 10000
-                                actual_max_mv = stocks_df['circ_mv'].max() / 10000
-                                st.info(f"📊 实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元")
-                            
-                            # 评分结果列表
-                            results = []
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
+                        with st.spinner("正在扫描..."):
+                            try:
+                                conn = sqlite3.connect(PERMANENT_DB_PATH)
                                 
-                                # 更新进度
-                                progress = (idx + 1) / len(stocks_df)
-                                progress_bar.progress(progress)
-                                status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
+                                # 市值转换（用户输入的是亿元，数据库中是万元）
+                                cap_min_wan = cap_min_v6 * 10000  # 转换为万元
+                                cap_max_wan = cap_max_v6 * 10000  # 转换为万元
                                 
-                                try:
-                                    # 获取该股票的历史数据
-                                    data_query = """
-                                        SELECT trade_date, close_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                    """
-                                    stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                # 查询符合市值条件的股票（扫描全市场）
+                                query = """
+                                    SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                    FROM stock_basic sb
+                                    WHERE sb.circ_mv >= ?
+                                    AND sb.circ_mv <= ?
+                                    ORDER BY RANDOM()
+                                """
+                                stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                                
+                                if stocks_df.empty:
+                                    st.error(f"❌ 未找到符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，请检查是否已更新市值数据")
+                                    st.info("💡 提示：请先到Tab5（数据中心）点击「更新市值数据」")
+                                    conn.close()
+                                else:
+                                    st.success(f"✅ 找到 {len(stocks_df)} 只符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，开始评分...")
                                     
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
+                                    # 显示市值范围确认
+                                    if len(stocks_df) > 0:
+                                        actual_min_mv = stocks_df['circ_mv'].min() / 10000
+                                        actual_max_mv = stocks_df['circ_mv'].max() / 10000
+                                        st.info(f"📊 实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元")
+                                    
+                                    # 评分结果列表
+                                    results = []
+                                    
+                                    # 进度条
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+                                    
+                                    for idx, row in stocks_df.iterrows():
+                                        ts_code = row['ts_code']
+                                        stock_name = row['name']
                                         
-                                        # 使用v6.0评分器（必须传ts_code）
-                                        score_result = vp_analyzer.evaluator_v6.evaluate_stock_v6(stock_data, ts_code)
+                                        # 更新进度
+                                        progress = (idx + 1) / len(stocks_df)
+                                        progress_bar.progress(progress)
+                                        status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
                                         
-                                        if score_result and score_result.get('final_score', 0) >= score_threshold_v6:
-                                            dim_scores = score_result.get('dim_scores', {})
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': row['industry'],
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '板块热度': f"{dim_scores.get('板块热度', 0):.1f}",
-                                                '资金流向': f"{dim_scores.get('资金流向', 0):.1f}",
-                                                '技术突破': f"{dim_scores.get('技术突破', 0):.1f}",
-                                                '短期动量': f"{dim_scores.get('短期动量', 0):.1f}",
-                                                '相对强度': f"{dim_scores.get('相对强度', 0):.1f}",
-                                                '量能配合': f"{dim_scores.get('量能配合', 0):.1f}",
-                                                '筹码结构': f"{dim_scores.get('筹码结构', 0):.1f}",
-                                                '安全边际': f"{dim_scores.get('安全边际', 0):.1f}",
-                                                '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
-                                                '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
-                                                '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '推荐理由': score_result.get('description', ''),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v6}分）")
-                                
-                                # 转换为DataFrame
-                                results_df = pd.DataFrame(results)
-                                
-                                # 保存到session_state
-                                st.session_state['v6_scan_results'] = results_df
-                                
-                                # 显示统计
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("推荐股票", f"{len(results)}只")
-                                with col2:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col3:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col4:
-                                    grade_s = sum(1 for g in results_df['评级'] if g == 'S')
-                                    grade_a = sum(1 for g in results_df['评级'] if g == 'A')
-                                    st.metric("S+A级", f"{grade_s+grade_a}只")
-                                
-                                st.markdown("---")
-                                st.subheader("🏆 推荐股票列表（v6.0超短线·8维评分）")
-                                
-                                # 选择显示模式
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    ["📊 完整评分", "🎯 核心指标", "💡 简洁模式"],
-                                    horizontal=True,
-                                    key="v6_view_mode"
-                                )
-                                
-                                # 根据模式选择列
-                                if view_mode == "📊 完整评分":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '板块热度', '资金流向', '技术突破', '短期动量', 
-                                                   '相对强度', '量能配合', '筹码结构', '安全边际',
-                                                   '最新价格', '止损价', '止盈价', '推荐理由']
-                                elif view_mode == "🎯 核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '板块热度', '资金流向', '最新价格', '止损价', '止盈价', '推荐理由']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '评级', '最新价格', '推荐理由']
-                                
-                                display_df = results_df[display_cols]
-                                
-                                # 显示表格
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v6.0超短线评分（100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="S:顶级 A:优质 B:良好 C:合格",
-                                            width="small"
-                                        ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
-                                            help="智能分析推荐原因",
-                                            width="large"
+                                        try:
+                                            # 获取该股票的历史数据
+                                            data_query = """
+                                                SELECT trade_date, close_price, vol, pct_chg
+                                                FROM daily_trading_data
+                                                WHERE ts_code = ?
+                                                ORDER BY trade_date DESC
+                                                LIMIT 120
+                                            """
+                                            stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                            
+                                            if len(stock_data) >= 60:
+                                                # 添加name列用于ST检查
+                                                stock_data['name'] = stock_name
+                                                
+                                                # 使用v6.0评分器（必须传ts_code）
+                                                score_result = vp_analyzer.evaluator_v6.evaluate_stock_v6(stock_data, ts_code)
+                                                
+                                                if score_result and score_result.get('final_score', 0) >= score_threshold_v6:
+                                                    dim_scores = score_result.get('dim_scores', {})
+                                                    results.append({
+                                                        '股票代码': ts_code,
+                                                        '股票名称': stock_name,
+                                                        '行业': row['industry'],
+                                                        '流通市值': f"{row['circ_mv']/10000:.1f}亿",
+                                                        '综合评分': f"{score_result['final_score']:.1f}",
+                                                        '评级': score_result.get('grade', '-'),
+                                                        '板块热度': f"{dim_scores.get('板块热度', 0):.1f}",
+                                                        '资金流向': f"{dim_scores.get('资金流向', 0):.1f}",
+                                                        '技术突破': f"{dim_scores.get('技术突破', 0):.1f}",
+                                                        '短期动量': f"{dim_scores.get('短期动量', 0):.1f}",
+                                                        '相对强度': f"{dim_scores.get('相对强度', 0):.1f}",
+                                                        '量能配合': f"{dim_scores.get('量能配合', 0):.1f}",
+                                                        '筹码结构': f"{dim_scores.get('筹码结构', 0):.1f}",
+                                                        '安全边际': f"{dim_scores.get('安全边际', 0):.1f}",
+                                                        '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
+                                                        '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
+                                                        '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
+                                                        '推荐理由': score_result.get('description', ''),
+                                                        '原始数据': score_result
+                                                    })
+                                        
+                                        except Exception as e:
+                                            logger.warning(f"评分失败 {ts_code}: {e}")
+                                            continue
+                                    
+                                    progress_bar.empty()
+                                    status_text.empty()
+                                    conn.close()
+                                    
+                                    # 显示结果
+                                    if results:
+                                        st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v6}分）")
+                                        
+                                        # 转换为DataFrame
+                                        results_df = pd.DataFrame(results)
+                                        
+                                        # 保存到session_state
+                                        st.session_state['v6_scan_results'] = results_df
+                                        
+                                        # 显示统计
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        with col1:
+                                            st.metric("推荐股票", f"{len(results)}只")
+                                        with col2:
+                                            avg_score = results_df['综合评分'].astype(float).mean()
+                                            st.metric("平均评分", f"{avg_score:.1f}分")
+                                        with col3:
+                                            max_score = results_df['综合评分'].astype(float).max()
+                                            st.metric("最高评分", f"{max_score:.1f}分")
+                                        with col4:
+                                            grade_s = sum(1 for g in results_df['评级'] if g == 'S')
+                                            grade_a = sum(1 for g in results_df['评级'] if g == 'A')
+                                            st.metric("S+A级", f"{grade_s+grade_a}只")
+                                        
+                                        st.markdown("---")
+                                        st.subheader("🏆 推荐股票列表（v6.0超短线·8维评分）")
+                                        
+                                        # 选择显示模式
+                                        view_mode = st.radio(
+                                            "显示模式",
+                                            ["📊 完整评分", "🎯 核心指标", "💡 简洁模式"],
+                                            horizontal=True,
+                                            key="v6_view_mode"
                                         )
-                                    }
-                                )
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop('原始数据', axis=1)
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label="📥 导出完整结果（CSV）",
-                                    data=csv,
-                                    file_name=f"核心策略_V6_超短线_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v6}分的股票\n\n**建议：**\n1. 降低评分阈值\n2. 扩大市值范围")
-                    
-                    except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
+                                        
+                                        # 根据模式选择列
+                                        if view_mode == "📊 完整评分":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '板块热度', '资金流向', '技术突破', '短期动量', 
+                                                           '相对强度', '量能配合', '筹码结构', '安全边际',
+                                                           '最新价格', '止损价', '止盈价', '推荐理由']
+                                        elif view_mode == "🎯 核心指标":
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                                           '板块热度', '资金流向', '最新价格', '止损价', '止盈价', '推荐理由']
+                                        else:  # 简洁模式
+                                            display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
+                                                           '评级', '最新价格', '推荐理由']
+                                        
+                                        display_df = results_df[display_cols]
+                                        
+                                        # 显示表格
+                                        st.dataframe(
+                                            display_df,
+                                            use_container_width=True,
+                                            hide_index=True,
+                                            column_config={
+                                                "综合评分": st.column_config.NumberColumn(
+                                                    "综合评分",
+                                                    help="v6.0超短线评分（100分制）",
+                                                    format="%.1f分"
+                                                ),
+                                                "评级": st.column_config.TextColumn(
+                                                    "评级",
+                                                    help="S:顶级 A:优质 B:良好 C:合格",
+                                                    width="small"
+                                                ),
+                                                "推荐理由": st.column_config.TextColumn(
+                                                    "推荐理由",
+                                                    help="智能分析推荐原因",
+                                                    width="large"
+                                                )
+                                            }
+                                        )
+                                        
+                                        # 导出功能
+                                        st.markdown("---")
+                                        export_df = results_df.drop('原始数据', axis=1)
+                                        csv = _df_to_csv_bytes(export_df)
+                                        st.download_button(
+                                            label="📥 导出完整结果（CSV）",
+                                            data=csv,
+                                            file_name=f"核心策略_V6_超短线_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                            mime="text/csv; charset=utf-8"
+                                        )
+                                        
+                                    else:
+                                        st.warning(f"⚠️ 未找到≥{score_threshold_v6}分的股票\n\n**建议：**\n1. 降低评分阈值\n2. 扩大市值范围")
+                            
+                            except Exception as e:
+                                st.error(f"❌ 扫描失败: {e}")
+                                import traceback
+                                st.code(traceback.format_exc())
+                        
+                    finally:
+                        _release_scan_slot(lock_path)
             # 显示之前的扫描结果
             if 'v6_scan_results' in st.session_state:
                 st.markdown("---")
