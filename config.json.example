@@ -1,0 +1,4 @@
+{
+  "PERMANENT_DB_PATH": "/path/to/permanent_stock_database.db",
+  "TUSHARE_TOKEN": "your_tushare_token_here"
+}

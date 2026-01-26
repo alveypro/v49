@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.csv
+*.parquet
+config.json
+notification_config.json
+.env
+.DS_Store
