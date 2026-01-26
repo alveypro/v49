@@ -148,6 +148,7 @@ except ImportError as e:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PERMANENT_DB_PATH = os.path.join(BASE_DIR, "permanent_stock_database.db")
 DEFAULT_TUSHARE_TOKEN = ""
+DEFAULT_UPDATE_PASSWORD = ""
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 def _load_config() -> Dict[str, Any]:
@@ -164,6 +165,7 @@ def _load_config() -> Dict[str, Any]:
 _CONFIG = _load_config()
 PERMANENT_DB_PATH = os.getenv("PERMANENT_DB_PATH") or _CONFIG.get("PERMANENT_DB_PATH") or DEFAULT_PERMANENT_DB_PATH
 TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN") or _CONFIG.get("TUSHARE_TOKEN") or DEFAULT_TUSHARE_TOKEN
+UPDATE_PASSWORD = os.getenv("UPDATE_PASSWORD") or _CONFIG.get("UPDATE_PASSWORD") or DEFAULT_UPDATE_PASSWORD
 SIM_TRADING_DB_PATH = os.path.join(BASE_DIR, "sim_trading.db")
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -10763,7 +10765,7 @@ def main():
                 st.error(f"无法读取数据库状态: {e}")
         
         st.markdown("---")
-        
+
         update_mode = st.radio("更新模式", ["快速（5天）", "标准（30天）", "深度（90天）"], horizontal=True)
         
         if update_mode == "快速（5天）":
@@ -10774,8 +10776,16 @@ def main():
             days = 90
         
         st.info(f"💡 将更新最近{days}天的数据")
-        
-        if st.button("🔄 开始更新数据", type="primary", use_container_width=True):
+
+        st.markdown("### 🔐 更新权限")
+        update_password = st.text_input("更新密码", type="password", placeholder="仅授权人员可更新")
+        update_auth_ok = bool(UPDATE_PASSWORD) and update_password == UPDATE_PASSWORD
+        if not UPDATE_PASSWORD:
+            st.warning("⚠️ 未设置更新密码（请在 config.json 或环境变量 UPDATE_PASSWORD 中配置）")
+        elif update_password and not update_auth_ok:
+            st.error("❌ 密码错误，无法执行更新")
+
+        if st.button("🔄 开始更新数据", type="primary", use_container_width=True, disabled=not update_auth_ok):
             with st.spinner(f"正在更新{days}天数据..."):
                 try:
                     result = db_manager.update_stock_data_from_tushare(days=days)
@@ -10803,7 +10813,7 @@ def main():
         st.subheader("💰 流通市值数据更新")
         st.info("💡 首次使用或市值筛选功能报错时，请先更新市值数据")
         
-        if st.button("💰 更新流通市值数据", use_container_width=True, type="primary"):
+        if st.button("💰 更新流通市值数据", use_container_width=True, type="primary", disabled=not update_auth_ok):
             with st.spinner("正在从Tushare获取最新市值数据..."):
                 result = db_manager.update_market_cap()
                 if result.get('success'):
