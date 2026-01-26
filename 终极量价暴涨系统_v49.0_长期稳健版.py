@@ -149,6 +149,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PERMANENT_DB_PATH = os.path.join(BASE_DIR, "permanent_stock_database.db")
 DEFAULT_TUSHARE_TOKEN = ""
 DEFAULT_UPDATE_PASSWORD = ""
+DEFAULT_BACKTEST_PASSWORD = ""
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 def _load_config() -> Dict[str, Any]:
@@ -166,6 +167,7 @@ _CONFIG = _load_config()
 PERMANENT_DB_PATH = os.getenv("PERMANENT_DB_PATH") or _CONFIG.get("PERMANENT_DB_PATH") or DEFAULT_PERMANENT_DB_PATH
 TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN") or _CONFIG.get("TUSHARE_TOKEN") or DEFAULT_TUSHARE_TOKEN
 UPDATE_PASSWORD = os.getenv("UPDATE_PASSWORD") or _CONFIG.get("UPDATE_PASSWORD") or DEFAULT_UPDATE_PASSWORD
+BACKTEST_PASSWORD = os.getenv("BACKTEST_PASSWORD") or _CONFIG.get("BACKTEST_PASSWORD") or DEFAULT_BACKTEST_PASSWORD
 SIM_TRADING_DB_PATH = os.path.join(BASE_DIR, "sim_trading.db")
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -6227,30 +6229,42 @@ def main():
         st.markdown("---")
     
     # 【核心架构】v50.0 极简至尊版 - 6大核心功能区
-    tab_core, tab_sector, tab_backtest, tab_ai, tab_assistant, tab_data, tab_guide = st.tabs([
-        "💎 核心策略中心 (v4/v5/v6/v7🚀)",
-        "🚀 板块热点分析",
-        "📊 超级回测系统",
-        "🤖 AI智能选股",
-        "🎯 智能交易助手",
-        "🔄 数据与参数管理",
-        "📚 实战指南"
-    ])
+    if compact_mode:
+        tab_core, tab_assistant, tab_data = st.tabs([
+            "🔍 扫描选股",
+            "📋 推荐列表",
+            "🔄 数据更新"
+        ])
+        tab_sector = tab_backtest = tab_ai = tab_guide = None
+    else:
+        tab_core, tab_sector, tab_backtest, tab_ai, tab_assistant, tab_data, tab_guide = st.tabs([
+            "💎 核心策略中心 (v4/v5/v6/v7🚀)",
+            "🚀 板块热点分析",
+            "📊 超级回测系统",
+            "🤖 AI智能选股",
+            "🎯 智能交易助手",
+            "🔄 数据与参数管理",
+            "📚 实战指南"
+        ])
     
     # ==================== Tab 1: 💎 核心策略中心 ====================
     with tab_core:
-        st.markdown("""
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
-            <h1 style='margin:0; color: white;'>💎 核心策略中心 - 四维一体顶级系统</h1>
-            <p style='margin:10px 0 0 0; font-size:1.2em; opacity:0.9;'>
-                v4.0 潜伏型 | v5.0 爆发型 | v6.0 超短型 | 🚀v7.0 终极智能型 · 全球顶级标准
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        if not compact_mode:
+            st.markdown("""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
+                <h1 style='margin:0; color: white;'>💎 核心策略中心 - 四维一体顶级系统</h1>
+                <p style='margin:10px 0 0 0; font-size:1.2em; opacity:0.9;'>
+                    v4.0 潜伏型 | v5.0 爆发型 | v6.0 超短型 | 🚀v7.0 终极智能型 · 全球顶级标准
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            # 统一使用下方导出按钮，避免表格右上角导出文件名不含策略版本
+            st.caption("提示：请使用下方“导出完整结果（CSV）”按钮，文件名包含策略版本。")
+        else:
+            st.subheader("🔍 扫描选股")
+            st.caption("简洁模式：仅保留关键参数与结果。")
 
-        # 统一使用下方导出按钮，避免表格右上角导出文件名不含策略版本
-        st.caption("提示：请使用下方“导出完整结果（CSV）”按钮，文件名包含策略版本。")
         st.markdown("""
         <style>
         button[title="Download data as CSV"],
@@ -8620,2110 +8634,2123 @@ def main():
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     # ==================== Tab 2: 🚀 板块热点分析 ====================
-    with tab_sector:
-        st.markdown("""
-        <div style='background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); 
-                    padding: 25px; border-radius: 15px; color: white; margin-bottom: 20px;'>
-            <h1 style='margin:0; color: white;'>🚀 板块热点分析 - 捕捉主力轮动路径</h1>
-            <p style='margin:10px 0 0 0; font-size:1.1em; opacity:0.9;'>
-                快速识别热门板块 · 生命周期分析 · 萌芽期重点关注
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            scan_days = st.slider("📅 扫描周期（天）", 30, 120, 60, 5, 
-                                key='sector_scan_days',
-                                help="扫描最近N天的板块数据，建议60天")
-        
-        with col2:
-            st.markdown("<br>", unsafe_allow_html=True)
-            start_scan = st.button("🔍 开始扫描", type="primary", use_container_width=True, key="start_sector_scan")
-        
-        if start_scan:
-            with st.spinner("正在扫描全市场板块..."):
-                try:
-                    # 初始化scanner
-                    if 'scanner' not in st.session_state:
-                        st.session_state.scanner = MarketScanner()
+    if tab_sector is not None:
+        with tab_sector:
+                    st.markdown("""
+                    <div style='background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); 
+                                padding: 25px; border-radius: 15px; color: white; margin-bottom: 20px;'>
+                        <h1 style='margin:0; color: white;'>🚀 板块热点分析 - 捕捉主力轮动路径</h1>
+                        <p style='margin:10px 0 0 0; font-size:1.1em; opacity:0.9;'>
+                            快速识别热门板块 · 生命周期分析 · 萌芽期重点关注
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
                     
-                    scan_results = st.session_state.scanner.scan_all_sectors(days=scan_days)
-                    st.session_state['scan_results'] = scan_results
-                    st.success("✅ 扫描完成！")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ 扫描失败: {e}")
-                    import traceback
-                    st.code(traceback.format_exc())
-        
-        if 'scan_results' in st.session_state:
-            results = st.session_state['scan_results']
-            
-            st.markdown("---")
-            st.subheader("📊 板块生命周期分布")
-            
-            col1, col2, col3, col4, col5 = st.columns(5)
-            
-            with col1:
-                st.metric("🟢 萌芽期", f"{len(results['emerging'])}个", 
-                         help="成交量低迷但价格稳定，主力可能在布局")
-            with col2:
-                st.metric("🟡 启动期", f"{len(results['launching'])}个",
-                         help="量价齐升，板块开始启动")
-            with col3:
-                st.metric("🔴 爆发期", f"{len(results['exploding'])}个",
-                         help="成交量爆发，价格大涨")
-            with col4:
-                st.metric("⚫ 衰退期", f"{len(results['declining'])}个",
-                         help="量价齐跌，板块进入衰退")
-            with col5:
-                st.metric("⚪ 过渡期", f"{len(results['transitioning'])}个",
-                         help="处于过渡阶段，观察为主")
-            
-            # 萌芽期板块（重点关注）
-            if results['emerging']:
-                st.markdown("---")
-                st.markdown("### 🟢 萌芽期板块（重点关注 - 最佳布局时机）")
-                st.info("💡 萌芽期特征：成交量低迷，价格稳定，主力可能在悄悄布局，是最佳介入时机！")
-                
-                for i, sector in enumerate(results['emerging'][:10], 1):
-                    with st.expander(f"🎯 {i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**所处阶段**: {sector['stage']}")
-                            st.markdown(f"**综合评分**: {sector['score']}分")
-                        with col2:
-                            st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
-                        
-                        st.success("💡 建议：密切关注该板块龙头股，等待启动信号")
-            
-            # 启动期板块
-            if results['launching']:
-                st.markdown("---")
-                st.markdown("### 🟡 启动期板块（关注 - 确认突破）")
-                
-                for i, sector in enumerate(results['launching'][:5], 1):
-                    with st.expander(f"🔥 {i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**所处阶段**: {sector['stage']}")
-                            st.markdown(f"**综合评分**: {sector['score']}分")
-                        with col2:
-                            st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
-                        
-                        st.warning("💡 建议：关注龙头股突破，可考虑介入")
-            
-            # 爆发期板块
-            if results['exploding']:
-                st.markdown("---")
-                st.markdown("### 🔴 爆发期板块（谨慎 - 短线为主）")
-                
-                for i, sector in enumerate(results['exploding'][:5], 1):
-                    with st.expander(f"⚡ {i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**所处阶段**: {sector['stage']}")
-                            st.markdown(f"**综合评分**: {sector['score']}分")
-                        with col2:
-                            st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
-                        
-                        st.error("⚠️ 建议：高位追涨风险大，仅供短线高手参与")
-            
-            # 使用指南
-            st.markdown("---")
-            with st.expander("📚 板块分析使用指南"):
-                st.markdown("""
-                ### 🎯 如何使用板块热点分析
-                
-                **1. 萌芽期板块（最佳布局期）**
-                - ✅ 特征：成交量低迷、价格稳定、涨跌幅小
-                - ✅ 策略：提前布局龙头股，等待启动
-                - ✅ 风险：较低，主力可能正在吸筹
-                - ✅ 建议：重点关注，建立股票池
-                
-                **2. 启动期板块（确认期）**
-                - 🔥 特征：量价齐升、开始突破
-                - 🔥 策略：追涨龙头股，顺势而为
-                - 🔥 风险：中等，需要及时止盈止损
-                - 🔥 建议：择机介入，设置止损
-                
-                **3. 爆发期板块（高风险期）**
-                - ⚠️ 特征：成交量暴增、价格大涨
-                - ⚠️ 策略：短线操作，快进快出
-                - ⚠️ 风险：高，随时可能回调
-                - ⚠️ 建议：谨慎参与，不追高
-                
-                **4. 衰退期板块（规避期）**
-                - ❌ 特征：量价齐跌、趋势向下
-                - ❌ 策略：观望为主，不要抄底
-                - ❌ 风险：很高，容易套牢
-                - ❌ 建议：避开，等待下一个周期
-                
-                ### 💡 实战技巧
-                1. **重点关注萌芽期板块** - 风险最低，收益潜力大
-                2. **分散布局** - 不要把所有资金押在一个板块
-                3. **跟踪龙头股** - 板块行情看龙头
-                4. **及时止盈止损** - 设置合理的止盈止损位
-                5. **结合市场环境** - 牛市积极，熊市谨慎
-                """)
-        else:
-            st.info("💡 点击「开始扫描」按钮，系统将自动分析全市场板块，识别最佳投资机会！")
-
-    # ==================== Tab 3: 📊 超级回测系统 ====================
-    with tab_backtest:
-        st.markdown("""
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 25px; border-radius: 15px; color: white; margin-bottom: 20px;'>
-            <h1 style='margin:0; color: white;'>📊 超级回测与策略对比</h1>
-            <p style='margin:10px 0 0 0; font-size:1.1em; opacity:0.9;'>
-                历史数据验证 · 策略表现评估 · 胜率收益分析 · 最优策略推荐
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # 选择回测模式
-        backtest_mode = st.radio(
-            "选择回测模式",
-            ["📊 v4/v5/v6/v7/v8🚀🚀🚀 策略对比", "🎯 单策略深度回测", "⚙️ 参数优化"],
-            horizontal=True,
-            help="策略对比：对比五大策略表现(新增v8.0!) | 单策略回测：深度测试某个策略 | 参数优化：寻找最佳参数"
-        )
-        
-        st.markdown("---")
-        
-        if backtest_mode == "📊 v4/v5/v6/v7/v8🚀🚀🚀 策略对比":
-            st.subheader("📊 五大策略全面对比（新增v8.0终极进化版！）")
-            
-            st.info("""
-            ### 🎯 策略特点对比
-            
-            **v4.0 长期稳健版（潜伏为王）**
-            - 💎 特点：提前布局，长期持有，注重价值底部
-            - 📊 适用：稳健投资者，中长线操作
-            - 🎯 目标：56.6%胜率，平均收益10-15%
-            
-            **v5.0 趋势爆发版（启动确认）**
-            - 🚀 特点：趋势确认后介入，追求爆发力
-            - 📊 适用：进取投资者，波段操作
-            - 🎯 目标：高爆发力，短期快速获利
-            
-            **v6.0 顶级超短线（快进快出）**
-            - ⚡ 特点：超短线操作，2-5天快速获利
-            - 📊 适用：短线高手，日内或短线
-            - 🎯 目标：极速进出，捕捉热点
-            
-            **v7.0 终极智能版（动态自适应）🚀**
-            - 🌟 特点：市场环境识别+行业轮动+动态权重+三层过滤
-            - 📊 适用：追求稳定高胜率的投资者
-            - 🎯 目标：62-70%胜率，年化28-38%，夏普比率1.5-2.2
-            
-            **v8.0 终极进化版（全球最强）🚀🚀🚀 NEW!**
-            - 💫 特点：ATR动态风控+凯利公式+18维度+五星评级+三级择时
-            - 📊 适用：追求极致性能的专业投资者
-            - 🎯 目标：70-78%胜率，年化35-52%，夏普比率2.5-3.2
-            """)
-            
-            col1, col2 = st.columns([3, 1])
-            
-            with col1:
-                backtest_sample_size = st.slider(
-                    "回测样本数量", 
-                    100, 2000, 500, 100,
-                    help="建议500-1000，样本越大越准确但耗时越长"
-                )
-            
-            with col2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                start_comparison = st.button(
-                    "🚀 开始对比", 
-                    type="primary", 
-                    use_container_width=True,
-                    key="start_strategy_comparison"
-                )
-            
-            if start_comparison:
-                with st.spinner("正在对比五大策略表现（包含v8.0！）...这可能需要几分钟..."):
-                    try:
-                        # 获取历史数据
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-                        
-                        query = """
-                            SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
-                                   dtd.open_price, dtd.high_price, dtd.low_price, 
-                                   dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
-                            FROM daily_trading_data dtd
-                            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-                            WHERE dtd.trade_date >= ?
-                            ORDER BY dtd.ts_code, dtd.trade_date
-                        """
-                        
-                        df = pd.read_sql_query(query, conn, params=(start_date,))
-                        conn.close()
-                        
-                        if df.empty:
-                            st.error("❌ 无法获取历史数据，请先到「数据管理」更新数据")
-                        else:
-                            # 🔧 v49修复：保留原始列名以兼容v6/v7/v8评分器
-                            # v4/v5评分器已支持多种列名格式
-                            # v6/v7/v8评分器需要close_price格式（不能重命名为close）
-                            # df = df.rename(columns={...})  # 已注释，保持数据库原始列名
-                            
-                            # 分别回测五个策略
-                            results = {}
-                            
-                            # v4.0 回测
-                            st.info("🔄 正在回测 v4.0 长期稳健版...")
-                            v4_result = vp_analyzer.backtest_explosive_hunter(
-                                df, 
-                                sample_size=backtest_sample_size,
-                                holding_days=5
-                            )
-                            if v4_result['success']:
-                                results['v4.0 长期稳健版'] = v4_result['stats']
-                            
-                            # v5.0 回测（使用底部突破策略作为代表）
-                            st.info("🔄 正在回测 v5.0 趋势爆发版...")
-                            v5_result = vp_analyzer.backtest_bottom_breakthrough(
-                                df,
-                                sample_size=backtest_sample_size,
-                                holding_days=5
-                            )
-                            if v5_result['success']:
-                                results['v5.0 趋势爆发版'] = v5_result['stats']
-                            
-                            # v6.0 回测
-                            st.info("🔄 正在回测 v6.0 顶级超短线...")
-                            v6_result = vp_analyzer.backtest_v6_ultra_short(
-                                df,
-                                sample_size=backtest_sample_size,
-                                holding_days=3,
-                                score_threshold=60.0  # 🔧 降低阈值从70到60
-                            )
-                            if v6_result['success']:
-                                results['v6.0 顶级超短线'] = v6_result['stats']
-                            else:
-                                # 🔍 显示v6失败原因
-                                st.warning(f"⚠️ v6.0回测未产生有效结果: {v6_result.get('error', '未知原因')}")
-                                if 'stats' in v6_result:
-                                    st.info(f"v6.0分析了 {v6_result['stats'].get('analyzed_stocks', 0)} 只股票，找到 {v6_result['stats'].get('total_signals', 0)} 个信号")
-                            
-                            # 🚀 v7.0 回测（终极智能版）
-                            if V7_EVALUATOR_AVAILABLE and hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
-                                st.info("🔄 正在回测 v7.0 终极智能版...")
-                                v7_result = vp_analyzer.backtest_v7_intelligent(
-                                    df,
-                                    sample_size=backtest_sample_size,
-                                    holding_days=5,
-                                    score_threshold=60.0
-                                )
-                                if v7_result['success']:
-                                    results['v7.0 终极智能版🚀'] = v7_result['stats']
-                                else:
-                                    st.warning(f"⚠️ v7.0回测未产生有效结果: {v7_result.get('error', '未知原因')}")
-                            else:
-                                st.warning("⚠️ v7.0评分器未加载，跳过v7.0回测")
-                            
-                            # 🚀🚀🚀 v8.0 回测（终极进化版）NEW!
-                            if V8_EVALUATOR_AVAILABLE and hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
-                                st.info("🔄 正在回测 v8.0 终极进化版...（ATR动态风控+凯利公式+软过滤）")
-                                v8_result = vp_analyzer.backtest_v8_ultimate(
-                                    df,
-                                    sample_size=backtest_sample_size,
-                                    holding_days=5,
-                                    score_threshold=50.0  # 🔧 v8.1优化：采用软过滤，降低阈值到50
-                                )
-                                if v8_result['success']:
-                                    results['v8.0 终极进化版🚀🚀🚀'] = v8_result['stats']
-                                else:
-                                    st.warning(f"⚠️ v8.0回测未产生有效结果: {v8_result.get('error', '未知原因')}")
-                                    if 'stats' in v8_result:
-                                        st.info(f"v8.0分析了 {v8_result['stats'].get('analyzed_stocks', 0)} 只股票，找到 {v8_result['stats'].get('total_signals', 0)} 个信号")
-                            else:
-                                st.warning("⚠️ v8.0评分器未加载，跳过v8.0回测")
-                            
-                            if results:
-                                st.session_state['comparison_results'] = results
-                                st.success("✅ 策略对比完成！")
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        scan_days = st.slider("📅 扫描周期（天）", 30, 120, 60, 5, 
+                                            key='sector_scan_days',
+                                            help="扫描最近N天的板块数据，建议60天")
+                    
+                    with col2:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        start_scan = st.button("🔍 开始扫描", type="primary", use_container_width=True, key="start_sector_scan")
+                    
+                    if start_scan:
+                        with st.spinner("正在扫描全市场板块..."):
+                            try:
+                                # 初始化scanner
+                                if 'scanner' not in st.session_state:
+                                    st.session_state.scanner = MarketScanner()
+                                
+                                scan_results = st.session_state.scanner.scan_all_sectors(days=scan_days)
+                                st.session_state['scan_results'] = scan_results
+                                st.success("✅ 扫描完成！")
                                 st.rerun()
-                            else:
-                                st.error("❌ 所有策略回测都失败了")
+                            except Exception as e:
+                                st.error(f"❌ 扫描失败: {e}")
+                                import traceback
+                                st.code(traceback.format_exc())
                     
-                    except Exception as e:
-                        st.error(f"❌ 回测失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
+                    if 'scan_results' in st.session_state:
+                        results = st.session_state['scan_results']
+                        
+                        st.markdown("---")
+                        st.subheader("📊 板块生命周期分布")
+                        
+                        col1, col2, col3, col4, col5 = st.columns(5)
+                        
+                        with col1:
+                            st.metric("🟢 萌芽期", f"{len(results['emerging'])}个", 
+                                     help="成交量低迷但价格稳定，主力可能在布局")
+                        with col2:
+                            st.metric("🟡 启动期", f"{len(results['launching'])}个",
+                                     help="量价齐升，板块开始启动")
+                        with col3:
+                            st.metric("🔴 爆发期", f"{len(results['exploding'])}个",
+                                     help="成交量爆发，价格大涨")
+                        with col4:
+                            st.metric("⚫ 衰退期", f"{len(results['declining'])}个",
+                                     help="量价齐跌，板块进入衰退")
+                        with col5:
+                            st.metric("⚪ 过渡期", f"{len(results['transitioning'])}个",
+                                     help="处于过渡阶段，观察为主")
+                        
+                        # 萌芽期板块（重点关注）
+                        if results['emerging']:
+                            st.markdown("---")
+                            st.markdown("### 🟢 萌芽期板块（重点关注 - 最佳布局时机）")
+                            st.info("💡 萌芽期特征：成交量低迷，价格稳定，主力可能在悄悄布局，是最佳介入时机！")
+                            
+                            for i, sector in enumerate(results['emerging'][:10], 1):
+                                with st.expander(f"🎯 {i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.markdown(f"**所处阶段**: {sector['stage']}")
+                                        st.markdown(f"**综合评分**: {sector['score']}分")
+                                    with col2:
+                                        st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
+                                    
+                                    st.success("💡 建议：密切关注该板块龙头股，等待启动信号")
+                        
+                        # 启动期板块
+                        if results['launching']:
+                            st.markdown("---")
+                            st.markdown("### 🟡 启动期板块（关注 - 确认突破）")
+                            
+                            for i, sector in enumerate(results['launching'][:5], 1):
+                                with st.expander(f"🔥 {i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.markdown(f"**所处阶段**: {sector['stage']}")
+                                        st.markdown(f"**综合评分**: {sector['score']}分")
+                                    with col2:
+                                        st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
+                                    
+                                    st.warning("💡 建议：关注龙头股突破，可考虑介入")
+                        
+                        # 爆发期板块
+                        if results['exploding']:
+                            st.markdown("---")
+                            st.markdown("### 🔴 爆发期板块（谨慎 - 短线为主）")
+                            
+                            for i, sector in enumerate(results['exploding'][:5], 1):
+                                with st.expander(f"⚡ {i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.markdown(f"**所处阶段**: {sector['stage']}")
+                                        st.markdown(f"**综合评分**: {sector['score']}分")
+                                    with col2:
+                                        st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
+                                    
+                                    st.error("⚠️ 建议：高位追涨风险大，仅供短线高手参与")
+                        
+                        # 使用指南
+                        st.markdown("---")
+                        with st.expander("📚 板块分析使用指南"):
+                            st.markdown("""
+                            ### 🎯 如何使用板块热点分析
+                            
+                            **1. 萌芽期板块（最佳布局期）**
+                            - ✅ 特征：成交量低迷、价格稳定、涨跌幅小
+                            - ✅ 策略：提前布局龙头股，等待启动
+                            - ✅ 风险：较低，主力可能正在吸筹
+                            - ✅ 建议：重点关注，建立股票池
+                            
+                            **2. 启动期板块（确认期）**
+                            - 🔥 特征：量价齐升、开始突破
+                            - 🔥 策略：追涨龙头股，顺势而为
+                            - 🔥 风险：中等，需要及时止盈止损
+                            - 🔥 建议：择机介入，设置止损
+                            
+                            **3. 爆发期板块（高风险期）**
+                            - ⚠️ 特征：成交量暴增、价格大涨
+                            - ⚠️ 策略：短线操作，快进快出
+                            - ⚠️ 风险：高，随时可能回调
+                            - ⚠️ 建议：谨慎参与，不追高
+                            
+                            **4. 衰退期板块（规避期）**
+                            - ❌ 特征：量价齐跌、趋势向下
+                            - ❌ 策略：观望为主，不要抄底
+                            - ❌ 风险：很高，容易套牢
+                            - ❌ 建议：避开，等待下一个周期
+                            
+                            ### 💡 实战技巧
+                            1. **重点关注萌芽期板块** - 风险最低，收益潜力大
+                            2. **分散布局** - 不要把所有资金押在一个板块
+                            3. **跟踪龙头股** - 板块行情看龙头
+                            4. **及时止盈止损** - 设置合理的止盈止损位
+                            5. **结合市场环境** - 牛市积极，熊市谨慎
+                            """)
+                    else:
+                        st.info("💡 点击「开始扫描」按钮，系统将自动分析全市场板块，识别最佳投资机会！")
             
-            # 显示对比结果
-            if 'comparison_results' in st.session_state:
-                results = st.session_state['comparison_results']
-                
-                st.markdown("---")
-                st.subheader("📈 策略对比结果")
-                
-                # 创建对比表格
-                comparison_data = []
-                for strategy_name, stats in results.items():
-                    comparison_data.append({
-                        '策略': strategy_name,
-                        '胜率': f"{stats.get('win_rate', 0):.1f}%",
-                        '平均收益': f"{stats.get('avg_return', 0):.2f}%",
-                        '夏普比率': f"{stats.get('sharpe_ratio', 0):.2f}",
-                        '信号数量': stats.get('total_signals', 0),
-                        '平均持仓天数': stats.get('avg_holding_days', 0)
-                    })
-                
-                comparison_df = pd.DataFrame(comparison_data)
-                st.dataframe(comparison_df, use_container_width=True, hide_index=True)
-                
-                # 🆕 高级可视化对比（v49增强版）
-                st.markdown("---")
-                st.subheader("📊 全方位可视化对比")
-                
-                # 第一行：胜率和收益对比
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    # 胜率对比 - 美化版
-                    import plotly.graph_objects as go
-                    fig_winrate = go.Figure()
-                    
-                    colors = ['#667eea', '#764ba2', '#FF6B6B', '#FFD700', '#FF1493']  # v4紫/v5深紫/v6红/v7金/v8粉
-                    strategies = list(results.keys())
-                    win_rates = [stats.get('win_rate', 0) for stats in results.values()]
-                    
-                    fig_winrate.add_trace(go.Bar(
-                        x=strategies,
-                        y=win_rates,
-                        marker=dict(
-                            color=colors,
-                            line=dict(color='white', width=2)
-                        ),
-                        text=[f"{wr:.1f}%" for wr in win_rates],
-                        textposition='auto',
-                        hovertemplate='<b>%{x}</b><br>胜率: %{y:.1f}%<extra></extra>'
-                    ))
-                    
-                    fig_winrate.update_layout(
-                        title={'text': '📊 胜率对比', 'x': 0.5, 'xanchor': 'center'},
-                        yaxis_title='胜率 (%)',
-                        height=350,
-                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
-                        showlegend=False,
-                        yaxis=dict(gridcolor='rgba(128, 128, 128, 0.2)')
-                    )
-                    st.plotly_chart(fig_winrate, use_container_width=True)
-                
-                with col2:
-                    # 平均收益对比 - 美化版
-                    fig_return = go.Figure()
-                    
-                    avg_returns = [stats.get('avg_return', 0) for stats in results.values()]
-                    
-                    fig_return.add_trace(go.Bar(
-                        x=strategies,
-                        y=avg_returns,
-                        marker=dict(
-                            color=colors,
-                            line=dict(color='white', width=2)
-                        ),
-                        text=[f"{ar:.2f}%" for ar in avg_returns],
-                        textposition='auto',
-                        hovertemplate='<b>%{x}</b><br>平均收益: %{y:.2f}%<extra></extra>'
-                    ))
-                    
-                    fig_return.update_layout(
-                        title={'text': '💰 平均收益对比', 'x': 0.5, 'xanchor': 'center'},
-                        yaxis_title='收益 (%)',
-                        height=350,
-                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
-                        showlegend=False,
-                        yaxis=dict(gridcolor='rgba(128, 128, 128, 0.2)')
-                    )
-                    st.plotly_chart(fig_return, use_container_width=True)
-                
-                # 第二行：风险指标对比
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    # 夏普比率和Sortino比率对比
-                    fig_risk = go.Figure()
-                    
-                    sharpe_ratios = [stats.get('sharpe_ratio', 0) for stats in results.values()]
-                    sortino_ratios = [stats.get('sortino_ratio', 0) for stats in results.values()]
-                    
-                    fig_risk.add_trace(go.Bar(
-                        name='夏普比率',
-                        x=strategies,
-                        y=sharpe_ratios,
-                        marker_color='#667eea',
-                        text=[f"{sr:.2f}" for sr in sharpe_ratios],
-                        textposition='auto'
-                    ))
-                    
-                    fig_risk.add_trace(go.Bar(
-                        name='Sortino比率',
-                        x=strategies,
-                        y=sortino_ratios,
-                        marker_color='#764ba2',
-                        text=[f"{sr:.2f}" for sr in sortino_ratios],
-                        textposition='auto'
-                    ))
-                    
-                    fig_risk.update_layout(
-                        title={'text': '📐 风险调整收益对比', 'x': 0.5, 'xanchor': 'center'},
-                        yaxis_title='比率',
-                        barmode='group',
-                        height=350,
-                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
-                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
-                    )
-                    st.plotly_chart(fig_risk, use_container_width=True)
-                
-                with col2:
-                    # 最大回撤和盈亏比对比
-                    fig_drawdown = go.Figure()
-                    
-                    max_drawdowns = [abs(stats.get('max_drawdown', 0)) for stats in results.values()]
-                    profit_loss_ratios = [min(stats.get('profit_loss_ratio', 0), 10) for stats in results.values()]  # 限制最大值避免显示问题
-                    
-                    fig_drawdown.add_trace(go.Bar(
-                        name='最大回撤',
-                        x=strategies,
-                        y=max_drawdowns,
-                        marker_color='#FF6B6B',
-                        text=[f"{md:.2f}%" for md in max_drawdowns],
-                        textposition='auto',
-                        yaxis='y'
-                    ))
-                    
-                    fig_drawdown.add_trace(go.Scatter(
-                        name='盈亏比',
-                        x=strategies,
-                        y=profit_loss_ratios,
-                        marker=dict(size=15, color='#00D9FF', line=dict(width=2, color='white')),
-                        mode='markers+lines',
-                        line=dict(width=3),
-                        text=[f"{pl:.2f}" for pl in profit_loss_ratios],
-                        textposition='top center',
-                        yaxis='y2'
-                    ))
-                    
-                    fig_drawdown.update_layout(
-                        title={'text': '⚠️ 风险与盈亏比', 'x': 0.5, 'xanchor': 'center'},
-                        yaxis=dict(title='最大回撤 (%)', side='left'),
-                        yaxis2=dict(title='盈亏比', side='right', overlaying='y'),
-                        height=350,
-                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
-                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
-                    )
-                    st.plotly_chart(fig_drawdown, use_container_width=True)
-                
-                # 🆕 策略对比雷达图
-                st.markdown("---")
-                st.subheader("🎯 策略综合评分雷达图")
-                
-                # 计算每个策略的标准化评分
-                radar_fig = go.Figure()
-                
-                for i, (strategy_name, stats) in enumerate(results.items()):
-                    # 标准化各项指标到0-100分
-                    normalized_scores = {
-                        '胜率': stats.get('win_rate', 0),
-                        '平均收益': min(stats.get('avg_return', 0) * 5, 100),  # 假设20%收益对应100分
-                        '夏普比率': min(stats.get('sharpe_ratio', 0) * 25, 100),  # 假设4.0对应100分
-                        '盈亏比': min(stats.get('profit_loss_ratio', 0) * 20, 100),  # 假设5.0对应100分
-                        '信号数量': min(stats.get('total_signals', 0) / 5, 100),  # 假设500个对应100分
-                        '稳定性': max(100 - abs(stats.get('max_drawdown', 0)) * 10, 0)  # 回撤越小越好
-                    }
-                    
-                    categories = list(normalized_scores.keys())
-                    values = list(normalized_scores.values())
-                    values.append(values[0])  # 闭合雷达图
-                    
-                    radar_fig.add_trace(go.Scatterpolar(
-                        r=values,
-                        theta=categories + [categories[0]],
-                        fill='toself',
-                        name=strategy_name,
-                        line=dict(color=colors[i % len(colors)], width=2)
-                    ))
-                
-                radar_fig.update_layout(
-                    polar=dict(
-                        radialaxis=dict(
-                            visible=True,
-                            range=[0, 100],
-                            tickmode='linear',
-                            tick0=0,
-                            dtick=20
+                # ==================== Tab 3: 📊 超级回测系统 ====================
+    if tab_backtest is not None:
+        with tab_backtest:
+            st.header("📊 超级回测系统")
+            pw_ok = True
+            if BACKTEST_PASSWORD:
+                pw = st.text_input("回测访问密码", type="password", placeholder="仅授权人员可用", key="backtest_password")
+                pw_ok = pw == BACKTEST_PASSWORD
+                if pw and not pw_ok:
+                    st.error("❌ 密码错误，无法使用回测")
+            if not pw_ok:
+                st.info("请输入正确密码以继续")
+            else:
+                        st.markdown("""
+                        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                    padding: 25px; border-radius: 15px; color: white; margin-bottom: 20px;'>
+                            <h1 style='margin:0; color: white;'>📊 超级回测与策略对比</h1>
+                            <p style='margin:10px 0 0 0; font-size:1.1em; opacity:0.9;'>
+                                历史数据验证 · 策略表现评估 · 胜率收益分析 · 最优策略推荐
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # 选择回测模式
+                        backtest_mode = st.radio(
+                            "选择回测模式",
+                            ["📊 v4/v5/v6/v7/v8🚀🚀🚀 策略对比", "🎯 单策略深度回测", "⚙️ 参数优化"],
+                            horizontal=True,
+                            help="策略对比：对比五大策略表现(新增v8.0!) | 单策略回测：深度测试某个策略 | 参数优化：寻找最佳参数"
                         )
-                    ),
-                    showlegend=True,
-                    legend=dict(orientation='h', yanchor='bottom', y=-0.2, xanchor='center', x=0.5),
-                    height=500,
-                    title={'text': '策略六维评分（标准化）', 'x': 0.5, 'xanchor': 'center'}
-                )
-                
-                st.plotly_chart(radar_fig, use_container_width=True)
-                
-                # 推荐最佳策略
-                st.markdown("---")
-                best_strategy = max(results.items(), 
-                                  key=lambda x: x[1].get('avg_return', 0) * x[1].get('win_rate', 0) / 100)
-                
-                st.success(f"""
-                ### 🏆 推荐策略：{best_strategy[0]}
-                
-                **综合表现**：
-                - 胜率：{best_strategy[1].get('win_rate', 0):.1f}%
-                - 平均收益：{best_strategy[1].get('avg_return', 0):.2f}%
-                - 夏普比率：{best_strategy[1].get('sharpe_ratio', 0):.2f}
-                - 信号数量：{best_strategy[1].get('total_signals', 0)}
-                
-                💡 根据历史回测数据，该策略综合表现最佳，建议优先使用！
-                """)
-                
-                # ==================== 回测+ 增强功能 ====================
-                st.markdown("---")
-                st.markdown("### 🚀 回测+ 增强分析")
-                
-                # 创建标签页
-                analysis_tab1, analysis_tab2, analysis_tab3, analysis_tab4 = st.tabs([
-                    "📊 高级指标", "📈 收益分析", "🎯 信号质量", "📥 导出报告"
-                ])
-                
-                with analysis_tab1:
-                    st.subheader("📊 高级性能指标（v49增强版）")
-                    
-                    # 为每个策略计算高级指标
-                    for strategy_name, stats in results.items():
-                        with st.expander(f"📈 {strategy_name} - 详细指标", expanded=True):
-                            # 基础指标
-                            st.markdown("#### 💎 核心指标")
-                            col1, col2, col3, col4 = st.columns(4)
+                        
+                        st.markdown("---")
+                        
+                        if backtest_mode == "📊 v4/v5/v6/v7/v8🚀🚀🚀 策略对比":
+                            st.subheader("📊 五大策略全面对比（新增v8.0终极进化版！）")
+                            
+                            st.info("""
+                            ### 🎯 策略特点对比
+                            
+                            **v4.0 长期稳健版（潜伏为王）**
+                            - 💎 特点：提前布局，长期持有，注重价值底部
+                            - 📊 适用：稳健投资者，中长线操作
+                            - 🎯 目标：56.6%胜率，平均收益10-15%
+                            
+                            **v5.0 趋势爆发版（启动确认）**
+                            - 🚀 特点：趋势确认后介入，追求爆发力
+                            - 📊 适用：进取投资者，波段操作
+                            - 🎯 目标：高爆发力，短期快速获利
+                            
+                            **v6.0 顶级超短线（快进快出）**
+                            - ⚡ 特点：超短线操作，2-5天快速获利
+                            - 📊 适用：短线高手，日内或短线
+                            - 🎯 目标：极速进出，捕捉热点
+                            
+                            **v7.0 终极智能版（动态自适应）🚀**
+                            - 🌟 特点：市场环境识别+行业轮动+动态权重+三层过滤
+                            - 📊 适用：追求稳定高胜率的投资者
+                            - 🎯 目标：62-70%胜率，年化28-38%，夏普比率1.5-2.2
+                            
+                            **v8.0 终极进化版（全球最强）🚀🚀🚀 NEW!**
+                            - 💫 特点：ATR动态风控+凯利公式+18维度+五星评级+三级择时
+                            - 📊 适用：追求极致性能的专业投资者
+                            - 🎯 目标：70-78%胜率，年化35-52%，夏普比率2.5-3.2
+                            """)
+                            
+                            col1, col2 = st.columns([3, 1])
                             
                             with col1:
-                                st.metric("📊 总信号数", stats.get('total_signals', 0))
-                                st.metric("✅ 胜率", f"{stats.get('win_rate', 0):.1f}%")
-                            
-                            with col2:
-                                st.metric("💰 平均收益", f"{stats.get('avg_return', 0):.2f}%")
-                                st.metric("📈 中位数收益", f"{stats.get('median_return', 0):.2f}%")
-                            
-                            with col3:
-                                st.metric("🎯 最大收益", f"{stats.get('max_return', 0):.2f}%")
-                                st.metric("⚠️ 最大亏损", f"{stats.get('min_return', 0):.2f}%")
-                            
-                            with col4:
-                                st.metric("📐 夏普比率", f"{stats.get('sharpe_ratio', 0):.2f}")
-                                profit_loss = stats.get('profit_loss_ratio', 0)
-                                if profit_loss == float('inf'):
-                                    st.metric("💪 盈亏比", "∞")
-                                else:
-                                    st.metric("💪 盈亏比", f"{profit_loss:.2f}")
-                            
-                            # 🆕 高级风险指标
-                            st.markdown("---")
-                            st.markdown("#### 🛡️ 风险控制指标")
-                            col1, col2, col3, col4 = st.columns(4)
-                            
-                            with col1:
-                                max_dd = stats.get('max_drawdown', 0)
-                                st.metric(
-                                    "📉 最大回撤", 
-                                    f"{max_dd:.2f}%",
-                                    delta=None,
-                                    help="资金曲线从高点到最低点的最大跌幅"
-                                )
-                                st.metric(
-                                    "📊 波动率",
-                                    f"{stats.get('volatility', 0):.2f}%",
-                                    help="收益率的标准差，越小越稳定"
+                                backtest_sample_size = st.slider(
+                                    "回测样本数量", 
+                                    100, 2000, 500, 100,
+                                    help="建议500-1000，样本越大越准确但耗时越长"
                                 )
                             
                             with col2:
-                                st.metric(
-                                    "🎯 Sortino比率",
-                                    f"{stats.get('sortino_ratio', 0):.2f}",
-                                    help="只考虑下行风险的风险调整收益率"
-                                )
-                                st.metric(
-                                    "📈 Calmar比率",
-                                    f"{stats.get('calmar_ratio', 0):.2f}",
-                                    help="年化收益率与最大回撤的比值"
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                start_comparison = st.button(
+                                    "🚀 开始对比", 
+                                    type="primary", 
+                                    use_container_width=True,
+                                    key="start_strategy_comparison"
                                 )
                             
-                            with col3:
-                                st.metric(
-                                    "🔥 最长连胜",
-                                    f"{stats.get('max_consecutive_wins', 0)} 次",
-                                    help="连续盈利交易的最长记录"
-                                )
-                                st.metric(
-                                    "❄️ 最长连亏",
-                                    f"{stats.get('max_consecutive_losses', 0)} 次",
-                                    help="连续亏损交易的最长记录"
-                                )
+                            if start_comparison:
+                                with st.spinner("正在对比五大策略表现（包含v8.0！）...这可能需要几分钟..."):
+                                    try:
+                                        # 获取历史数据
+                                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                                        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
+                                        
+                                        query = """
+                                            SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
+                                                   dtd.open_price, dtd.high_price, dtd.low_price, 
+                                                   dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
+                                            FROM daily_trading_data dtd
+                                            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
+                                            WHERE dtd.trade_date >= ?
+                                            ORDER BY dtd.ts_code, dtd.trade_date
+                                        """
+                                        
+                                        df = pd.read_sql_query(query, conn, params=(start_date,))
+                                        conn.close()
+                                        
+                                        if df.empty:
+                                            st.error("❌ 无法获取历史数据，请先到「数据管理」更新数据")
+                                        else:
+                                            # 🔧 v49修复：保留原始列名以兼容v6/v7/v8评分器
+                                            # v4/v5评分器已支持多种列名格式
+                                            # v6/v7/v8评分器需要close_price格式（不能重命名为close）
+                                            # df = df.rename(columns={...})  # 已注释，保持数据库原始列名
+                                            
+                                            # 分别回测五个策略
+                                            results = {}
+                                            
+                                            # v4.0 回测
+                                            st.info("🔄 正在回测 v4.0 长期稳健版...")
+                                            v4_result = vp_analyzer.backtest_explosive_hunter(
+                                                df, 
+                                                sample_size=backtest_sample_size,
+                                                holding_days=5
+                                            )
+                                            if v4_result['success']:
+                                                results['v4.0 长期稳健版'] = v4_result['stats']
+                                            
+                                            # v5.0 回测（使用底部突破策略作为代表）
+                                            st.info("🔄 正在回测 v5.0 趋势爆发版...")
+                                            v5_result = vp_analyzer.backtest_bottom_breakthrough(
+                                                df,
+                                                sample_size=backtest_sample_size,
+                                                holding_days=5
+                                            )
+                                            if v5_result['success']:
+                                                results['v5.0 趋势爆发版'] = v5_result['stats']
+                                            
+                                            # v6.0 回测
+                                            st.info("🔄 正在回测 v6.0 顶级超短线...")
+                                            v6_result = vp_analyzer.backtest_v6_ultra_short(
+                                                df,
+                                                sample_size=backtest_sample_size,
+                                                holding_days=3,
+                                                score_threshold=60.0  # 🔧 降低阈值从70到60
+                                            )
+                                            if v6_result['success']:
+                                                results['v6.0 顶级超短线'] = v6_result['stats']
+                                            else:
+                                                # 🔍 显示v6失败原因
+                                                st.warning(f"⚠️ v6.0回测未产生有效结果: {v6_result.get('error', '未知原因')}")
+                                                if 'stats' in v6_result:
+                                                    st.info(f"v6.0分析了 {v6_result['stats'].get('analyzed_stocks', 0)} 只股票，找到 {v6_result['stats'].get('total_signals', 0)} 个信号")
+                                            
+                                            # 🚀 v7.0 回测（终极智能版）
+                                            if V7_EVALUATOR_AVAILABLE and hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
+                                                st.info("🔄 正在回测 v7.0 终极智能版...")
+                                                v7_result = vp_analyzer.backtest_v7_intelligent(
+                                                    df,
+                                                    sample_size=backtest_sample_size,
+                                                    holding_days=5,
+                                                    score_threshold=60.0
+                                                )
+                                                if v7_result['success']:
+                                                    results['v7.0 终极智能版🚀'] = v7_result['stats']
+                                                else:
+                                                    st.warning(f"⚠️ v7.0回测未产生有效结果: {v7_result.get('error', '未知原因')}")
+                                            else:
+                                                st.warning("⚠️ v7.0评分器未加载，跳过v7.0回测")
+                                            
+                                            # 🚀🚀🚀 v8.0 回测（终极进化版）NEW!
+                                            if V8_EVALUATOR_AVAILABLE and hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
+                                                st.info("🔄 正在回测 v8.0 终极进化版...（ATR动态风控+凯利公式+软过滤）")
+                                                v8_result = vp_analyzer.backtest_v8_ultimate(
+                                                    df,
+                                                    sample_size=backtest_sample_size,
+                                                    holding_days=5,
+                                                    score_threshold=50.0  # 🔧 v8.1优化：采用软过滤，降低阈值到50
+                                                )
+                                                if v8_result['success']:
+                                                    results['v8.0 终极进化版🚀🚀🚀'] = v8_result['stats']
+                                                else:
+                                                    st.warning(f"⚠️ v8.0回测未产生有效结果: {v8_result.get('error', '未知原因')}")
+                                                    if 'stats' in v8_result:
+                                                        st.info(f"v8.0分析了 {v8_result['stats'].get('analyzed_stocks', 0)} 只股票，找到 {v8_result['stats'].get('total_signals', 0)} 个信号")
+                                            else:
+                                                st.warning("⚠️ v8.0评分器未加载，跳过v8.0回测")
+                                            
+                                            if results:
+                                                st.session_state['comparison_results'] = results
+                                                st.success("✅ 策略对比完成！")
+                                                st.rerun()
+                                            else:
+                                                st.error("❌ 所有策略回测都失败了")
+                                    
+                                    except Exception as e:
+                                        st.error(f"❌ 回测失败: {e}")
+                                        import traceback
+                                        st.code(traceback.format_exc())
                             
-                            with col4:
-                                st.metric(
-                                    "📊 年化收益",
-                                    f"{stats.get('annualized_return', 0):.2f}%",
-                                    help="按252个交易日计算的年化收益率"
-                                )
-                                st.metric(
-                                    "💡 期望值",
-                                    f"{stats.get('expected_value', 0):.2f}%",
-                                    help="每笔交易的期望收益"
-                                )
-                            
-                            # 收益分位数
-                            st.markdown("---")
-                            st.markdown("#### 📊 收益分布")
-                            col1, col2, col3 = st.columns(3)
-                            
-                            with col1:
-                                st.metric("25%分位数", f"{stats.get('return_25_percentile', 0):.2f}%")
-                            with col2:
-                                st.metric("50%分位数(中位)", f"{stats.get('median_return', 0):.2f}%")
-                            with col3:
-                                st.metric("75%分位数", f"{stats.get('return_75_percentile', 0):.2f}%")
-                            
-                            # 分强度统计
-                            if 'strength_performance' in stats:
+                            # 显示对比结果
+                            if 'comparison_results' in st.session_state:
+                                results = st.session_state['comparison_results']
+                                
                                 st.markdown("---")
-                                st.markdown("#### 📊 分强度表现统计")
-                                strength_data = []
-                                for strength_range, perf in stats['strength_performance'].items():
-                                    strength_data.append({
-                                        '信号强度': strength_range,
-                                        '信号数量': perf['count'],
-                                        '平均收益': f"{perf['avg_return']:.2f}%",
-                                        '胜率': f"{perf['win_rate']:.1f}%",
-                                        '最大收益': f"{perf.get('max_return', 0):.2f}%",
-                                        '最大亏损': f"{perf.get('min_return', 0):.2f}%"
+                                st.subheader("📈 策略对比结果")
+                                
+                                # 创建对比表格
+                                comparison_data = []
+                                for strategy_name, stats in results.items():
+                                    comparison_data.append({
+                                        '策略': strategy_name,
+                                        '胜率': f"{stats.get('win_rate', 0):.1f}%",
+                                        '平均收益': f"{stats.get('avg_return', 0):.2f}%",
+                                        '夏普比率': f"{stats.get('sharpe_ratio', 0):.2f}",
+                                        '信号数量': stats.get('total_signals', 0),
+                                        '平均持仓天数': stats.get('avg_holding_days', 0)
                                     })
                                 
-                                if strength_data:
-                                    strength_df = pd.DataFrame(strength_data)
-                                    st.dataframe(strength_df, use_container_width=True, hide_index=True)
+                                comparison_df = pd.DataFrame(comparison_data)
+                                st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+                                
+                                # 🆕 高级可视化对比（v49增强版）
+                                st.markdown("---")
+                                st.subheader("📊 全方位可视化对比")
+                                
+                                # 第一行：胜率和收益对比
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    # 胜率对比 - 美化版
+                                    import plotly.graph_objects as go
+                                    fig_winrate = go.Figure()
                                     
-                                    # 可视化信号强度分布
-                                    fig_strength = go.Figure()
+                                    colors = ['#667eea', '#764ba2', '#FF6B6B', '#FFD700', '#FF1493']  # v4紫/v5深紫/v6红/v7金/v8粉
+                                    strategies = list(results.keys())
+                                    win_rates = [stats.get('win_rate', 0) for stats in results.values()]
                                     
-                                    fig_strength.add_trace(go.Bar(
-                                        name='信号数量',
-                                        x=[d['信号强度'] for d in strength_data],
-                                        y=[d['信号数量'] for d in strength_data],
-                                        yaxis='y',
-                                        marker_color='lightblue'
+                                    fig_winrate.add_trace(go.Bar(
+                                        x=strategies,
+                                        y=win_rates,
+                                        marker=dict(
+                                            color=colors,
+                                            line=dict(color='white', width=2)
+                                        ),
+                                        text=[f"{wr:.1f}%" for wr in win_rates],
+                                        textposition='auto',
+                                        hovertemplate='<b>%{x}</b><br>胜率: %{y:.1f}%<extra></extra>'
                                     ))
                                     
-                                    fig_strength.add_trace(go.Scatter(
-                                        name='平均收益',
-                                        x=[d['信号强度'] for d in strength_data],
-                                        y=[float(d['平均收益'].rstrip('%')) for d in strength_data],
-                                        yaxis='y2',
-                                        mode='lines+markers',
-                                        marker=dict(size=10, color='red'),
-                                        line=dict(width=3)
+                                    fig_winrate.update_layout(
+                                        title={'text': '📊 胜率对比', 'x': 0.5, 'xanchor': 'center'},
+                                        yaxis_title='胜率 (%)',
+                                        height=350,
+                                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
+                                        showlegend=False,
+                                        yaxis=dict(gridcolor='rgba(128, 128, 128, 0.2)')
+                                    )
+                                    st.plotly_chart(fig_winrate, use_container_width=True)
+                                
+                                with col2:
+                                    # 平均收益对比 - 美化版
+                                    fig_return = go.Figure()
+                                    
+                                    avg_returns = [stats.get('avg_return', 0) for stats in results.values()]
+                                    
+                                    fig_return.add_trace(go.Bar(
+                                        x=strategies,
+                                        y=avg_returns,
+                                        marker=dict(
+                                            color=colors,
+                                            line=dict(color='white', width=2)
+                                        ),
+                                        text=[f"{ar:.2f}%" for ar in avg_returns],
+                                        textposition='auto',
+                                        hovertemplate='<b>%{x}</b><br>平均收益: %{y:.2f}%<extra></extra>'
                                     ))
                                     
-                                    fig_strength.update_layout(
-                                        title='信号强度 vs 收益表现',
-                                        xaxis_title='信号强度',
-                                        yaxis=dict(title='信号数量', side='left'),
-                                        yaxis2=dict(title='平均收益 (%)', side='right', overlaying='y'),
-                                        height=400,
-                                        showlegend=True
+                                    fig_return.update_layout(
+                                        title={'text': '💰 平均收益对比', 'x': 0.5, 'xanchor': 'center'},
+                                        yaxis_title='收益 (%)',
+                                        height=350,
+                                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
+                                        showlegend=False,
+                                        yaxis=dict(gridcolor='rgba(128, 128, 128, 0.2)')
+                                    )
+                                    st.plotly_chart(fig_return, use_container_width=True)
+                                
+                                # 第二行：风险指标对比
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    # 夏普比率和Sortino比率对比
+                                    fig_risk = go.Figure()
+                                    
+                                    sharpe_ratios = [stats.get('sharpe_ratio', 0) for stats in results.values()]
+                                    sortino_ratios = [stats.get('sortino_ratio', 0) for stats in results.values()]
+                                    
+                                    fig_risk.add_trace(go.Bar(
+                                        name='夏普比率',
+                                        x=strategies,
+                                        y=sharpe_ratios,
+                                        marker_color='#667eea',
+                                        text=[f"{sr:.2f}" for sr in sharpe_ratios],
+                                        textposition='auto'
+                                    ))
+                                    
+                                    fig_risk.add_trace(go.Bar(
+                                        name='Sortino比率',
+                                        x=strategies,
+                                        y=sortino_ratios,
+                                        marker_color='#764ba2',
+                                        text=[f"{sr:.2f}" for sr in sortino_ratios],
+                                        textposition='auto'
+                                    ))
+                                    
+                                    fig_risk.update_layout(
+                                        title={'text': '📐 风险调整收益对比', 'x': 0.5, 'xanchor': 'center'},
+                                        yaxis_title='比率',
+                                        barmode='group',
+                                        height=350,
+                                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
+                                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
+                                    )
+                                    st.plotly_chart(fig_risk, use_container_width=True)
+                                
+                                with col2:
+                                    # 最大回撤和盈亏比对比
+                                    fig_drawdown = go.Figure()
+                                    
+                                    max_drawdowns = [abs(stats.get('max_drawdown', 0)) for stats in results.values()]
+                                    profit_loss_ratios = [min(stats.get('profit_loss_ratio', 0), 10) for stats in results.values()]  # 限制最大值避免显示问题
+                                    
+                                    fig_drawdown.add_trace(go.Bar(
+                                        name='最大回撤',
+                                        x=strategies,
+                                        y=max_drawdowns,
+                                        marker_color='#FF6B6B',
+                                        text=[f"{md:.2f}%" for md in max_drawdowns],
+                                        textposition='auto',
+                                        yaxis='y'
+                                    ))
+                                    
+                                    fig_drawdown.add_trace(go.Scatter(
+                                        name='盈亏比',
+                                        x=strategies,
+                                        y=profit_loss_ratios,
+                                        marker=dict(size=15, color='#00D9FF', line=dict(width=2, color='white')),
+                                        mode='markers+lines',
+                                        line=dict(width=3),
+                                        text=[f"{pl:.2f}" for pl in profit_loss_ratios],
+                                        textposition='top center',
+                                        yaxis='y2'
+                                    ))
+                                    
+                                    fig_drawdown.update_layout(
+                                        title={'text': '⚠️ 风险与盈亏比', 'x': 0.5, 'xanchor': 'center'},
+                                        yaxis=dict(title='最大回撤 (%)', side='left'),
+                                        yaxis2=dict(title='盈亏比', side='right', overlaying='y'),
+                                        height=350,
+                                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
+                                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
+                                    )
+                                    st.plotly_chart(fig_drawdown, use_container_width=True)
+                                
+                                # 🆕 策略对比雷达图
+                                st.markdown("---")
+                                st.subheader("🎯 策略综合评分雷达图")
+                                
+                                # 计算每个策略的标准化评分
+                                radar_fig = go.Figure()
+                                
+                                for i, (strategy_name, stats) in enumerate(results.items()):
+                                    # 标准化各项指标到0-100分
+                                    normalized_scores = {
+                                        '胜率': stats.get('win_rate', 0),
+                                        '平均收益': min(stats.get('avg_return', 0) * 5, 100),  # 假设20%收益对应100分
+                                        '夏普比率': min(stats.get('sharpe_ratio', 0) * 25, 100),  # 假设4.0对应100分
+                                        '盈亏比': min(stats.get('profit_loss_ratio', 0) * 20, 100),  # 假设5.0对应100分
+                                        '信号数量': min(stats.get('total_signals', 0) / 5, 100),  # 假设500个对应100分
+                                        '稳定性': max(100 - abs(stats.get('max_drawdown', 0)) * 10, 0)  # 回撤越小越好
+                                    }
+                                    
+                                    categories = list(normalized_scores.keys())
+                                    values = list(normalized_scores.values())
+                                    values.append(values[0])  # 闭合雷达图
+                                    
+                                    radar_fig.add_trace(go.Scatterpolar(
+                                        r=values,
+                                        theta=categories + [categories[0]],
+                                        fill='toself',
+                                        name=strategy_name,
+                                        line=dict(color=colors[i % len(colors)], width=2)
+                                    ))
+                                
+                                radar_fig.update_layout(
+                                    polar=dict(
+                                        radialaxis=dict(
+                                            visible=True,
+                                            range=[0, 100],
+                                            tickmode='linear',
+                                            tick0=0,
+                                            dtick=20
+                                        )
+                                    ),
+                                    showlegend=True,
+                                    legend=dict(orientation='h', yanchor='bottom', y=-0.2, xanchor='center', x=0.5),
+                                    height=500,
+                                    title={'text': '策略六维评分（标准化）', 'x': 0.5, 'xanchor': 'center'}
+                                )
+                                
+                                st.plotly_chart(radar_fig, use_container_width=True)
+                                
+                                # 推荐最佳策略
+                                st.markdown("---")
+                                best_strategy = max(results.items(), 
+                                                  key=lambda x: x[1].get('avg_return', 0) * x[1].get('win_rate', 0) / 100)
+                                
+                                st.success(f"""
+                                ### 🏆 推荐策略：{best_strategy[0]}
+                                
+                                **综合表现**：
+                                - 胜率：{best_strategy[1].get('win_rate', 0):.1f}%
+                                - 平均收益：{best_strategy[1].get('avg_return', 0):.2f}%
+                                - 夏普比率：{best_strategy[1].get('sharpe_ratio', 0):.2f}
+                                - 信号数量：{best_strategy[1].get('total_signals', 0)}
+                                
+                                💡 根据历史回测数据，该策略综合表现最佳，建议优先使用！
+                                """)
+                                
+                                # ==================== 回测+ 增强功能 ====================
+                                st.markdown("---")
+                                st.markdown("### 🚀 回测+ 增强分析")
+                                
+                                # 创建标签页
+                                analysis_tab1, analysis_tab2, analysis_tab3, analysis_tab4 = st.tabs([
+                                    "📊 高级指标", "📈 收益分析", "🎯 信号质量", "📥 导出报告"
+                                ])
+                                
+                                with analysis_tab1:
+                                    st.subheader("📊 高级性能指标（v49增强版）")
+                                    
+                                    # 为每个策略计算高级指标
+                                    for strategy_name, stats in results.items():
+                                        with st.expander(f"📈 {strategy_name} - 详细指标", expanded=True):
+                                            # 基础指标
+                                            st.markdown("#### 💎 核心指标")
+                                            col1, col2, col3, col4 = st.columns(4)
+                                            
+                                            with col1:
+                                                st.metric("📊 总信号数", stats.get('total_signals', 0))
+                                                st.metric("✅ 胜率", f"{stats.get('win_rate', 0):.1f}%")
+                                            
+                                            with col2:
+                                                st.metric("💰 平均收益", f"{stats.get('avg_return', 0):.2f}%")
+                                                st.metric("📈 中位数收益", f"{stats.get('median_return', 0):.2f}%")
+                                            
+                                            with col3:
+                                                st.metric("🎯 最大收益", f"{stats.get('max_return', 0):.2f}%")
+                                                st.metric("⚠️ 最大亏损", f"{stats.get('min_return', 0):.2f}%")
+                                            
+                                            with col4:
+                                                st.metric("📐 夏普比率", f"{stats.get('sharpe_ratio', 0):.2f}")
+                                                profit_loss = stats.get('profit_loss_ratio', 0)
+                                                if profit_loss == float('inf'):
+                                                    st.metric("💪 盈亏比", "∞")
+                                                else:
+                                                    st.metric("💪 盈亏比", f"{profit_loss:.2f}")
+                                            
+                                            # 🆕 高级风险指标
+                                            st.markdown("---")
+                                            st.markdown("#### 🛡️ 风险控制指标")
+                                            col1, col2, col3, col4 = st.columns(4)
+                                            
+                                            with col1:
+                                                max_dd = stats.get('max_drawdown', 0)
+                                                st.metric(
+                                                    "📉 最大回撤", 
+                                                    f"{max_dd:.2f}%",
+                                                    delta=None,
+                                                    help="资金曲线从高点到最低点的最大跌幅"
+                                                )
+                                                st.metric(
+                                                    "📊 波动率",
+                                                    f"{stats.get('volatility', 0):.2f}%",
+                                                    help="收益率的标准差，越小越稳定"
+                                                )
+                                            
+                                            with col2:
+                                                st.metric(
+                                                    "🎯 Sortino比率",
+                                                    f"{stats.get('sortino_ratio', 0):.2f}",
+                                                    help="只考虑下行风险的风险调整收益率"
+                                                )
+                                                st.metric(
+                                                    "📈 Calmar比率",
+                                                    f"{stats.get('calmar_ratio', 0):.2f}",
+                                                    help="年化收益率与最大回撤的比值"
+                                                )
+                                            
+                                            with col3:
+                                                st.metric(
+                                                    "🔥 最长连胜",
+                                                    f"{stats.get('max_consecutive_wins', 0)} 次",
+                                                    help="连续盈利交易的最长记录"
+                                                )
+                                                st.metric(
+                                                    "❄️ 最长连亏",
+                                                    f"{stats.get('max_consecutive_losses', 0)} 次",
+                                                    help="连续亏损交易的最长记录"
+                                                )
+                                            
+                                            with col4:
+                                                st.metric(
+                                                    "📊 年化收益",
+                                                    f"{stats.get('annualized_return', 0):.2f}%",
+                                                    help="按252个交易日计算的年化收益率"
+                                                )
+                                                st.metric(
+                                                    "💡 期望值",
+                                                    f"{stats.get('expected_value', 0):.2f}%",
+                                                    help="每笔交易的期望收益"
+                                                )
+                                            
+                                            # 收益分位数
+                                            st.markdown("---")
+                                            st.markdown("#### 📊 收益分布")
+                                            col1, col2, col3 = st.columns(3)
+                                            
+                                            with col1:
+                                                st.metric("25%分位数", f"{stats.get('return_25_percentile', 0):.2f}%")
+                                            with col2:
+                                                st.metric("50%分位数(中位)", f"{stats.get('median_return', 0):.2f}%")
+                                            with col3:
+                                                st.metric("75%分位数", f"{stats.get('return_75_percentile', 0):.2f}%")
+                                            
+                                            # 分强度统计
+                                            if 'strength_performance' in stats:
+                                                st.markdown("---")
+                                                st.markdown("#### 📊 分强度表现统计")
+                                                strength_data = []
+                                                for strength_range, perf in stats['strength_performance'].items():
+                                                    strength_data.append({
+                                                        '信号强度': strength_range,
+                                                        '信号数量': perf['count'],
+                                                        '平均收益': f"{perf['avg_return']:.2f}%",
+                                                        '胜率': f"{perf['win_rate']:.1f}%",
+                                                        '最大收益': f"{perf.get('max_return', 0):.2f}%",
+                                                        '最大亏损': f"{perf.get('min_return', 0):.2f}%"
+                                                    })
+                                                
+                                                if strength_data:
+                                                    strength_df = pd.DataFrame(strength_data)
+                                                    st.dataframe(strength_df, use_container_width=True, hide_index=True)
+                                                    
+                                                    # 可视化信号强度分布
+                                                    fig_strength = go.Figure()
+                                                    
+                                                    fig_strength.add_trace(go.Bar(
+                                                        name='信号数量',
+                                                        x=[d['信号强度'] for d in strength_data],
+                                                        y=[d['信号数量'] for d in strength_data],
+                                                        yaxis='y',
+                                                        marker_color='lightblue'
+                                                    ))
+                                                    
+                                                    fig_strength.add_trace(go.Scatter(
+                                                        name='平均收益',
+                                                        x=[d['信号强度'] for d in strength_data],
+                                                        y=[float(d['平均收益'].rstrip('%')) for d in strength_data],
+                                                        yaxis='y2',
+                                                        mode='lines+markers',
+                                                        marker=dict(size=10, color='red'),
+                                                        line=dict(width=3)
+                                                    ))
+                                                    
+                                                    fig_strength.update_layout(
+                                                        title='信号强度 vs 收益表现',
+                                                        xaxis_title='信号强度',
+                                                        yaxis=dict(title='信号数量', side='left'),
+                                                        yaxis2=dict(title='平均收益 (%)', side='right', overlaying='y'),
+                                                        height=400,
+                                                        showlegend=True
+                                                    )
+                                                    
+                                                    st.plotly_chart(fig_strength, use_container_width=True)
+                                
+                                with analysis_tab2:
+                                    st.subheader("📈 收益分布与资金曲线（v49增强版）")
+                                    
+                                    # 选择要分析的策略
+                                    selected_for_analysis = st.selectbox(
+                                        "选择策略进行详细分析",
+                                        list(results.keys()),
+                                        key="analysis_strategy_select"
                                     )
                                     
-                                    st.plotly_chart(fig_strength, use_container_width=True)
-                
-                with analysis_tab2:
-                    st.subheader("📈 收益分布与资金曲线（v49增强版）")
-                    
-                    # 选择要分析的策略
-                    selected_for_analysis = st.selectbox(
-                        "选择策略进行详细分析",
-                        list(results.keys()),
-                        key="analysis_strategy_select"
-                    )
-                    
-                    stats_for_analysis = results[selected_for_analysis]
-                    
-                    # 基础统计
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown("#### 📊 收益统计")
-                        st.info(f"""
-                        **平均收益**: {stats_for_analysis.get('avg_return', 0):.2f}%
-                        
-                        **中位数收益**: {stats_for_analysis.get('median_return', 0):.2f}%
-                        
-                        **最大收益**: {stats_for_analysis.get('max_return', 0):.2f}%
-                        
-                        **最大亏损**: {stats_for_analysis.get('min_return', 0):.2f}%
-                        
-                        **标准差**: {stats_for_analysis.get('volatility', 0):.2f}%
-                        """)
-                    
-                    with col2:
-                        st.markdown("#### 🎯 风险指标")
-                        win_rate = stats_for_analysis.get('win_rate', 0)
-                        avg_return = stats_for_analysis.get('avg_return', 0)
-                        
-                        # 计算风险等级
-                        if win_rate >= 60 and avg_return >= 5:
-                            risk_level = "🟢 低风险"
-                        elif win_rate >= 50 and avg_return >= 3:
-                            risk_level = "🟡 中风险"
-                        else:
-                            risk_level = "🔴 高风险"
-                        
-                        st.metric("风险等级", risk_level)
-                        st.metric("胜率", f"{win_rate:.1f}%")
-                        st.metric("夏普比率", f"{stats_for_analysis.get('sharpe_ratio', 0):.2f}")
-                        st.metric("盈亏比", f"{stats_for_analysis.get('profit_loss_ratio', 0):.2f}")
-                    
-                    # 🆕 资金曲线图
-                    st.markdown("---")
-                    st.markdown("#### 💰 资金曲线")
-                    
-                    if 'cumulative_returns' in stats_for_analysis and stats_for_analysis['cumulative_returns']:
-                        cumulative_returns = stats_for_analysis['cumulative_returns']
-                        
-                        fig_equity = go.Figure()
-                        
-                        # 主资金曲线
-                        fig_equity.add_trace(go.Scatter(
-                            x=list(range(len(cumulative_returns))),
-                            y=cumulative_returns,
-                            mode='lines',
-                            name='资金曲线',
-                            line=dict(color='#667eea', width=3),
-                            fill='tozeroy',
-                            fillcolor='rgba(102, 126, 234, 0.1)'
-                        ))
-                        
-                        # 添加基准线
-                        fig_equity.add_trace(go.Scatter(
-                            x=[0, len(cumulative_returns)-1],
-                            y=[1, 1],
-                            mode='lines',
-                            name='基准线',
-                            line=dict(color='gray', width=2, dash='dash')
-                        ))
-                        
-                        fig_equity.update_layout(
-                            title='累计收益率曲线',
-                            xaxis_title='交易次数',
-                            yaxis_title='累计收益倍数',
-                            height=400,
-                            hovermode='x unified',
-                            plot_bgcolor='rgba(240, 242, 246, 0.5)'
-                        )
-                        
-                        st.plotly_chart(fig_equity, use_container_width=True)
-                    else:
-                        st.info("📊 资金曲线数据不可用")
-                    
-                    # 🆕 Monte Carlo模拟
-                    st.markdown("---")
-                    st.markdown("#### 🎲 Monte Carlo模拟（未来收益预测）")
-                    
-                    col1, col2 = st.columns([2, 1])
-                    
-                    with col2:
-                        mc_simulations = st.slider("模拟次数", 100, 1000, 500, 100, key="mc_sims")
-                        mc_periods = st.slider("预测周期", 10, 100, 50, 10, key="mc_periods")
-                        run_mc = st.button("🎲 运行Monte Carlo模拟", type="primary", use_container_width=True)
-                    
-                    with col1:
-                        if run_mc:
-                            with st.spinner("正在运行Monte Carlo模拟..."):
-                                # 基于历史收益率进行蒙特卡洛模拟
-                                avg_ret = stats_for_analysis.get('avg_return', 0) / 100
-                                vol = stats_for_analysis.get('volatility', 0) / 100
-                                
-                                # 生成随机收益路径
-                                np.random.seed(42)
-                                simulations = []
-                                
-                                for _ in range(mc_simulations):
-                                    returns = np.random.normal(avg_ret, vol, mc_periods)
-                                    cumulative = np.cumprod(1 + returns)
-                                    simulations.append(cumulative)
-                                
-                                simulations = np.array(simulations)
-                                
-                                # 绘制Monte Carlo模拟结果
-                                fig_mc = go.Figure()
-                                
-                                # 绘制所有模拟路径（半透明）
-                                for i in range(min(100, mc_simulations)):  # 最多显示100条路径
-                                    fig_mc.add_trace(go.Scatter(
-                                        x=list(range(mc_periods)),
-                                        y=simulations[i],
-                                        mode='lines',
-                                        line=dict(color='lightblue', width=0.5),
-                                        opacity=0.3,
-                                        showlegend=False,
-                                        hoverinfo='skip'
-                                    ))
-                                
-                                # 添加中位数、25%和75%分位数
-                                median_path = np.median(simulations, axis=0)
-                                percentile_25 = np.percentile(simulations, 25, axis=0)
-                                percentile_75 = np.percentile(simulations, 75, axis=0)
-                                
-                                fig_mc.add_trace(go.Scatter(
-                                    x=list(range(mc_periods)),
-                                    y=median_path,
-                                    mode='lines',
-                                    name='中位数预测',
-                                    line=dict(color='red', width=3)
-                                ))
-                                
-                                fig_mc.add_trace(go.Scatter(
-                                    x=list(range(mc_periods)),
-                                    y=percentile_75,
-                                    mode='lines',
-                                    name='75%分位',
-                                    line=dict(color='green', width=2, dash='dash')
-                                ))
-                                
-                                fig_mc.add_trace(go.Scatter(
-                                    x=list(range(mc_periods)),
-                                    y=percentile_25,
-                                    mode='lines',
-                                    name='25%分位',
-                                    line=dict(color='orange', width=2, dash='dash'),
-                                    fill='tonexty',
-                                    fillcolor='rgba(102, 126, 234, 0.1)'
-                                ))
-                                
-                                fig_mc.update_layout(
-                                    title=f'Monte Carlo模拟 ({mc_simulations}次模拟, {mc_periods}期)',
-                                    xaxis_title='交易周期',
-                                    yaxis_title='累计收益倍数',
-                                    height=450,
-                                    hovermode='x unified',
-                                    plot_bgcolor='rgba(240, 242, 246, 0.5)'
-                                )
-                                
-                                st.plotly_chart(fig_mc, use_container_width=True)
-                                
-                                # 显示统计结果
-                                final_values = simulations[:, -1]
-                                st.success(f"""
-                                ### 📊 Monte Carlo模拟结果
-                                
-                                **{mc_periods}个周期后的预期收益：**
-                                - 中位数：{(median_path[-1] - 1) * 100:.2f}%
-                                - 25%分位：{(percentile_25[-1] - 1) * 100:.2f}%
-                                - 75%分位：{(percentile_75[-1] - 1) * 100:.2f}%
-                                - 最好情况：{(final_values.max() - 1) * 100:.2f}%
-                                - 最坏情况：{(final_values.min() - 1) * 100:.2f}%
-                                - 盈利概率：{(final_values > 1).sum() / len(final_values) * 100:.1f}%
-                                """)
-                    
-                    # 收益区间分布
-                    st.markdown("---")
-                    st.markdown("#### 📊 收益区间分布")
-                    if 'strength_performance' in stats_for_analysis:
-                        strength_perf = stats_for_analysis['strength_performance']
-                        
-                        labels = list(strength_perf.keys())
-                        counts = [perf['count'] for perf in strength_perf.values()]
-                        returns = [perf['avg_return'] for perf in strength_perf.values()]
-                        
-                        fig = go.Figure()
-                        
-                        fig.add_trace(go.Bar(
-                            x=labels,
-                            y=counts,
-                            name='信号数量',
-                            marker_color='lightblue',
-                            yaxis='y'
-                        ))
-                        
-                        fig.add_trace(go.Scatter(
-                            x=labels,
-                            y=returns,
-                            name='平均收益',
-                            marker_color='red',
-                            yaxis='y2',
-                            mode='lines+markers',
-                            marker=dict(size=10),
-                            line=dict(width=3)
-                        ))
-                        
-                        fig.update_layout(
-                            title='信号强度 vs 收益表现',
-                            xaxis_title='信号强度',
-                            yaxis=dict(title='信号数量', side='left'),
-                            yaxis2=dict(title='平均收益 (%)', side='right', overlaying='y'),
-                            height=400
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                with analysis_tab3:
-                    st.subheader("🎯 信号质量分析（v49增强版）")
-                    
-                    # 整体信号质量评估
-                    st.markdown("#### 📊 策略信号质量对比")
-                    
-                    quality_data = []
-                    quality_scores_list = []
-                    
-                    for strategy_name, stats in results.items():
-                        # 计算综合质量分数（增强版）
-                        win_rate = stats.get('win_rate', 0)
-                        avg_return = stats.get('avg_return', 0)
-                        sharpe = stats.get('sharpe_ratio', 0)
-                        sortino = stats.get('sortino_ratio', 0)
-                        total_signals = stats.get('total_signals', 0)
-                        max_drawdown = abs(stats.get('max_drawdown', 0))
-                        profit_loss = min(stats.get('profit_loss_ratio', 0), 10)  # 限制最大值
-                        
-                        # 质量分数 = 胜率*0.25 + 平均收益*3*0.25 + 夏普比率*10*0.15 + 
-                        #            Sortino*8*0.1 + min(信号数/100, 1)*100*0.15 + 
-                        #            (10-回撤)*0.05 + 盈亏比*3*0.05
-                        quality_score = (
-                            win_rate * 0.25 +
-                            avg_return * 3 * 0.25 +
-                            sharpe * 10 * 0.15 +
-                            sortino * 8 * 0.1 +
-                            min(total_signals / 100, 1) * 100 * 0.15 +
-                            max(10 - max_drawdown, 0) * 0.05 +
-                            profit_loss * 3 * 0.05
-                        )
-                        
-                        quality_scores_list.append(quality_score)
-                        
-                        # 评级
-                        if quality_score >= 80:
-                            grade = "S 级（优秀）"
-                            grade_icon = "🌟"
-                            grade_color = "#FFD700"
-                        elif quality_score >= 70:
-                            grade = "A 级（良好）"
-                            grade_icon = "⭐"
-                            grade_color = "#C0C0C0"
-                        elif quality_score >= 60:
-                            grade = "B 级（合格）"
-                            grade_icon = "✅"
-                            grade_color = "#CD7F32"
-                        else:
-                            grade = "C 级（待改进）"
-                            grade_icon = "📝"
-                            grade_color = "#808080"
-                        
-                        quality_data.append({
-                            '策略': strategy_name,
-                            '质量分数': f"{quality_score:.1f}",
-                            '评级': f"{grade_icon} {grade}",
-                            '胜率': f"{win_rate:.1f}%",
-                            '平均收益': f"{avg_return:.2f}%",
-                            '夏普比率': f"{sharpe:.2f}",
-                            'Sortino比率': f"{sortino:.2f}",
-                            '最大回撤': f"{max_drawdown:.2f}%",
-                            '盈亏比': f"{profit_loss:.2f}",
-                            '信号数量': total_signals
-                        })
-                    
-                    quality_df = pd.DataFrame(quality_data)
-                    st.dataframe(quality_df, use_container_width=True, hide_index=True)
-                    
-                    # 🆕 质量分数可视化对比
-                    st.markdown("---")
-                    st.markdown("#### 📊 质量分数可视化")
-                    
-                    fig_quality = go.Figure()
-                    
-                    colors_quality = ['#FFD700' if score >= 80 else '#C0C0C0' if score >= 70 else '#CD7F32' if score >= 60 else '#808080' 
-                                     for score in quality_scores_list]
-                    
-                    fig_quality.add_trace(go.Bar(
-                        x=list(results.keys()),
-                        y=quality_scores_list,
-                        marker=dict(
-                            color=colors_quality,
-                            line=dict(color='white', width=2)
-                        ),
-                        text=[f"{score:.1f}" for score in quality_scores_list],
-                        textposition='auto'
-                    ))
-                    
-                    # 添加评级线
-                    fig_quality.add_hline(y=80, line_dash="dash", line_color="gold", 
-                                         annotation_text="S级线", annotation_position="right")
-                    fig_quality.add_hline(y=70, line_dash="dash", line_color="silver", 
-                                         annotation_text="A级线", annotation_position="right")
-                    fig_quality.add_hline(y=60, line_dash="dash", line_color="#CD7F32", 
-                                         annotation_text="B级线", annotation_position="right")
-                    
-                    fig_quality.update_layout(
-                        title='策略质量分数对比',
-                        yaxis_title='质量分数',
-                        height=400,
-                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
-                        showlegend=False
-                    )
-                    
-                    st.plotly_chart(fig_quality, use_container_width=True)
-                    
-                    # 🆕 策略对比热力图
-                    st.markdown("---")
-                    st.markdown("#### 🔥 策略指标热力图")
-                    
-                    # 准备热力图数据
-                    heatmap_metrics = ['胜率', '平均收益', '夏普比率', 'Sortino比率', '盈亏比']
-                    heatmap_data = []
-                    
-                    for strategy_name, stats in results.items():
-                        row = [
-                            stats.get('win_rate', 0),
-                            stats.get('avg_return', 0) * 5,  # 归一化
-                            stats.get('sharpe_ratio', 0) * 20,  # 归一化
-                            stats.get('sortino_ratio', 0) * 15,  # 归一化
-                            min(stats.get('profit_loss_ratio', 0) * 15, 100)  # 归一化
-                        ]
-                        heatmap_data.append(row)
-                    
-                    fig_heatmap = go.Figure(data=go.Heatmap(
-                        z=heatmap_data,
-                        x=heatmap_metrics,
-                        y=list(results.keys()),
-                        colorscale='RdYlGn',
-                        text=[[f"{val:.1f}" for val in row] for row in heatmap_data],
-                        texttemplate='%{text}',
-                        textfont={"size": 12},
-                        colorbar=dict(title="标准化分数")
-                    ))
-                    
-                    fig_heatmap.update_layout(
-                        title='策略指标热力图（标准化）',
-                        height=300,
-                        xaxis_title='指标',
-                        yaxis_title='策略'
-                    )
-                    
-                    st.plotly_chart(fig_heatmap, use_container_width=True)
-                    
-                    # 质量评估说明
-                    st.info("""
-                    ### 📋 质量评级标准（v49增强版）
-                    
-                    **评分公式**：
-                    - 胜率 × 25%
-                    - 平均收益 × 25%
-                    - 夏普比率 × 15%
-                    - Sortino比率 × 10%
-                    - 信号数量 × 15%
-                    - 回撤控制 × 5%
-                    - 盈亏比 × 5%
-                    
-                    **评级标准**：
-                    - 🌟 **S 级（优秀）**：质量分数 ≥ 80分 - 胜率高、收益好、风险可控、信号充足，建议重点使用
-                    - ⭐ **A 级（良好）**：质量分数 70-80分 - 综合表现良好，建议正常使用
-                    - ✅ **B 级（合格）**：质量分数 60-70分 - 表现尚可，有改进空间，谨慎使用
-                    - 📝 **C 级（待改进）**：质量分数 < 60分 - 需要优化参数或策略，不建议使用
-                    """)
-                
-                with analysis_tab4:
-                    st.subheader("📥 导出回测报告（v49增强版）")
-                    
-                    st.markdown("#### 📊 可导出内容")
-                    
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        if st.button("📄 生成Markdown报告", use_container_width=True):
-                            # 生成Markdown格式的详细报告
-                            report_md = f"""# 📊 超级回测对比报告 v49.0
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    终极量价暴涨系统 · 策略回测分析报告
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                            
-## 🎯 回测概况
-
-- **回测时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-- **回测策略**: {', '.join(results.keys())}
-- **系统版本**: v49.0 长期稳健版
-- **数据来源**: Tushare Pro（真实数据）
-
----
-
-## 📈 策略表现汇总
-
-"""
-                            for strategy_name, stats in results.items():
-                                report_md += f"""
-### 🎯 {strategy_name}
-
-#### 核心指标
-| 指标 | 数值 | 说明 |
-|------|------|------|
-| 总信号数 | {stats.get('total_signals', 0)} | 历史回测产生的有效信号数量 |
-| 分析股票数 | {stats.get('analyzed_stocks', 0)} | 回测分析的股票总数 |
-| 胜率 | {stats.get('win_rate', 0):.1f}% | 盈利交易占比 |
-| 平均收益 | {stats.get('avg_return', 0):.2f}% | 所有交易的平均收益率 |
-| 中位数收益 | {stats.get('median_return', 0):.2f}% | 收益率的中位数 |
-| 最大收益 | {stats.get('max_return', 0):.2f}% | 单笔最大盈利 |
-| 最大亏损 | {stats.get('min_return', 0):.2f}% | 单笔最大亏损 |
-
-#### 风险指标
-| 指标 | 数值 | 说明 |
-|------|------|------|
-| 夏普比率 | {stats.get('sharpe_ratio', 0):.2f} | 风险调整后收益（>1为良好）|
-| Sortino比率 | {stats.get('sortino_ratio', 0):.2f} | 下行风险调整收益 |
-| 最大回撤 | {stats.get('max_drawdown', 0):.2f}% | 资金曲线最大跌幅 |
-| 波动率 | {stats.get('volatility', 0):.2f}% | 收益率标准差 |
-| Calmar比率 | {stats.get('calmar_ratio', 0):.2f} | 年化收益/最大回撤 |
-
-#### 盈亏分析
-| 指标 | 数值 | 说明 |
-|------|------|------|
-| 盈亏比 | {stats.get('profit_loss_ratio', 0):.2f} | 平均盈利/平均亏损 |
-| 平均盈利 | {stats.get('avg_win', 0):.2f}% | 盈利交易的平均收益 |
-| 平均亏损 | {stats.get('avg_loss', 0):.2f}% | 亏损交易的平均损失 |
-| 最长连胜 | {stats.get('max_consecutive_wins', 0)} 次 | 连续盈利交易记录 |
-| 最长连亏 | {stats.get('max_consecutive_losses', 0)} 次 | 连续亏损交易记录 |
-
-#### 收益分布
-| 分位数 | 数值 |
-|--------|------|
-| 25%分位 | {stats.get('return_25_percentile', 0):.2f}% |
-| 50%分位 | {stats.get('median_return', 0):.2f}% |
-| 75%分位 | {stats.get('return_75_percentile', 0):.2f}% |
-
-#### 年化指标
-| 指标 | 数值 |
-|------|------|
-| 年化收益 | {stats.get('annualized_return', 0):.2f}% |
-| 期望值 | {stats.get('expected_value', 0):.2f}% |
-
-"""
-                            
-                            report_md += f"""
----
-
-## 🏆 最佳策略推荐
-
-### 推荐策略：{best_strategy[0]}
-
-**综合评分最高！**
-
-#### 推荐理由
-- ✅ **胜率**: {best_strategy[1].get('win_rate', 0):.1f}% - {"超过50%，表现优秀" if best_strategy[1].get('win_rate', 0) > 50 else "有提升空间"}
-- 💰 **平均收益**: {best_strategy[1].get('avg_return', 0):.2f}% - {"收益可观" if best_strategy[1].get('avg_return', 0) > 3 else "稳健增长"}
-- 📐 **夏普比率**: {best_strategy[1].get('sharpe_ratio', 0):.2f} - {"风险收益比优秀" if best_strategy[1].get('sharpe_ratio', 0) > 1 else "风险适中"}
-- ⚠️ **最大回撤**: {best_strategy[1].get('max_drawdown', 0):.2f}% - {"回撤控制良好" if abs(best_strategy[1].get('max_drawdown', 0)) < 10 else "注意风险控制"}
-- 📊 **信号数量**: {best_strategy[1].get('total_signals', 0)} - {"样本充足" if best_strategy[1].get('total_signals', 0) > 100 else "样本适中"}
-
-根据历史回测数据，该策略在风险收益平衡方面表现最佳，建议优先使用！
-
----
-
-## 📊 策略对比分析
-
-### 核心指标对比表
-
-| 策略 | 胜率 | 平均收益 | 夏普比率 | 最大回撤 | 信号数 |
-|------|------|----------|----------|----------|--------|
-"""
-                            for strategy_name, stats in results.items():
-                                report_md += f"| {strategy_name} | {stats.get('win_rate', 0):.1f}% | {stats.get('avg_return', 0):.2f}% | {stats.get('sharpe_ratio', 0):.2f} | {stats.get('max_drawdown', 0):.2f}% | {stats.get('total_signals', 0)} |\n"
-                            
-                            report_md += f"""
-
----
-
-## 📝 实战操作建议
-
-### 🎯 仓位管理
-1. **初始仓位**: 建议每次投入不超过总资金的 **15-20%**
-2. **最大持仓**: 同时持有不超过 **5只股票**（避免过度分散）
-3. **加仓策略**: 盈利达到+5%后可适当加仓10%
-4. **减仓原则**: 单只股票浮亏超过-3%立即减半仓位
-
-### ⚠️ 风险控制
-1. **止损设置**: **严格设置-5%止损位**，触及立即清仓
-2. **移动止损**: 盈利超过+10%后，将止损位移至成本价
-3. **时间止损**: 持仓超过10个交易日未盈利，考虑减仓
-4. **大盘止损**: 大盘跌破重要支撑位，减仓50%观望
-
-### 💰 止盈策略
-1. **首次止盈**: 盈利达到 **+10%** 时止盈50%仓位
-2. **二次止盈**: 盈利达到 **+15%** 时再止盈30%仓位
-3. **持有利润**: 保留20%仓位博取更大收益，移动止损保护
-4. **分批止盈**: 避免一次性清仓，保持市场敏感度
-
-### 📊 信号筛选
-1. **高分优先**: 优先选择评分 **≥75分** 的信号
-2. **行业分散**: 避免所有持仓集中在同一行业
-3. **市值均衡**: 大中小市值合理配置（建议3:5:2）
-4. **成交量确认**: 必须确认成交量配合，避免假突破
-
-### ⏰ 最佳操作时间
-1. **买入时机**: 开盘后30分钟或尾盘最后30分钟
-2. **卖出时机**: 触发止盈止损立即执行，不要犹豫
-3. **持仓周期**: 建议 **5-10个交易日**（黄金周期）
-4. **避开时段**: 重大会议、节假日前后减少操作
-
----
-
-## 🔬 数据质量说明
-
-### 数据来源
-- **真实数据源**: Tushare Pro专业金融数据接口
-- **数据完整性**: ✅ 100%真实市场数据，无模拟无演示
-- **更新频率**: 每日收盘后自动更新
-- **数据范围**: 最近1年历史数据，覆盖完整牛熊周期
-
-### 回测可靠性
-- **样本数量**: 充足（{sum(stats.get('total_signals', 0) for stats in results.values())}个信号）
-- **时间跨度**: 覆盖不同市场环境
-- **无未来函数**: ✅ 严格按照时间顺序回测
-- **滑点处理**: 已考虑1%交易滑点和手续费
-
----
-
-## ⚡ 快速开始
-
-### 第一步：选择策略
-根据上述分析，建议使用 **{best_strategy[0]}**
-
-### 第二步：设置参数
-- 评分阈值：**60分**起（可根据市场调整）
-- 持仓周期：**5-10天**（黄金周期）
-- 单只仓位：**15-20%**（最多5只）
-
-### 第三步：实盘验证
-- 先用小资金测试1-2周
-- 验证信号质量和操作感觉
-- 稳定盈利后逐步加大资金
-
-### 第四步：持续优化
-- 定期查看回测结果
-- 根据市场环境调整参数
-- 记录交易日志，总结经验
-
----
-
-## 📞 技术支持
-
-- 系统版本：v49.0 长期稳健版
-- 更新日期：{datetime.now().strftime('%Y-%m-%d')}
-- 数据来源：Tushare Pro
-- 核心策略：八维评分体系（潜伏为王）
-
----
-
-## ⚠️ 免责声明
-
-本报告基于历史数据回测分析，仅供参考。历史表现不代表未来收益，股市有风险，投资需谨慎。
-建议投资者：
-1. 充分理解策略逻辑和风险
-2. 严格遵守风险控制原则
-3. 根据自身情况调整策略参数
-4. 不要盲目追涨杀跌
-5. 保持理性投资心态
-
----
-
-*报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
-*报告类型: 策略对比回测报告*
-*系统版本: 终极量价暴涨系统 v49.0*
-"""
-                            
-                            # 生成文件名
-                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                            
-                            st.download_button(
-                                label="💾 下载 Markdown 报告",
-                                data=report_md,
-                                file_name=f"超级回测报告_v49_{timestamp}.md",
-                                mime="text/markdown",
-                                help="下载完整的Markdown格式回测报告，包含所有分析细节"
-                            )
-                            
-                            st.success("✅ 报告已生成！点击上方按钮下载")
-                    
-                    with col2:
-                        if st.button("📊 导出 CSV 数据", use_container_width=True):
-                            # 准备CSV数据（v49增强版 - 包含更多字段）
-                            csv_data = []
-                            for strategy_name, stats in results.items():
-                                csv_data.append({
-                                    '策略名称': strategy_name,
-                                    '总信号数': stats.get('total_signals', 0),
-                                    '分析股票数': stats.get('analyzed_stocks', 0),
-                                    '胜率(%)': f"{stats.get('win_rate', 0):.1f}",
-                                    '平均收益(%)': f"{stats.get('avg_return', 0):.2f}",
-                                    '中位数收益(%)': f"{stats.get('median_return', 0):.2f}",
-                                    '最大收益(%)': f"{stats.get('max_return', 0):.2f}",
-                                    '最大亏损(%)': f"{stats.get('min_return', 0):.2f}",
-                                    '夏普比率': f"{stats.get('sharpe_ratio', 0):.2f}",
-                                    'Sortino比率': f"{stats.get('sortino_ratio', 0):.2f}",
-                                    '最大回撤(%)': f"{stats.get('max_drawdown', 0):.2f}",
-                                    'Calmar比率': f"{stats.get('calmar_ratio', 0):.2f}",
-                                    '盈亏比': f"{stats.get('profit_loss_ratio', 0):.2f}",
-                                    '年化收益(%)': f"{stats.get('annualized_return', 0):.2f}",
-                                    '波动率(%)': f"{stats.get('volatility', 0):.2f}",
-                                    '期望值(%)': f"{stats.get('expected_value', 0):.2f}",
-                                    '最长连胜': stats.get('max_consecutive_wins', 0),
-                                    '最长连亏': stats.get('max_consecutive_losses', 0)
-                                })
-                            
-                            csv_df = pd.DataFrame(csv_data)
-                            csv_string = csv_df.to_csv(index=False, encoding='utf-8-sig')
-                            
-                            # 生成文件名
-                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                            
-                            st.download_button(
-                                label="💾 下载 CSV 文件",
-                                data=csv_string,
-                                file_name=f"回测对比数据_v49_{timestamp}.csv",
-                                mime="text/csv",
-                                help="下载CSV格式数据，包含所有关键指标"
-                            )
-                            
-                            st.success("✅ CSV数据已准备好！点击上方按钮下载")
-                    
-                    with col3:
-                        if st.button("📈 导出Excel完整版", use_container_width=True):
-                            st.info("""
-                            ### 📊 Excel完整版报告功能
-                            
-                            包含以下工作表：
-                            1. **策略对比** - 所有策略的核心指标
-                            2. **详细统计** - 每个策略的详细统计数据
-                            3. **信号记录** - 所有交易信号的明细
-                            4. **强度分析** - 信号强度分布统计
-                            
-                            💡 该功能需要安装 `openpyxl` 库
-                            
-                            如需使用，请联系技术支持或手动导出CSV后用Excel打开
-                            """)
-                    
-                    st.markdown("---")
-                    st.info("""
-                    ### 💡 导出功能说明（v49增强版）
-                    
-                    #### 📄 Markdown报告
-                    - ✅ 包含完整的策略分析和操作建议
-                    - ✅ 可直接在Markdown阅读器或记事本中查看
-                    - ✅ 格式清晰，适合打印或分享
-                    
-                    #### 📊 CSV数据
-                    - ✅ 包含18项核心指标
-                    - ✅ 适合导入Excel进行进一步分析
-                    - ✅ 支持数据透视表和图表制作
-                    
-                    #### 📈 Excel完整版（即将上线）
-                    - ⏳ 多工作表结构化报告
-                    - ⏳ 自动生成图表和分析
-                    - ⏳ 交互式数据筛选
-                    
-                    #### 💾 建议
-                    - 定期保存回测结果，建立策略表现档案
-                    - 对比不同时期的回测数据，观察策略稳定性
-                    - 根据回测结果优化参数和选股标准
-                    """)
-        
-        elif backtest_mode == "🎯 单策略深度回测":
-            st.subheader("🎯 单策略深度回测")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                selected_strategy = st.selectbox(
-                    "选择策略",
-                    ["v4.0 长期稳健版", "v5.0 趋势爆发版", "v6.0 顶级超短线", "v7.0 终极智能版🚀", "v8.0 终极进化版🚀🚀🚀 NEW!"],
-                    help="选择要深度回测的策略。v8.0全新升级：ATR动态风控+市场过滤+凯利仓位！"
-                )
-            
-            with col2:
-                holding_days = st.slider("持仓天数", 1, 10, 5, 1, key="single_backtest_holding_days")
-            
-            col3, col4 = st.columns(2)
-            with col3:
-                sample_size = st.slider("回测样本数量", 100, 2000, 800, 100, key="single_backtest_sample_size")
-            with col4:
-                # ✅ 添加评分阈值参数（特别针对v6/v7/v8）
-                score_threshold = st.slider("评分阈值", 50, 90, 65, 5, 
-                                           key="single_backtest_threshold",
-                                           help="v4/v5建议60分，v6建议80分，v7建议60分，v8建议60-65分（激进55）")
-            
-            if st.button("🚀 开始回测", type="primary", use_container_width=True, key="single_backtest"):
-                with st.spinner(f"正在回测 {selected_strategy}..."):
-                    try:
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-                        
-                        query = """
-                            SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
-                                   dtd.open_price, dtd.high_price, dtd.low_price, 
-                                   dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
-                            FROM daily_trading_data dtd
-                            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-                            WHERE dtd.trade_date >= ?
-                            ORDER BY dtd.ts_code, dtd.trade_date
-                        """
-                        
-                        df = pd.read_sql_query(query, conn, params=(start_date,))
-                        conn.close()
-                        
-                        if df.empty:
-                            st.error("❌ 无法获取历史数据")
-                        else:
-                            df = df.rename(columns={
-                                'close_price': 'close',
-                                'open_price': 'open',
-                                'high_price': 'high',
-                                'low_price': 'low'
-                            })
-                            
-                            # 根据选择的策略执行回测
-                            if "v4.0" in selected_strategy:
-                                result = vp_analyzer.backtest_strategy_complete(
-                                    df, sample_size=sample_size, holding_days=holding_days
-                                )
-                            elif "v5.0" in selected_strategy:
-                                result = vp_analyzer.backtest_bottom_breakthrough(
-                                    df, sample_size=sample_size, holding_days=holding_days
-                                )
-                            elif "v8.0" in selected_strategy:
-                                # 🚀🚀🚀 v8.0 终极进化版回测
-                                result = vp_analyzer.backtest_v8_ultimate(
-                                    df, sample_size=sample_size, holding_days=holding_days,
-                                    score_threshold=score_threshold
-                                )
-                            elif "v7.0" in selected_strategy:
-                                # v7.0 终极智能版回测
-                                result = vp_analyzer.backtest_v7_intelligent(
-                                    df, sample_size=sample_size, holding_days=holding_days,
-                                    score_threshold=score_threshold  # ✅ 传入评分阈值
-                                )
-                            else:  # v6.0
-                                result = vp_analyzer.backtest_v6_ultra_short(
-                                    df, sample_size=sample_size, holding_days=holding_days,
-                                    score_threshold=score_threshold  # ✅ 传入评分阈值
-                                )
-                            
-                            if result['success']:
-                                st.session_state['single_backtest_result'] = result
-                                st.success("✅ 回测完成！")
-                                st.rerun()
-                            else:
-                                st.error(f"❌ 回测失败：{result.get('error', '未知错误')}")
-                    
-                    except Exception as e:
-                        st.error(f"❌ 回测失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
-            # 显示回测结果
-            if 'single_backtest_result' in st.session_state:
-                result = st.session_state['single_backtest_result']
-                stats = result.get('stats', {})
-                
-                st.markdown("---")
-                st.subheader("📊 回测结果详情")
-                
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric("胜率", f"{stats.get('win_rate', 0):.1f}%")
-                with col2:
-                    st.metric("平均收益", f"{stats.get('avg_return', 0):.2f}%")
-                with col3:
-                    st.metric("夏普比率", f"{stats.get('sharpe_ratio', 0):.2f}")
-                with col4:
-                    st.metric("信号数量", stats.get('total_signals', 0))
-                
-                st.markdown("---")
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric("最大收益", f"{stats.get('max_return', 0):.2f}%")
-                with col2:
-                    st.metric("最大亏损", f"{stats.get('max_loss', 0):.2f}%")
-                with col3:
-                    st.metric("盈亏比", f"{stats.get('profit_loss_ratio', 0):.2f}")
-                
-                # ==================== 单策略回测+ 增强功能 ====================
-                st.markdown("---")
-                st.subheader("🚀 深度分析")
-                
-                single_analysis_tab1, single_analysis_tab2, single_analysis_tab3 = st.tabs([
-                    "📊 分强度统计", "📋 交易记录", "📥 导出数据"
-                ])
-                
-                with single_analysis_tab1:
-                    if 'strength_performance' in stats:
-                        st.markdown("### 📊 信号强度表现分析")
-                        
-                        strength_perf = stats['strength_performance']
-                        
-                        # 创建表格
-                        strength_table_data = []
-                        for strength_range, perf in strength_perf.items():
-                            strength_table_data.append({
-                                '信号强度': strength_range + '分',
-                                '信号数量': perf['count'],
-                                '平均收益': f"{perf['avg_return']:.2f}%",
-                                '胜率': f"{perf['win_rate']:.1f}%"
-                            })
-                        
-                        strength_table_df = pd.DataFrame(strength_table_data)
-                        st.dataframe(strength_table_df, use_container_width=True, hide_index=True)
-                        
-                        # 可视化
-                        st.markdown("### 📈 信号强度可视化")
-                        
-                        import plotly.graph_objects as go
-                        from plotly.subplots import make_subplots
-                        
-                        labels = list(strength_perf.keys())
-                        counts = [perf['count'] for perf in strength_perf.values()]
-                        returns = [perf['avg_return'] for perf in strength_perf.values()]
-                        win_rates = [perf['win_rate'] for perf in strength_perf.values()]
-                        
-                        # 创建子图
-                        fig = make_subplots(
-                            rows=1, cols=2,
-                            subplot_titles=('信号强度分布', '信号强度 vs 胜率&收益'),
-                            specs=[[{'type': 'bar'}, {'type': 'scatter'}]]
-                        )
-                        
-                        # 左图：信号数量分布
-                        fig.add_trace(
-                            go.Bar(x=labels, y=counts, name='信号数量', marker_color='lightblue'),
-                            row=1, col=1
-                        )
-                        
-                        # 右图：胜率和收益
-                        fig.add_trace(
-                            go.Scatter(x=labels, y=win_rates, name='胜率 (%)', 
-                                     mode='lines+markers', marker=dict(size=10)),
-                            row=1, col=2
-                        )
-                        
-                        fig.add_trace(
-                            go.Scatter(x=labels, y=returns, name='平均收益 (%)', 
-                                     mode='lines+markers', marker=dict(size=10), yaxis='y2'),
-                            row=1, col=2
-                        )
-                        
-                        fig.update_xaxes(title_text="信号强度", row=1, col=1)
-                        fig.update_xaxes(title_text="信号强度", row=1, col=2)
-                        fig.update_yaxes(title_text="信号数量", row=1, col=1)
-                        fig.update_yaxes(title_text="百分比", row=1, col=2)
-                        
-                        fig.update_layout(height=400, showlegend=True)
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # 结论分析
-                        st.markdown("### 💡 策略分析结论")
-                        
-                        # 找出表现最好的强度区间
-                        best_strength = max(strength_perf.items(), 
-                                          key=lambda x: x[1]['avg_return'] * x[1]['win_rate'] / 100)
-                        
-                        st.success(f"""
-                        **最佳信号强度区间**: {best_strength[0]}分
-                        - 平均收益: {best_strength[1]['avg_return']:.2f}%
-                        - 胜率: {best_strength[1]['win_rate']:.1f}%
-                        - 信号数量: {best_strength[1]['count']}
-                        
-                        💡 建议：重点关注 {best_strength[0]}分 区间的信号，该区间风险收益比最佳。
-                        """)
-                    else:
-                        st.info("暂无分强度统计数据")
-                
-                with single_analysis_tab2:
-                    if 'details' in result and len(result.get('details', [])) > 0:
-                        st.markdown("### 📋 详细交易记录（前50条）")
-                        
-                        details_df = result['details'][:50] if isinstance(result['details'], pd.DataFrame) else pd.DataFrame(result['details'][:50])
-                        st.dataframe(details_df, use_container_width=True, hide_index=True)
-                        
-                        # 交易记录统计
-                        st.markdown("### 📊 交易统计")
-                        col1, col2, col3, col4 = st.columns(4)
-                        
-                        with col1:
-                            st.metric("总交易数", len(result['details']))
-                        with col2:
-                            profitable = sum(1 for d in result['details'] 
-                                           if float(d.get(f"{stats.get('avg_holding_days', 5)}天收益", "0%").rstrip('%')) > 0)
-                            st.metric("盈利交易", profitable)
-                        with col3:
-                            loss = len(result['details']) - profitable
-                            st.metric("亏损交易", loss)
-                        with col4:
-                            if loss > 0:
-                                st.metric("盈亏比", f"{profitable/loss:.2f}")
-                            else:
-                                st.metric("盈亏比", "∞")
-                    else:
-                        st.info("暂无详细交易记录")
-                
-                with single_analysis_tab3:
-                    st.markdown("### 📥 导出回测数据")
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        if st.button("📄 生成回测报告", use_container_width=True, key="single_report"):
-                            strategy_name = result.get('strategy', '未知策略')
-                            
-                            report_md = f"""# 📊 {strategy_name} 深度回测报告
-                            
-## 🎯 回测概况
-
-**回测时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-**回测策略**: {strategy_name}
-**持仓天数**: {stats.get('avg_holding_days', 'N/A')}天
-**样本数量**: {stats.get('analyzed_stocks', 'N/A')}只
-
----
-
-## 📈 核心指标
-
-| 指标 | 数值 |
-|------|------|
-| 总信号数 | {stats.get('total_signals', 0)} |
-| 胜率 | {stats.get('win_rate', 0):.1f}% |
-| 平均收益 | {stats.get('avg_return', 0):.2f}% |
-| 中位数收益 | {stats.get('median_return', 0):.2f}% |
-| 最大收益 | {stats.get('max_return', 0):.2f}% |
-| 最大亏损 | {stats.get('min_return', 0):.2f}% |
-| 夏普比率 | {stats.get('sharpe_ratio', 0):.2f} |
-| 盈亏比 | {stats.get('profit_loss_ratio', 0):.2f} |
-
----
-
-## 📊 分强度表现
-"""
-                            if 'strength_performance' in stats:
-                                for strength_range, perf in stats['strength_performance'].items():
-                                    report_md += f"""
-### {strength_range}分
-
-- 信号数量: {perf['count']}
-- 平均收益: {perf['avg_return']:.2f}%
-- 胜率: {perf['win_rate']:.1f}%
-"""
-                            
-                            report_md += f"""
----
-
-## 💡 使用建议
-
-1. **最佳信号强度**: 关注70分以上的信号
-2. **止损建议**: 建议设置-5%止损位
-3. **止盈建议**: 分批止盈，首次+10%，第二次+15%
-4. **仓位控制**: 单只股票不超过总资金的8%
-
----
-
-*报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
-"""
-                            
-                            # 生成文件名
-                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                            
-                            st.download_button(
-                                label="💾 下载报告",
-                                data=report_md,
-                                file_name=f"single_backtest_report_{timestamp}.md",
-                                mime="text/markdown",
-                                key="download_single_report"
-                            )
-                            
-                            st.success("✅ 报告已生成！")
-                    
-                    with col2:
-                        if st.button("📊 导出交易记录", use_container_width=True, key="single_export"):
-                            if 'details' in result and len(result.get('details', [])) > 0:
-                                details_df = result['details'] if isinstance(result['details'], pd.DataFrame) else pd.DataFrame(result['details'])
-                                csv_string = details_df.to_csv(index=False, encoding='utf-8-sig')
-                                
-                                # 生成文件名
-                                timestamp2 = datetime.now().strftime('%Y%m%d_%H%M%S')
-                                
-                                st.download_button(
-                                    label="💾 下载CSV",
-                                    data=csv_string,
-                                    file_name=f"trade_records_{timestamp2}.csv",
-                                    mime="text/csv",
-                                    key="download_single_csv"
-                                )
-                                
-                                st.success("✅ 交易记录已准备好！")
-                            else:
-                                st.warning("⚠️ 暂无交易记录可导出")
-        
-        else:  # 参数优化
-            st.subheader("⚙️ 参数优化")
-            
-            st.info("""
-            ### 💡 参数优化说明
-            
-            系统将自动测试不同的参数组合，找出历史表现最佳的参数设置。
-            
-            **优化维度**：
-            - 信号强度阈值：0.4、0.5、0.6、0.7
-            - 持仓天数：3、5、7、10天
-            
-            **评分标准**：
-            - 平均收益（40%权重）
-            - 胜率（30%权重）
-            - 夏普比率（20%权重）
-            - 信号数量（10%权重）
-            """)
-            
-            sample_size = st.slider("优化样本数量", 100, 1000, 300, 50, help="样本越大越准确但耗时越长")
-            
-            if st.button("🔍 开始优化", type="primary", use_container_width=True, key="start_optimization"):
-                with st.spinner("正在优化参数...这可能需要几分钟..."):
-                    try:
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-                        
-                        query = """
-                            SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
-                                   dtd.open_price, dtd.high_price, dtd.low_price, 
-                                   dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
-                            FROM daily_trading_data dtd
-                            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-                            WHERE dtd.trade_date >= ?
-                            ORDER BY dtd.ts_code, dtd.trade_date
-                        """
-                        
-                        df = pd.read_sql_query(query, conn, params=(start_date,))
-                        conn.close()
-                        
-                        if df.empty:
-                            st.error("❌ 无法获取历史数据")
-                        else:
-                            df = df.rename(columns={
-                                'close_price': 'close',
-                                'open_price': 'open',
-                                'high_price': 'high',
-                                'low_price': 'low'
-                            })
-                            
-                            # 初始化优化器
-                            if 'optimizer' not in st.session_state:
-                                st.session_state.optimizer = StrategyOptimizer(vp_analyzer)
-                            
-                            result = st.session_state.optimizer.optimize_parameters(df, sample_size=sample_size)
-                            
-                            if result['success']:
-                                st.session_state['optimization_result'] = result
-                                st.success("✅ 参数优化完成！")
-                                st.rerun()
-                            else:
-                                st.error(f"❌ 优化失败：{result.get('error', '未知错误')}")
-                    
-                    except Exception as e:
-                        st.error(f"❌ 优化失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
-            # 显示优化结果
-            if 'optimization_result' in st.session_state:
-                result = st.session_state['optimization_result']
-                best_params = result.get('best_params', {})
-                
-                st.markdown("---")
-                st.success(f"""
-                ### 🏆 最佳参数组合
-                
-                **信号强度阈值**: {best_params.get('params', {}).get('signal_strength', 'N/A')}
-                
-                **历史表现**:
-                - 胜率：{best_params.get('stats', {}).get('win_rate', 0):.1f}%
-                - 平均收益：{best_params.get('stats', {}).get('avg_return', 0):.2f}%
-                - 夏普比率：{best_params.get('stats', {}).get('sharpe_ratio', 0):.2f}
-                - 综合评分：{best_params.get('score', 0):.2f}
-                """)
-                
-                st.markdown("---")
-                st.subheader("📊 所有参数对比")
-                
-                all_results = result.get('all_results', [])
-                if all_results:
-                    params_data = []
-                    for res in all_results:
-                        params_data.append({
-                            '信号强度': res['params']['signal_strength'],
-                            '综合评分': f"{res['score']:.2f}",
-                            '胜率': f"{res['stats'].get('win_rate', 0):.1f}%",
-                            '平均收益': f"{res['stats'].get('avg_return', 0):.2f}%",
-                            '夏普比率': f"{res['stats'].get('sharpe_ratio', 0):.2f}"
-                        })
-                    
-                    params_df = pd.DataFrame(params_data)
-                    st.dataframe(params_df, use_container_width=True, hide_index=True)
-
-    # ==================== Tab 4: 🤖 AI智能选股 ====================
-    with tab_ai:
-        st.header("🤖 AI 智能选股（高收益捕获者）")
-        
-        # 策略版本选择
-        strategy_version = st.radio(
-            "选择策略版本",
-            ["V5.0 稳健月度目标版（推荐）", "V2.0 追涨版"],
-            horizontal=True,
-            help="V5.0：强调回撤控制与回踩确认 | V2.0：追已涨20%的股票"
-        )
-        
-        use_v3 = "V5.0" in strategy_version
-        
-        if use_v3:
-            st.markdown("**✅ V5.0 稳健月度目标版：强调安全边际与回撤控制**")
-            st.info("""
-            ### ✨ V5.0 核心特点（稳健月度目标版）
-            
-            **稳健评分体系**：
-            - 🛡️ **回撤控制**：20日回撤过大直接剔除
-            - ✅ **回踩确认**：回踩均线后企稳反弹优先
-            - 🔥 **板块强度**：板块共振强势的更可靠
-            - 📈 **适度动量**：不过度追高，强调安全边际
-            
-            **稳健门槛**：
-            - ✅ 成交活跃度与波动率双重过滤
-            - ✅ 回撤过大与极端波动直接剔除
-            - ✅ 优先“趋势健康 + 回踩确认 + 板块共振”
-            
-            **中国市场特性适配**：
-            - 🇨🇳 回避涨停追高与连板博弈
-            - 🇨🇳 过滤新股高波动阶段
-            - 🇨🇳 结合换手率筛选更稳健标的
-            - 🇨🇳 行业强度加权 + 龙头/次龙识别
-            - 🇨🇳 波动分位自适应 + 市值分层优化
-            
-            **推荐等级**：🌟🌟🌟强烈推荐(70+) | 🌟🌟推荐(50+) | 🌟关注(35+)
-            """)
-        else:
-            st.markdown("**🛡️ V2.0 追涨版：筛选已涨20%+的高动量标的**")
-            st.info("""
-            ### ⚠️ V2.0 策略特点
-            - **大盘风控**：自动检测上证指数，空头市场自动预警并下调评分
-            - **板块共振**：挖掘"板块集体爆发"个股，提升板块领头羊权重
-            - **乖离率过滤**：自动过滤远离均线 35%+ 的标的，拒绝高位接盘
-            - **量价健康度**：多维度校验成交量支撑，确保不是缩量诱多
-            
-            **注意**：V2.0要求已涨20%，在当前市场环境下可能选不到股票
-            """)
-        
-        st.divider()
-        
-        st.markdown("### 🎯 策略参数设置")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            if use_v3:
-                target_return = st.slider(
-                    "目标月收益阈值（%）",
-                    min_value=10, max_value=50, value=18, step=1,
-                    help="预测未来20天可能达到的收益目标"
-                )
-            else:
-                target_return = st.slider(
-                    "目标月收益阈值（%）",
-                    min_value=10, max_value=50, value=20, step=1,
-                    help="筛选近 20 个交易日涨幅达标的标的"
-                )
-        with col2:
-            min_amount_default = 2.5 if use_v3 else 2.0
-            min_amount = st.slider(
-                "最低成交活跃度（亿元）",
-                min_value=0.5, max_value=15.0, value=min_amount_default, step=0.5,
-                help="过滤'僵尸股'，确保进出容易"
-            )
-        with col3:
-            max_volatility_default = 14.0 if use_v3 else 12.0
-            max_volatility = st.slider(
-                "最大波动容忍度（%）",
-                min_value=5.0, max_value=25.0, value=max_volatility_default, step=0.5,
-                help="过滤极端异常波动的'电梯股'"
-            )
-        with col4:
-            top_n_default = 25 if use_v3 else 30
-            top_n = st.slider("优选推荐数量", 5, 100, top_n_default, 5, key="ai_top_n_v3")
-
-        with st.expander("📌 市值筛选（可选）", expanded=False):
-            if use_v3:
-                default_mcap = (100, 5000)
-            else:
-                default_mcap = (0, 5000)
-            market_cap_range = st.slider(
-                "流通市值范围（亿）",
-                min_value=0,
-                max_value=5000,
-                value=default_mcap,
-                step=10,
-                help="用于过滤过小/过大的流通市值标的"
-            )
-            min_market_cap, max_market_cap = market_cap_range
-        
-        button_text = "🚀 开启 AI 稳健月度目标 (V5.0)" if use_v3 else "🚀 开启 AI 高收益捕获 (V2.0)"
-        if st.button(button_text, type="primary", use_container_width=True):
-            with st.spinner(f"🤖 AI 正在全市场扫描 {'V5.0 稳健月度目标' if use_v3 else 'V2.0 高收益标的'}..."):
-                try:
-                    conn = sqlite3.connect(PERMANENT_DB_PATH)
-                    start_date = (datetime.now() - timedelta(days=150)).strftime('%Y%m%d')
-                    query = """
-                        SELECT dtd.ts_code, sb.name, sb.industry, sb.circ_mv,
-                               dtd.trade_date, dtd.close_price, dtd.vol, dtd.amount, dtd.pct_chg
-                        FROM daily_trading_data dtd
-                        INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-                        WHERE dtd.trade_date >= ?
-                        ORDER BY dtd.ts_code, dtd.trade_date
-                    """
-                    df = pd.read_sql_query(query, conn, params=(start_date,))
-                    conn.close()
-                    
-                    if df.empty:
-                        st.error("数据库为空，请先在'数据中心'更新数据")
-                    else:
-                        if use_v3:
-                            stocks = vp_analyzer.select_monthly_target_stocks_v3(
-                                df,
-                                target_return=target_return / 100,
-                                min_amount=min_amount,
-                                max_volatility=max_volatility / 100,
-                                min_market_cap=min_market_cap,
-                                max_market_cap=max_market_cap
-                            )
-                            session_key = 'ai_monthly_stocks_v3'
-                            version_name = "V5.0"
-                        else:
-                            stocks = vp_analyzer.select_monthly_target_stocks(
-                                df,
-                                target_return=target_return / 100,
-                                min_amount=min_amount,
-                                max_volatility=max_volatility / 100
-                            )
-                            session_key = 'ai_monthly_stocks_v2'
-                            version_name = "V2.0"
-                        
-                        if not stocks.empty:
-                            st.session_state[session_key] = stocks
-                            st.session_state['ai_strategy_version'] = version_name
-                            st.success(f"✅ {version_name} 扫描完成：找到 {len(stocks)} 只{'综合潜力' if use_v3 else '高收益潜力'}标的")
-                            sim_account = _get_sim_account()
-                            buy_count, buy_status = _auto_buy_ai_stocks(
-                                stocks,
-                                sim_account['per_buy_amount'],
-                                sim_account['auto_buy_top_n']
-                            )
-                            st.session_state['last_ai_auto_buy'] = {
-                                'count': buy_count,
-                                'status': buy_status,
-                                'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                            }
-                            st.rerun()
-                        else:
-                            if use_v3:
-                                st.error("⚠️ V5.0 未找到股票，可能的原因：\n1. 数据库数据不足（请先到「数据中心」更新数据）\n2. 数据查询出错（请查看系统日志）\n3. 当前市场偏弱或稳健过滤过严")
-                                st.info("💡 提示：V5.0已自动从“严格稳健”→“稳健放宽”→“救援筛选”仍未命中。\n可尝试：降低目标收益阈值、提高最大波动容忍度、或暂时放宽回撤/新股过滤。")
-                                debug_runs = getattr(vp_analyzer, 'last_v5_debug', None)
-                                if debug_runs:
-                                    lines = []
-                                    for s in debug_runs:
-                                        lines.append(
-                                            f"[{s['stage']}] total={s['total_stocks']} cand={s['candidates']} res={s['results']} | "
-                                            f"history={s['skip_history']} st={s['skip_st']} data={s['skip_len_data']} "
-                                            f"limitup={s['skip_limitup']} amount={s['skip_amount']} mcap={s['skip_mcap']} turnover={s['skip_turnover']} ret20={s['skip_ret20_gate']} "
-                                            f"ind_weak={s['skip_industry_weak']} vol_pct={s['skip_vol_percentile']} dd={s['skip_drawdown']} vol={s['skip_volatility']} "
-                                            f"pull={s['skip_pullback']} bias={s['skip_bias']} score={s['skip_score']}"
+                                    stats_for_analysis = results[selected_for_analysis]
+                                    
+                                    # 基础统计
+                                    col1, col2 = st.columns(2)
+                                    
+                                    with col1:
+                                        st.markdown("#### 📊 收益统计")
+                                        st.info(f"""
+                                        **平均收益**: {stats_for_analysis.get('avg_return', 0):.2f}%
+                                        
+                                        **中位数收益**: {stats_for_analysis.get('median_return', 0):.2f}%
+                                        
+                                        **最大收益**: {stats_for_analysis.get('max_return', 0):.2f}%
+                                        
+                                        **最大亏损**: {stats_for_analysis.get('min_return', 0):.2f}%
+                                        
+                                        **标准差**: {stats_for_analysis.get('volatility', 0):.2f}%
+                                        """)
+                                    
+                                    with col2:
+                                        st.markdown("#### 🎯 风险指标")
+                                        win_rate = stats_for_analysis.get('win_rate', 0)
+                                        avg_return = stats_for_analysis.get('avg_return', 0)
+                                        
+                                        # 计算风险等级
+                                        if win_rate >= 60 and avg_return >= 5:
+                                            risk_level = "🟢 低风险"
+                                        elif win_rate >= 50 and avg_return >= 3:
+                                            risk_level = "🟡 中风险"
+                                        else:
+                                            risk_level = "🔴 高风险"
+                                        
+                                        st.metric("风险等级", risk_level)
+                                        st.metric("胜率", f"{win_rate:.1f}%")
+                                        st.metric("夏普比率", f"{stats_for_analysis.get('sharpe_ratio', 0):.2f}")
+                                        st.metric("盈亏比", f"{stats_for_analysis.get('profit_loss_ratio', 0):.2f}")
+                                    
+                                    # 🆕 资金曲线图
+                                    st.markdown("---")
+                                    st.markdown("#### 💰 资金曲线")
+                                    
+                                    if 'cumulative_returns' in stats_for_analysis and stats_for_analysis['cumulative_returns']:
+                                        cumulative_returns = stats_for_analysis['cumulative_returns']
+                                        
+                                        fig_equity = go.Figure()
+                                        
+                                        # 主资金曲线
+                                        fig_equity.add_trace(go.Scatter(
+                                            x=list(range(len(cumulative_returns))),
+                                            y=cumulative_returns,
+                                            mode='lines',
+                                            name='资金曲线',
+                                            line=dict(color='#667eea', width=3),
+                                            fill='tozeroy',
+                                            fillcolor='rgba(102, 126, 234, 0.1)'
+                                        ))
+                                        
+                                        # 添加基准线
+                                        fig_equity.add_trace(go.Scatter(
+                                            x=[0, len(cumulative_returns)-1],
+                                            y=[1, 1],
+                                            mode='lines',
+                                            name='基准线',
+                                            line=dict(color='gray', width=2, dash='dash')
+                                        ))
+                                        
+                                        fig_equity.update_layout(
+                                            title='累计收益率曲线',
+                                            xaxis_title='交易次数',
+                                            yaxis_title='累计收益倍数',
+                                            height=400,
+                                            hovermode='x unified',
+                                            plot_bgcolor='rgba(240, 242, 246, 0.5)'
                                         )
-                                    st.code("\n".join(lines))
-                            else:
-                                st.warning("⚠️ 当前市场环境下未发现符合 V2.0 标准的标的，建议：\n1. 切换到V5.0稳健月度目标版（推荐）\n2. 降低门槛或等待大盘企稳")
+                                        
+                                        st.plotly_chart(fig_equity, use_container_width=True)
+                                    else:
+                                        st.info("📊 资金曲线数据不可用")
+                                    
+                                    # 🆕 Monte Carlo模拟
+                                    st.markdown("---")
+                                    st.markdown("#### 🎲 Monte Carlo模拟（未来收益预测）")
+                                    
+                                    col1, col2 = st.columns([2, 1])
+                                    
+                                    with col2:
+                                        mc_simulations = st.slider("模拟次数", 100, 1000, 500, 100, key="mc_sims")
+                                        mc_periods = st.slider("预测周期", 10, 100, 50, 10, key="mc_periods")
+                                        run_mc = st.button("🎲 运行Monte Carlo模拟", type="primary", use_container_width=True)
+                                    
+                                    with col1:
+                                        if run_mc:
+                                            with st.spinner("正在运行Monte Carlo模拟..."):
+                                                # 基于历史收益率进行蒙特卡洛模拟
+                                                avg_ret = stats_for_analysis.get('avg_return', 0) / 100
+                                                vol = stats_for_analysis.get('volatility', 0) / 100
+                                                
+                                                # 生成随机收益路径
+                                                np.random.seed(42)
+                                                simulations = []
+                                                
+                                                for _ in range(mc_simulations):
+                                                    returns = np.random.normal(avg_ret, vol, mc_periods)
+                                                    cumulative = np.cumprod(1 + returns)
+                                                    simulations.append(cumulative)
+                                                
+                                                simulations = np.array(simulations)
+                                                
+                                                # 绘制Monte Carlo模拟结果
+                                                fig_mc = go.Figure()
+                                                
+                                                # 绘制所有模拟路径（半透明）
+                                                for i in range(min(100, mc_simulations)):  # 最多显示100条路径
+                                                    fig_mc.add_trace(go.Scatter(
+                                                        x=list(range(mc_periods)),
+                                                        y=simulations[i],
+                                                        mode='lines',
+                                                        line=dict(color='lightblue', width=0.5),
+                                                        opacity=0.3,
+                                                        showlegend=False,
+                                                        hoverinfo='skip'
+                                                    ))
+                                                
+                                                # 添加中位数、25%和75%分位数
+                                                median_path = np.median(simulations, axis=0)
+                                                percentile_25 = np.percentile(simulations, 25, axis=0)
+                                                percentile_75 = np.percentile(simulations, 75, axis=0)
+                                                
+                                                fig_mc.add_trace(go.Scatter(
+                                                    x=list(range(mc_periods)),
+                                                    y=median_path,
+                                                    mode='lines',
+                                                    name='中位数预测',
+                                                    line=dict(color='red', width=3)
+                                                ))
+                                                
+                                                fig_mc.add_trace(go.Scatter(
+                                                    x=list(range(mc_periods)),
+                                                    y=percentile_75,
+                                                    mode='lines',
+                                                    name='75%分位',
+                                                    line=dict(color='green', width=2, dash='dash')
+                                                ))
+                                                
+                                                fig_mc.add_trace(go.Scatter(
+                                                    x=list(range(mc_periods)),
+                                                    y=percentile_25,
+                                                    mode='lines',
+                                                    name='25%分位',
+                                                    line=dict(color='orange', width=2, dash='dash'),
+                                                    fill='tonexty',
+                                                    fillcolor='rgba(102, 126, 234, 0.1)'
+                                                ))
+                                                
+                                                fig_mc.update_layout(
+                                                    title=f'Monte Carlo模拟 ({mc_simulations}次模拟, {mc_periods}期)',
+                                                    xaxis_title='交易周期',
+                                                    yaxis_title='累计收益倍数',
+                                                    height=450,
+                                                    hovermode='x unified',
+                                                    plot_bgcolor='rgba(240, 242, 246, 0.5)'
+                                                )
+                                                
+                                                st.plotly_chart(fig_mc, use_container_width=True)
+                                                
+                                                # 显示统计结果
+                                                final_values = simulations[:, -1]
+                                                st.success(f"""
+                                                ### 📊 Monte Carlo模拟结果
+                                                
+                                                **{mc_periods}个周期后的预期收益：**
+                                                - 中位数：{(median_path[-1] - 1) * 100:.2f}%
+                                                - 25%分位：{(percentile_25[-1] - 1) * 100:.2f}%
+                                                - 75%分位：{(percentile_75[-1] - 1) * 100:.2f}%
+                                                - 最好情况：{(final_values.max() - 1) * 100:.2f}%
+                                                - 最坏情况：{(final_values.min() - 1) * 100:.2f}%
+                                                - 盈利概率：{(final_values > 1).sum() / len(final_values) * 100:.1f}%
+                                                """)
+                                    
+                                    # 收益区间分布
+                                    st.markdown("---")
+                                    st.markdown("#### 📊 收益区间分布")
+                                    if 'strength_performance' in stats_for_analysis:
+                                        strength_perf = stats_for_analysis['strength_performance']
+                                        
+                                        labels = list(strength_perf.keys())
+                                        counts = [perf['count'] for perf in strength_perf.values()]
+                                        returns = [perf['avg_return'] for perf in strength_perf.values()]
+                                        
+                                        fig = go.Figure()
+                                        
+                                        fig.add_trace(go.Bar(
+                                            x=labels,
+                                            y=counts,
+                                            name='信号数量',
+                                            marker_color='lightblue',
+                                            yaxis='y'
+                                        ))
+                                        
+                                        fig.add_trace(go.Scatter(
+                                            x=labels,
+                                            y=returns,
+                                            name='平均收益',
+                                            marker_color='red',
+                                            yaxis='y2',
+                                            mode='lines+markers',
+                                            marker=dict(size=10),
+                                            line=dict(width=3)
+                                        ))
+                                        
+                                        fig.update_layout(
+                                            title='信号强度 vs 收益表现',
+                                            xaxis_title='信号强度',
+                                            yaxis=dict(title='信号数量', side='left'),
+                                            yaxis2=dict(title='平均收益 (%)', side='right', overlaying='y'),
+                                            height=400
+                                        )
+                                        
+                                        st.plotly_chart(fig, use_container_width=True)
+                                
+                                with analysis_tab3:
+                                    st.subheader("🎯 信号质量分析（v49增强版）")
+                                    
+                                    # 整体信号质量评估
+                                    st.markdown("#### 📊 策略信号质量对比")
+                                    
+                                    quality_data = []
+                                    quality_scores_list = []
+                                    
+                                    for strategy_name, stats in results.items():
+                                        # 计算综合质量分数（增强版）
+                                        win_rate = stats.get('win_rate', 0)
+                                        avg_return = stats.get('avg_return', 0)
+                                        sharpe = stats.get('sharpe_ratio', 0)
+                                        sortino = stats.get('sortino_ratio', 0)
+                                        total_signals = stats.get('total_signals', 0)
+                                        max_drawdown = abs(stats.get('max_drawdown', 0))
+                                        profit_loss = min(stats.get('profit_loss_ratio', 0), 10)  # 限制最大值
+                                        
+                                        # 质量分数 = 胜率*0.25 + 平均收益*3*0.25 + 夏普比率*10*0.15 + 
+                                        #            Sortino*8*0.1 + min(信号数/100, 1)*100*0.15 + 
+                                        #            (10-回撤)*0.05 + 盈亏比*3*0.05
+                                        quality_score = (
+                                            win_rate * 0.25 +
+                                            avg_return * 3 * 0.25 +
+                                            sharpe * 10 * 0.15 +
+                                            sortino * 8 * 0.1 +
+                                            min(total_signals / 100, 1) * 100 * 0.15 +
+                                            max(10 - max_drawdown, 0) * 0.05 +
+                                            profit_loss * 3 * 0.05
+                                        )
+                                        
+                                        quality_scores_list.append(quality_score)
+                                        
+                                        # 评级
+                                        if quality_score >= 80:
+                                            grade = "S 级（优秀）"
+                                            grade_icon = "🌟"
+                                            grade_color = "#FFD700"
+                                        elif quality_score >= 70:
+                                            grade = "A 级（良好）"
+                                            grade_icon = "⭐"
+                                            grade_color = "#C0C0C0"
+                                        elif quality_score >= 60:
+                                            grade = "B 级（合格）"
+                                            grade_icon = "✅"
+                                            grade_color = "#CD7F32"
+                                        else:
+                                            grade = "C 级（待改进）"
+                                            grade_icon = "📝"
+                                            grade_color = "#808080"
+                                        
+                                        quality_data.append({
+                                            '策略': strategy_name,
+                                            '质量分数': f"{quality_score:.1f}",
+                                            '评级': f"{grade_icon} {grade}",
+                                            '胜率': f"{win_rate:.1f}%",
+                                            '平均收益': f"{avg_return:.2f}%",
+                                            '夏普比率': f"{sharpe:.2f}",
+                                            'Sortino比率': f"{sortino:.2f}",
+                                            '最大回撤': f"{max_drawdown:.2f}%",
+                                            '盈亏比': f"{profit_loss:.2f}",
+                                            '信号数量': total_signals
+                                        })
+                                    
+                                    quality_df = pd.DataFrame(quality_data)
+                                    st.dataframe(quality_df, use_container_width=True, hide_index=True)
+                                    
+                                    # 🆕 质量分数可视化对比
+                                    st.markdown("---")
+                                    st.markdown("#### 📊 质量分数可视化")
+                                    
+                                    fig_quality = go.Figure()
+                                    
+                                    colors_quality = ['#FFD700' if score >= 80 else '#C0C0C0' if score >= 70 else '#CD7F32' if score >= 60 else '#808080' 
+                                                     for score in quality_scores_list]
+                                    
+                                    fig_quality.add_trace(go.Bar(
+                                        x=list(results.keys()),
+                                        y=quality_scores_list,
+                                        marker=dict(
+                                            color=colors_quality,
+                                            line=dict(color='white', width=2)
+                                        ),
+                                        text=[f"{score:.1f}" for score in quality_scores_list],
+                                        textposition='auto'
+                                    ))
+                                    
+                                    # 添加评级线
+                                    fig_quality.add_hline(y=80, line_dash="dash", line_color="gold", 
+                                                         annotation_text="S级线", annotation_position="right")
+                                    fig_quality.add_hline(y=70, line_dash="dash", line_color="silver", 
+                                                         annotation_text="A级线", annotation_position="right")
+                                    fig_quality.add_hline(y=60, line_dash="dash", line_color="#CD7F32", 
+                                                         annotation_text="B级线", annotation_position="right")
+                                    
+                                    fig_quality.update_layout(
+                                        title='策略质量分数对比',
+                                        yaxis_title='质量分数',
+                                        height=400,
+                                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
+                                        showlegend=False
+                                    )
+                                    
+                                    st.plotly_chart(fig_quality, use_container_width=True)
+                                    
+                                    # 🆕 策略对比热力图
+                                    st.markdown("---")
+                                    st.markdown("#### 🔥 策略指标热力图")
+                                    
+                                    # 准备热力图数据
+                                    heatmap_metrics = ['胜率', '平均收益', '夏普比率', 'Sortino比率', '盈亏比']
+                                    heatmap_data = []
+                                    
+                                    for strategy_name, stats in results.items():
+                                        row = [
+                                            stats.get('win_rate', 0),
+                                            stats.get('avg_return', 0) * 5,  # 归一化
+                                            stats.get('sharpe_ratio', 0) * 20,  # 归一化
+                                            stats.get('sortino_ratio', 0) * 15,  # 归一化
+                                            min(stats.get('profit_loss_ratio', 0) * 15, 100)  # 归一化
+                                        ]
+                                        heatmap_data.append(row)
+                                    
+                                    fig_heatmap = go.Figure(data=go.Heatmap(
+                                        z=heatmap_data,
+                                        x=heatmap_metrics,
+                                        y=list(results.keys()),
+                                        colorscale='RdYlGn',
+                                        text=[[f"{val:.1f}" for val in row] for row in heatmap_data],
+                                        texttemplate='%{text}',
+                                        textfont={"size": 12},
+                                        colorbar=dict(title="标准化分数")
+                                    ))
+                                    
+                                    fig_heatmap.update_layout(
+                                        title='策略指标热力图（标准化）',
+                                        height=300,
+                                        xaxis_title='指标',
+                                        yaxis_title='策略'
+                                    )
+                                    
+                                    st.plotly_chart(fig_heatmap, use_container_width=True)
+                                    
+                                    # 质量评估说明
+                                    st.info("""
+                                    ### 📋 质量评级标准（v49增强版）
+                                    
+                                    **评分公式**：
+                                    - 胜率 × 25%
+                                    - 平均收益 × 25%
+                                    - 夏普比率 × 15%
+                                    - Sortino比率 × 10%
+                                    - 信号数量 × 15%
+                                    - 回撤控制 × 5%
+                                    - 盈亏比 × 5%
+                                    
+                                    **评级标准**：
+                                    - 🌟 **S 级（优秀）**：质量分数 ≥ 80分 - 胜率高、收益好、风险可控、信号充足，建议重点使用
+                                    - ⭐ **A 级（良好）**：质量分数 70-80分 - 综合表现良好，建议正常使用
+                                    - ✅ **B 级（合格）**：质量分数 60-70分 - 表现尚可，有改进空间，谨慎使用
+                                    - 📝 **C 级（待改进）**：质量分数 < 60分 - 需要优化参数或策略，不建议使用
+                                    """)
+                                
+                                with analysis_tab4:
+                                    st.subheader("📥 导出回测报告（v49增强版）")
+                                    
+                                    st.markdown("#### 📊 可导出内容")
+                                    
+                                    col1, col2, col3 = st.columns(3)
+                                    
+                                    with col1:
+                                        if st.button("📄 生成Markdown报告", use_container_width=True):
+                                            # 生成Markdown格式的详细报告
+                                            report_md = f"""# 📊 超级回测对比报告 v49.0
                 
-                except Exception as e:
-                    st.error(f"❌ 运行失败: {e}")
-                    import traceback
-                    st.code(traceback.format_exc())
-        
-        # 显示结果
-        result_key = 'ai_monthly_stocks_v3' if use_v3 else 'ai_monthly_stocks_v2'
-        if result_key in st.session_state:
-            stocks = st.session_state[result_key].head(top_n)
-            version_name = st.session_state.get('ai_strategy_version', 'V5.0' if use_v3 else 'V2.0')
-            st.divider()
-            st.subheader(f"📊 AI 优选名单 ({version_name} {'稳健月度目标版' if use_v3 else '追涨版'})")
-            auto_buy_info = st.session_state.get('last_ai_auto_buy')
-            if auto_buy_info:
-                if auto_buy_info.get('status') == 'duplicate':
-                    st.info("ℹ️ 本次 AI 优选名单已自动买入过，无需重复买入。")
-                elif auto_buy_info.get('status') == 'disabled':
-                    st.warning("⚠️ 自动买入已关闭，本次未执行买入。")
-                elif auto_buy_info.get('status') in ("empty", "skipped"):
-                    st.info("ℹ️ 本次无可买标的，未执行买入。")
-                else:
-                    st.info(f"✅ 已自动买入 {auto_buy_info.get('count', 0)} 只标的（{auto_buy_info.get('time', '')}）")
+                ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    终极量价暴涨系统 · 策略回测分析报告
+                ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                                            
+                ## 🎯 回测概况
+                
+                - **回测时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                - **回测策略**: {', '.join(results.keys())}
+                - **系统版本**: v49.0 长期稳健版
+                - **数据来源**: Tushare Pro（真实数据）
+                
+                ---
+                
+                ## 📈 策略表现汇总
+                
+                """
+                                            for strategy_name, stats in results.items():
+                                                report_md += f"""
+                ### 🎯 {strategy_name}
+                
+                #### 核心指标
+                | 指标 | 数值 | 说明 |
+                |------|------|------|
+                | 总信号数 | {stats.get('total_signals', 0)} | 历史回测产生的有效信号数量 |
+                | 分析股票数 | {stats.get('analyzed_stocks', 0)} | 回测分析的股票总数 |
+                | 胜率 | {stats.get('win_rate', 0):.1f}% | 盈利交易占比 |
+                | 平均收益 | {stats.get('avg_return', 0):.2f}% | 所有交易的平均收益率 |
+                | 中位数收益 | {stats.get('median_return', 0):.2f}% | 收益率的中位数 |
+                | 最大收益 | {stats.get('max_return', 0):.2f}% | 单笔最大盈利 |
+                | 最大亏损 | {stats.get('min_return', 0):.2f}% | 单笔最大亏损 |
+                
+                #### 风险指标
+                | 指标 | 数值 | 说明 |
+                |------|------|------|
+                | 夏普比率 | {stats.get('sharpe_ratio', 0):.2f} | 风险调整后收益（>1为良好）|
+                | Sortino比率 | {stats.get('sortino_ratio', 0):.2f} | 下行风险调整收益 |
+                | 最大回撤 | {stats.get('max_drawdown', 0):.2f}% | 资金曲线最大跌幅 |
+                | 波动率 | {stats.get('volatility', 0):.2f}% | 收益率标准差 |
+                | Calmar比率 | {stats.get('calmar_ratio', 0):.2f} | 年化收益/最大回撤 |
+                
+                #### 盈亏分析
+                | 指标 | 数值 | 说明 |
+                |------|------|------|
+                | 盈亏比 | {stats.get('profit_loss_ratio', 0):.2f} | 平均盈利/平均亏损 |
+                | 平均盈利 | {stats.get('avg_win', 0):.2f}% | 盈利交易的平均收益 |
+                | 平均亏损 | {stats.get('avg_loss', 0):.2f}% | 亏损交易的平均损失 |
+                | 最长连胜 | {stats.get('max_consecutive_wins', 0)} 次 | 连续盈利交易记录 |
+                | 最长连亏 | {stats.get('max_consecutive_losses', 0)} 次 | 连续亏损交易记录 |
+                
+                #### 收益分布
+                | 分位数 | 数值 |
+                |--------|------|
+                | 25%分位 | {stats.get('return_25_percentile', 0):.2f}% |
+                | 50%分位 | {stats.get('median_return', 0):.2f}% |
+                | 75%分位 | {stats.get('return_75_percentile', 0):.2f}% |
+                
+                #### 年化指标
+                | 指标 | 数值 |
+                |------|------|
+                | 年化收益 | {stats.get('annualized_return', 0):.2f}% |
+                | 期望值 | {stats.get('expected_value', 0):.2f}% |
+                
+                """
+                                            
+                                            report_md += f"""
+                ---
+                
+                ## 🏆 最佳策略推荐
+                
+                ### 推荐策略：{best_strategy[0]}
+                
+                **综合评分最高！**
+                
+                #### 推荐理由
+                - ✅ **胜率**: {best_strategy[1].get('win_rate', 0):.1f}% - {"超过50%，表现优秀" if best_strategy[1].get('win_rate', 0) > 50 else "有提升空间"}
+                - 💰 **平均收益**: {best_strategy[1].get('avg_return', 0):.2f}% - {"收益可观" if best_strategy[1].get('avg_return', 0) > 3 else "稳健增长"}
+                - 📐 **夏普比率**: {best_strategy[1].get('sharpe_ratio', 0):.2f} - {"风险收益比优秀" if best_strategy[1].get('sharpe_ratio', 0) > 1 else "风险适中"}
+                - ⚠️ **最大回撤**: {best_strategy[1].get('max_drawdown', 0):.2f}% - {"回撤控制良好" if abs(best_strategy[1].get('max_drawdown', 0)) < 10 else "注意风险控制"}
+                - 📊 **信号数量**: {best_strategy[1].get('total_signals', 0)} - {"样本充足" if best_strategy[1].get('total_signals', 0) > 100 else "样本适中"}
+                
+                根据历史回测数据，该策略在风险收益平衡方面表现最佳，建议优先使用！
+                
+                ---
+                
+                ## 📊 策略对比分析
+                
+                ### 核心指标对比表
+                
+                | 策略 | 胜率 | 平均收益 | 夏普比率 | 最大回撤 | 信号数 |
+                |------|------|----------|----------|----------|--------|
+                """
+                                            for strategy_name, stats in results.items():
+                                                report_md += f"| {strategy_name} | {stats.get('win_rate', 0):.1f}% | {stats.get('avg_return', 0):.2f}% | {stats.get('sharpe_ratio', 0):.2f} | {stats.get('max_drawdown', 0):.2f}% | {stats.get('total_signals', 0)} |\n"
+                                            
+                                            report_md += f"""
+                
+                ---
+                
+                ## 📝 实战操作建议
+                
+                ### 🎯 仓位管理
+                1. **初始仓位**: 建议每次投入不超过总资金的 **15-20%**
+                2. **最大持仓**: 同时持有不超过 **5只股票**（避免过度分散）
+                3. **加仓策略**: 盈利达到+5%后可适当加仓10%
+                4. **减仓原则**: 单只股票浮亏超过-3%立即减半仓位
+                
+                ### ⚠️ 风险控制
+                1. **止损设置**: **严格设置-5%止损位**，触及立即清仓
+                2. **移动止损**: 盈利超过+10%后，将止损位移至成本价
+                3. **时间止损**: 持仓超过10个交易日未盈利，考虑减仓
+                4. **大盘止损**: 大盘跌破重要支撑位，减仓50%观望
+                
+                ### 💰 止盈策略
+                1. **首次止盈**: 盈利达到 **+10%** 时止盈50%仓位
+                2. **二次止盈**: 盈利达到 **+15%** 时再止盈30%仓位
+                3. **持有利润**: 保留20%仓位博取更大收益，移动止损保护
+                4. **分批止盈**: 避免一次性清仓，保持市场敏感度
+                
+                ### 📊 信号筛选
+                1. **高分优先**: 优先选择评分 **≥75分** 的信号
+                2. **行业分散**: 避免所有持仓集中在同一行业
+                3. **市值均衡**: 大中小市值合理配置（建议3:5:2）
+                4. **成交量确认**: 必须确认成交量配合，避免假突破
+                
+                ### ⏰ 最佳操作时间
+                1. **买入时机**: 开盘后30分钟或尾盘最后30分钟
+                2. **卖出时机**: 触发止盈止损立即执行，不要犹豫
+                3. **持仓周期**: 建议 **5-10个交易日**（黄金周期）
+                4. **避开时段**: 重大会议、节假日前后减少操作
+                
+                ---
+                
+                ## 🔬 数据质量说明
+                
+                ### 数据来源
+                - **真实数据源**: Tushare Pro专业金融数据接口
+                - **数据完整性**: ✅ 100%真实市场数据，无模拟无演示
+                - **更新频率**: 每日收盘后自动更新
+                - **数据范围**: 最近1年历史数据，覆盖完整牛熊周期
+                
+                ### 回测可靠性
+                - **样本数量**: 充足（{sum(stats.get('total_signals', 0) for stats in results.values())}个信号）
+                - **时间跨度**: 覆盖不同市场环境
+                - **无未来函数**: ✅ 严格按照时间顺序回测
+                - **滑点处理**: 已考虑1%交易滑点和手续费
+                
+                ---
+                
+                ## ⚡ 快速开始
+                
+                ### 第一步：选择策略
+                根据上述分析，建议使用 **{best_strategy[0]}**
+                
+                ### 第二步：设置参数
+                - 评分阈值：**60分**起（可根据市场调整）
+                - 持仓周期：**5-10天**（黄金周期）
+                - 单只仓位：**15-20%**（最多5只）
+                
+                ### 第三步：实盘验证
+                - 先用小资金测试1-2周
+                - 验证信号质量和操作感觉
+                - 稳定盈利后逐步加大资金
+                
+                ### 第四步：持续优化
+                - 定期查看回测结果
+                - 根据市场环境调整参数
+                - 记录交易日志，总结经验
+                
+                ---
+                
+                ## 📞 技术支持
+                
+                - 系统版本：v49.0 长期稳健版
+                - 更新日期：{datetime.now().strftime('%Y-%m-%d')}
+                - 数据来源：Tushare Pro
+                - 核心策略：八维评分体系（潜伏为王）
+                
+                ---
+                
+                ## ⚠️ 免责声明
+                
+                本报告基于历史数据回测分析，仅供参考。历史表现不代表未来收益，股市有风险，投资需谨慎。
+                建议投资者：
+                1. 充分理解策略逻辑和风险
+                2. 严格遵守风险控制原则
+                3. 根据自身情况调整策略参数
+                4. 不要盲目追涨杀跌
+                5. 保持理性投资心态
+                
+                ---
+                
+                *报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+                *报告类型: 策略对比回测报告*
+                *系统版本: 终极量价暴涨系统 v49.0*
+                """
+                                            
+                                            # 生成文件名
+                                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                                            
+                                            st.download_button(
+                                                label="💾 下载 Markdown 报告",
+                                                data=report_md,
+                                                file_name=f"超级回测报告_v49_{timestamp}.md",
+                                                mime="text/markdown",
+                                                help="下载完整的Markdown格式回测报告，包含所有分析细节"
+                                            )
+                                            
+                                            st.success("✅ 报告已生成！点击上方按钮下载")
+                                    
+                                    with col2:
+                                        if st.button("📊 导出 CSV 数据", use_container_width=True):
+                                            # 准备CSV数据（v49增强版 - 包含更多字段）
+                                            csv_data = []
+                                            for strategy_name, stats in results.items():
+                                                csv_data.append({
+                                                    '策略名称': strategy_name,
+                                                    '总信号数': stats.get('total_signals', 0),
+                                                    '分析股票数': stats.get('analyzed_stocks', 0),
+                                                    '胜率(%)': f"{stats.get('win_rate', 0):.1f}",
+                                                    '平均收益(%)': f"{stats.get('avg_return', 0):.2f}",
+                                                    '中位数收益(%)': f"{stats.get('median_return', 0):.2f}",
+                                                    '最大收益(%)': f"{stats.get('max_return', 0):.2f}",
+                                                    '最大亏损(%)': f"{stats.get('min_return', 0):.2f}",
+                                                    '夏普比率': f"{stats.get('sharpe_ratio', 0):.2f}",
+                                                    'Sortino比率': f"{stats.get('sortino_ratio', 0):.2f}",
+                                                    '最大回撤(%)': f"{stats.get('max_drawdown', 0):.2f}",
+                                                    'Calmar比率': f"{stats.get('calmar_ratio', 0):.2f}",
+                                                    '盈亏比': f"{stats.get('profit_loss_ratio', 0):.2f}",
+                                                    '年化收益(%)': f"{stats.get('annualized_return', 0):.2f}",
+                                                    '波动率(%)': f"{stats.get('volatility', 0):.2f}",
+                                                    '期望值(%)': f"{stats.get('expected_value', 0):.2f}",
+                                                    '最长连胜': stats.get('max_consecutive_wins', 0),
+                                                    '最长连亏': stats.get('max_consecutive_losses', 0)
+                                                })
+                                            
+                                            csv_df = pd.DataFrame(csv_data)
+                                            csv_string = csv_df.to_csv(index=False, encoding='utf-8-sig')
+                                            
+                                            # 生成文件名
+                                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                                            
+                                            st.download_button(
+                                                label="💾 下载 CSV 文件",
+                                                data=csv_string,
+                                                file_name=f"回测对比数据_v49_{timestamp}.csv",
+                                                mime="text/csv",
+                                                help="下载CSV格式数据，包含所有关键指标"
+                                            )
+                                            
+                                            st.success("✅ CSV数据已准备好！点击上方按钮下载")
+                                    
+                                    with col3:
+                                        if st.button("📈 导出Excel完整版", use_container_width=True):
+                                            st.info("""
+                                            ### 📊 Excel完整版报告功能
+                                            
+                                            包含以下工作表：
+                                            1. **策略对比** - 所有策略的核心指标
+                                            2. **详细统计** - 每个策略的详细统计数据
+                                            3. **信号记录** - 所有交易信号的明细
+                                            4. **强度分析** - 信号强度分布统计
+                                            
+                                            💡 该功能需要安装 `openpyxl` 库
+                                            
+                                            如需使用，请联系技术支持或手动导出CSV后用Excel打开
+                                            """)
+                                    
+                                    st.markdown("---")
+                                    st.info("""
+                                    ### 💡 导出功能说明（v49增强版）
+                                    
+                                    #### 📄 Markdown报告
+                                    - ✅ 包含完整的策略分析和操作建议
+                                    - ✅ 可直接在Markdown阅读器或记事本中查看
+                                    - ✅ 格式清晰，适合打印或分享
+                                    
+                                    #### 📊 CSV数据
+                                    - ✅ 包含18项核心指标
+                                    - ✅ 适合导入Excel进行进一步分析
+                                    - ✅ 支持数据透视表和图表制作
+                                    
+                                    #### 📈 Excel完整版（即将上线）
+                                    - ⏳ 多工作表结构化报告
+                                    - ⏳ 自动生成图表和分析
+                                    - ⏳ 交互式数据筛选
+                                    
+                                    #### 💾 建议
+                                    - 定期保存回测结果，建立策略表现档案
+                                    - 对比不同时期的回测数据，观察策略稳定性
+                                    - 根据回测结果优化参数和选股标准
+                                    """)
+                        
+                        elif backtest_mode == "🎯 单策略深度回测":
+                            st.subheader("🎯 单策略深度回测")
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                selected_strategy = st.selectbox(
+                                    "选择策略",
+                                    ["v4.0 长期稳健版", "v5.0 趋势爆发版", "v6.0 顶级超短线", "v7.0 终极智能版🚀", "v8.0 终极进化版🚀🚀🚀 NEW!"],
+                                    help="选择要深度回测的策略。v8.0全新升级：ATR动态风控+市场过滤+凯利仓位！"
+                                )
+                            
+                            with col2:
+                                holding_days = st.slider("持仓天数", 1, 10, 5, 1, key="single_backtest_holding_days")
+                            
+                            col3, col4 = st.columns(2)
+                            with col3:
+                                sample_size = st.slider("回测样本数量", 100, 2000, 800, 100, key="single_backtest_sample_size")
+                            with col4:
+                                # ✅ 添加评分阈值参数（特别针对v6/v7/v8）
+                                score_threshold = st.slider("评分阈值", 50, 90, 65, 5, 
+                                                           key="single_backtest_threshold",
+                                                           help="v4/v5建议60分，v6建议80分，v7建议60分，v8建议60-65分（激进55）")
+                            
+                            if st.button("🚀 开始回测", type="primary", use_container_width=True, key="single_backtest"):
+                                with st.spinner(f"正在回测 {selected_strategy}..."):
+                                    try:
+                                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                                        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
+                                        
+                                        query = """
+                                            SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
+                                                   dtd.open_price, dtd.high_price, dtd.low_price, 
+                                                   dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
+                                            FROM daily_trading_data dtd
+                                            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
+                                            WHERE dtd.trade_date >= ?
+                                            ORDER BY dtd.ts_code, dtd.trade_date
+                                        """
+                                        
+                                        df = pd.read_sql_query(query, conn, params=(start_date,))
+                                        conn.close()
+                                        
+                                        if df.empty:
+                                            st.error("❌ 无法获取历史数据")
+                                        else:
+                                            df = df.rename(columns={
+                                                'close_price': 'close',
+                                                'open_price': 'open',
+                                                'high_price': 'high',
+                                                'low_price': 'low'
+                                            })
+                                            
+                                            # 根据选择的策略执行回测
+                                            if "v4.0" in selected_strategy:
+                                                result = vp_analyzer.backtest_strategy_complete(
+                                                    df, sample_size=sample_size, holding_days=holding_days
+                                                )
+                                            elif "v5.0" in selected_strategy:
+                                                result = vp_analyzer.backtest_bottom_breakthrough(
+                                                    df, sample_size=sample_size, holding_days=holding_days
+                                                )
+                                            elif "v8.0" in selected_strategy:
+                                                # 🚀🚀🚀 v8.0 终极进化版回测
+                                                result = vp_analyzer.backtest_v8_ultimate(
+                                                    df, sample_size=sample_size, holding_days=holding_days,
+                                                    score_threshold=score_threshold
+                                                )
+                                            elif "v7.0" in selected_strategy:
+                                                # v7.0 终极智能版回测
+                                                result = vp_analyzer.backtest_v7_intelligent(
+                                                    df, sample_size=sample_size, holding_days=holding_days,
+                                                    score_threshold=score_threshold  # ✅ 传入评分阈值
+                                                )
+                                            else:  # v6.0
+                                                result = vp_analyzer.backtest_v6_ultra_short(
+                                                    df, sample_size=sample_size, holding_days=holding_days,
+                                                    score_threshold=score_threshold  # ✅ 传入评分阈值
+                                                )
+                                            
+                                            if result['success']:
+                                                st.session_state['single_backtest_result'] = result
+                                                st.success("✅ 回测完成！")
+                                                st.rerun()
+                                            else:
+                                                st.error(f"❌ 回测失败：{result.get('error', '未知错误')}")
+                                    
+                                    except Exception as e:
+                                        st.error(f"❌ 回测失败: {e}")
+                                        import traceback
+                                        st.code(traceback.format_exc())
+                            
+                            # 显示回测结果
+                            if 'single_backtest_result' in st.session_state:
+                                result = st.session_state['single_backtest_result']
+                                stats = result.get('stats', {})
+                                
+                                st.markdown("---")
+                                st.subheader("📊 回测结果详情")
+                                
+                                col1, col2, col3, col4 = st.columns(4)
+                                
+                                with col1:
+                                    st.metric("胜率", f"{stats.get('win_rate', 0):.1f}%")
+                                with col2:
+                                    st.metric("平均收益", f"{stats.get('avg_return', 0):.2f}%")
+                                with col3:
+                                    st.metric("夏普比率", f"{stats.get('sharpe_ratio', 0):.2f}")
+                                with col4:
+                                    st.metric("信号数量", stats.get('total_signals', 0))
+                                
+                                st.markdown("---")
+                                col1, col2, col3 = st.columns(3)
+                                
+                                with col1:
+                                    st.metric("最大收益", f"{stats.get('max_return', 0):.2f}%")
+                                with col2:
+                                    st.metric("最大亏损", f"{stats.get('max_loss', 0):.2f}%")
+                                with col3:
+                                    st.metric("盈亏比", f"{stats.get('profit_loss_ratio', 0):.2f}")
+                                
+                                # ==================== 单策略回测+ 增强功能 ====================
+                                st.markdown("---")
+                                st.subheader("🚀 深度分析")
+                                
+                                single_analysis_tab1, single_analysis_tab2, single_analysis_tab3 = st.tabs([
+                                    "📊 分强度统计", "📋 交易记录", "📥 导出数据"
+                                ])
+                                
+                                with single_analysis_tab1:
+                                    if 'strength_performance' in stats:
+                                        st.markdown("### 📊 信号强度表现分析")
+                                        
+                                        strength_perf = stats['strength_performance']
+                                        
+                                        # 创建表格
+                                        strength_table_data = []
+                                        for strength_range, perf in strength_perf.items():
+                                            strength_table_data.append({
+                                                '信号强度': strength_range + '分',
+                                                '信号数量': perf['count'],
+                                                '平均收益': f"{perf['avg_return']:.2f}%",
+                                                '胜率': f"{perf['win_rate']:.1f}%"
+                                            })
+                                        
+                                        strength_table_df = pd.DataFrame(strength_table_data)
+                                        st.dataframe(strength_table_df, use_container_width=True, hide_index=True)
+                                        
+                                        # 可视化
+                                        st.markdown("### 📈 信号强度可视化")
+                                        
+                                        import plotly.graph_objects as go
+                                        from plotly.subplots import make_subplots
+                                        
+                                        labels = list(strength_perf.keys())
+                                        counts = [perf['count'] for perf in strength_perf.values()]
+                                        returns = [perf['avg_return'] for perf in strength_perf.values()]
+                                        win_rates = [perf['win_rate'] for perf in strength_perf.values()]
+                                        
+                                        # 创建子图
+                                        fig = make_subplots(
+                                            rows=1, cols=2,
+                                            subplot_titles=('信号强度分布', '信号强度 vs 胜率&收益'),
+                                            specs=[[{'type': 'bar'}, {'type': 'scatter'}]]
+                                        )
+                                        
+                                        # 左图：信号数量分布
+                                        fig.add_trace(
+                                            go.Bar(x=labels, y=counts, name='信号数量', marker_color='lightblue'),
+                                            row=1, col=1
+                                        )
+                                        
+                                        # 右图：胜率和收益
+                                        fig.add_trace(
+                                            go.Scatter(x=labels, y=win_rates, name='胜率 (%)', 
+                                                     mode='lines+markers', marker=dict(size=10)),
+                                            row=1, col=2
+                                        )
+                                        
+                                        fig.add_trace(
+                                            go.Scatter(x=labels, y=returns, name='平均收益 (%)', 
+                                                     mode='lines+markers', marker=dict(size=10), yaxis='y2'),
+                                            row=1, col=2
+                                        )
+                                        
+                                        fig.update_xaxes(title_text="信号强度", row=1, col=1)
+                                        fig.update_xaxes(title_text="信号强度", row=1, col=2)
+                                        fig.update_yaxes(title_text="信号数量", row=1, col=1)
+                                        fig.update_yaxes(title_text="百分比", row=1, col=2)
+                                        
+                                        fig.update_layout(height=400, showlegend=True)
+                                        
+                                        st.plotly_chart(fig, use_container_width=True)
+                                        
+                                        # 结论分析
+                                        st.markdown("### 💡 策略分析结论")
+                                        
+                                        # 找出表现最好的强度区间
+                                        best_strength = max(strength_perf.items(), 
+                                                          key=lambda x: x[1]['avg_return'] * x[1]['win_rate'] / 100)
+                                        
+                                        st.success(f"""
+                                        **最佳信号强度区间**: {best_strength[0]}分
+                                        - 平均收益: {best_strength[1]['avg_return']:.2f}%
+                                        - 胜率: {best_strength[1]['win_rate']:.1f}%
+                                        - 信号数量: {best_strength[1]['count']}
+                                        
+                                        💡 建议：重点关注 {best_strength[0]}分 区间的信号，该区间风险收益比最佳。
+                                        """)
+                                    else:
+                                        st.info("暂无分强度统计数据")
+                                
+                                with single_analysis_tab2:
+                                    if 'details' in result and len(result.get('details', [])) > 0:
+                                        st.markdown("### 📋 详细交易记录（前50条）")
+                                        
+                                        details_df = result['details'][:50] if isinstance(result['details'], pd.DataFrame) else pd.DataFrame(result['details'][:50])
+                                        st.dataframe(details_df, use_container_width=True, hide_index=True)
+                                        
+                                        # 交易记录统计
+                                        st.markdown("### 📊 交易统计")
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        
+                                        with col1:
+                                            st.metric("总交易数", len(result['details']))
+                                        with col2:
+                                            profitable = sum(1 for d in result['details'] 
+                                                           if float(d.get(f"{stats.get('avg_holding_days', 5)}天收益", "0%").rstrip('%')) > 0)
+                                            st.metric("盈利交易", profitable)
+                                        with col3:
+                                            loss = len(result['details']) - profitable
+                                            st.metric("亏损交易", loss)
+                                        with col4:
+                                            if loss > 0:
+                                                st.metric("盈亏比", f"{profitable/loss:.2f}")
+                                            else:
+                                                st.metric("盈亏比", "∞")
+                                    else:
+                                        st.info("暂无详细交易记录")
+                                
+                                with single_analysis_tab3:
+                                    st.markdown("### 📥 导出回测数据")
+                                    
+                                    col1, col2 = st.columns(2)
+                                    
+                                    with col1:
+                                        if st.button("📄 生成回测报告", use_container_width=True, key="single_report"):
+                                            strategy_name = result.get('strategy', '未知策略')
+                                            
+                                            report_md = f"""# 📊 {strategy_name} 深度回测报告
+                                            
+                ## 🎯 回测概况
+                
+                **回测时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                **回测策略**: {strategy_name}
+                **持仓天数**: {stats.get('avg_holding_days', 'N/A')}天
+                **样本数量**: {stats.get('analyzed_stocks', 'N/A')}只
+                
+                ---
+                
+                ## 📈 核心指标
+                
+                | 指标 | 数值 |
+                |------|------|
+                | 总信号数 | {stats.get('total_signals', 0)} |
+                | 胜率 | {stats.get('win_rate', 0):.1f}% |
+                | 平均收益 | {stats.get('avg_return', 0):.2f}% |
+                | 中位数收益 | {stats.get('median_return', 0):.2f}% |
+                | 最大收益 | {stats.get('max_return', 0):.2f}% |
+                | 最大亏损 | {stats.get('min_return', 0):.2f}% |
+                | 夏普比率 | {stats.get('sharpe_ratio', 0):.2f} |
+                | 盈亏比 | {stats.get('profit_loss_ratio', 0):.2f} |
+                
+                ---
+                
+                ## 📊 分强度表现
+                """
+                                            if 'strength_performance' in stats:
+                                                for strength_range, perf in stats['strength_performance'].items():
+                                                    report_md += f"""
+                ### {strength_range}分
+                
+                - 信号数量: {perf['count']}
+                - 平均收益: {perf['avg_return']:.2f}%
+                - 胜率: {perf['win_rate']:.1f}%
+                """
+                                            
+                                            report_md += f"""
+                ---
+                
+                ## 💡 使用建议
+                
+                1. **最佳信号强度**: 关注70分以上的信号
+                2. **止损建议**: 建议设置-5%止损位
+                3. **止盈建议**: 分批止盈，首次+10%，第二次+15%
+                4. **仓位控制**: 单只股票不超过总资金的8%
+                
+                ---
+                
+                *报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+                """
+                                            
+                                            # 生成文件名
+                                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                                            
+                                            st.download_button(
+                                                label="💾 下载报告",
+                                                data=report_md,
+                                                file_name=f"single_backtest_report_{timestamp}.md",
+                                                mime="text/markdown",
+                                                key="download_single_report"
+                                            )
+                                            
+                                            st.success("✅ 报告已生成！")
+                                    
+                                    with col2:
+                                        if st.button("📊 导出交易记录", use_container_width=True, key="single_export"):
+                                            if 'details' in result and len(result.get('details', [])) > 0:
+                                                details_df = result['details'] if isinstance(result['details'], pd.DataFrame) else pd.DataFrame(result['details'])
+                                                csv_string = details_df.to_csv(index=False, encoding='utf-8-sig')
+                                                
+                                                # 生成文件名
+                                                timestamp2 = datetime.now().strftime('%Y%m%d_%H%M%S')
+                                                
+                                                st.download_button(
+                                                    label="💾 下载CSV",
+                                                    data=csv_string,
+                                                    file_name=f"trade_records_{timestamp2}.csv",
+                                                    mime="text/csv",
+                                                    key="download_single_csv"
+                                                )
+                                                
+                                                st.success("✅ 交易记录已准备好！")
+                                            else:
+                                                st.warning("⚠️ 暂无交易记录可导出")
+                        
+                        else:  # 参数优化
+                            st.subheader("⚙️ 参数优化")
+                            
+                            st.info("""
+                            ### 💡 参数优化说明
+                            
+                            系统将自动测试不同的参数组合，找出历史表现最佳的参数设置。
+                            
+                            **优化维度**：
+                            - 信号强度阈值：0.4、0.5、0.6、0.7
+                            - 持仓天数：3、5、7、10天
+                            
+                            **评分标准**：
+                            - 平均收益（40%权重）
+                            - 胜率（30%权重）
+                            - 夏普比率（20%权重）
+                            - 信号数量（10%权重）
+                            """)
+                            
+                            sample_size = st.slider("优化样本数量", 100, 1000, 300, 50, help="样本越大越准确但耗时越长")
+                            
+                            if st.button("🔍 开始优化", type="primary", use_container_width=True, key="start_optimization"):
+                                with st.spinner("正在优化参数...这可能需要几分钟..."):
+                                    try:
+                                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                                        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
+                                        
+                                        query = """
+                                            SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
+                                                   dtd.open_price, dtd.high_price, dtd.low_price, 
+                                                   dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
+                                            FROM daily_trading_data dtd
+                                            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
+                                            WHERE dtd.trade_date >= ?
+                                            ORDER BY dtd.ts_code, dtd.trade_date
+                                        """
+                                        
+                                        df = pd.read_sql_query(query, conn, params=(start_date,))
+                                        conn.close()
+                                        
+                                        if df.empty:
+                                            st.error("❌ 无法获取历史数据")
+                                        else:
+                                            df = df.rename(columns={
+                                                'close_price': 'close',
+                                                'open_price': 'open',
+                                                'high_price': 'high',
+                                                'low_price': 'low'
+                                            })
+                                            
+                                            # 初始化优化器
+                                            if 'optimizer' not in st.session_state:
+                                                st.session_state.optimizer = StrategyOptimizer(vp_analyzer)
+                                            
+                                            result = st.session_state.optimizer.optimize_parameters(df, sample_size=sample_size)
+                                            
+                                            if result['success']:
+                                                st.session_state['optimization_result'] = result
+                                                st.success("✅ 参数优化完成！")
+                                                st.rerun()
+                                            else:
+                                                st.error(f"❌ 优化失败：{result.get('error', '未知错误')}")
+                                    
+                                    except Exception as e:
+                                        st.error(f"❌ 优化失败: {e}")
+                                        import traceback
+                                        st.code(traceback.format_exc())
+                            
+                            # 显示优化结果
+                            if 'optimization_result' in st.session_state:
+                                result = st.session_state['optimization_result']
+                                best_params = result.get('best_params', {})
+                                
+                                st.markdown("---")
+                                st.success(f"""
+                                ### 🏆 最佳参数组合
+                                
+                                **信号强度阈值**: {best_params.get('params', {}).get('signal_strength', 'N/A')}
+                                
+                                **历史表现**:
+                                - 胜率：{best_params.get('stats', {}).get('win_rate', 0):.1f}%
+                                - 平均收益：{best_params.get('stats', {}).get('avg_return', 0):.2f}%
+                                - 夏普比率：{best_params.get('stats', {}).get('sharpe_ratio', 0):.2f}
+                                - 综合评分：{best_params.get('score', 0):.2f}
+                                """)
+                                
+                                st.markdown("---")
+                                st.subheader("📊 所有参数对比")
+                                
+                                all_results = result.get('all_results', [])
+                                if all_results:
+                                    params_data = []
+                                    for res in all_results:
+                                        params_data.append({
+                                            '信号强度': res['params']['signal_strength'],
+                                            '综合评分': f"{res['score']:.2f}",
+                                            '胜率': f"{res['stats'].get('win_rate', 0):.1f}%",
+                                            '平均收益': f"{res['stats'].get('avg_return', 0):.2f}%",
+                                            '夏普比率': f"{res['stats'].get('sharpe_ratio', 0):.2f}"
+                                        })
+                                    
+                                    params_df = pd.DataFrame(params_data)
+                                    st.dataframe(params_df, use_container_width=True, hide_index=True)
+                
+                    # ==================== Tab 4: 🤖 AI智能选股 ====================
+    if tab_ai is not None:
+        with tab_ai:
+                    st.header("🤖 AI 智能选股（高收益捕获者）")
+                    
+                    # 策略版本选择
+                    strategy_version = st.radio(
+                        "选择策略版本",
+                        ["V5.0 稳健月度目标版（推荐）", "V2.0 追涨版"],
+                        horizontal=True,
+                        help="V5.0：强调回撤控制与回踩确认 | V2.0：追已涨20%的股票"
+                    )
+                    
+                    use_v3 = "V5.0" in strategy_version
+                    
+                    if use_v3:
+                        st.markdown("**✅ V5.0 稳健月度目标版：强调安全边际与回撤控制**")
+                        st.info("""
+                        ### ✨ V5.0 核心特点（稳健月度目标版）
+                        
+                        **稳健评分体系**：
+                        - 🛡️ **回撤控制**：20日回撤过大直接剔除
+                        - ✅ **回踩确认**：回踩均线后企稳反弹优先
+                        - 🔥 **板块强度**：板块共振强势的更可靠
+                        - 📈 **适度动量**：不过度追高，强调安全边际
+                        
+                        **稳健门槛**：
+                        - ✅ 成交活跃度与波动率双重过滤
+                        - ✅ 回撤过大与极端波动直接剔除
+                        - ✅ 优先“趋势健康 + 回踩确认 + 板块共振”
+                        
+                        **中国市场特性适配**：
+                        - 🇨🇳 回避涨停追高与连板博弈
+                        - 🇨🇳 过滤新股高波动阶段
+                        - 🇨🇳 结合换手率筛选更稳健标的
+                        - 🇨🇳 行业强度加权 + 龙头/次龙识别
+                        - 🇨🇳 波动分位自适应 + 市值分层优化
+                        
+                        **推荐等级**：🌟🌟🌟强烈推荐(70+) | 🌟🌟推荐(50+) | 🌟关注(35+)
+                        """)
+                    else:
+                        st.markdown("**🛡️ V2.0 追涨版：筛选已涨20%+的高动量标的**")
+                        st.info("""
+                        ### ⚠️ V2.0 策略特点
+                        - **大盘风控**：自动检测上证指数，空头市场自动预警并下调评分
+                        - **板块共振**：挖掘"板块集体爆发"个股，提升板块领头羊权重
+                        - **乖离率过滤**：自动过滤远离均线 35%+ 的标的，拒绝高位接盘
+                        - **量价健康度**：多维度校验成交量支撑，确保不是缩量诱多
+                        
+                        **注意**：V2.0要求已涨20%，在当前市场环境下可能选不到股票
+                        """)
+                    
+                    st.divider()
+                    
+                    st.markdown("### 🎯 策略参数设置")
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        if use_v3:
+                            target_return = st.slider(
+                                "目标月收益阈值（%）",
+                                min_value=10, max_value=50, value=18, step=1,
+                                help="预测未来20天可能达到的收益目标"
+                            )
+                        else:
+                            target_return = st.slider(
+                                "目标月收益阈值（%）",
+                                min_value=10, max_value=50, value=20, step=1,
+                                help="筛选近 20 个交易日涨幅达标的标的"
+                            )
+                    with col2:
+                        min_amount_default = 2.5 if use_v3 else 2.0
+                        min_amount = st.slider(
+                            "最低成交活跃度（亿元）",
+                            min_value=0.5, max_value=15.0, value=min_amount_default, step=0.5,
+                            help="过滤'僵尸股'，确保进出容易"
+                        )
+                    with col3:
+                        max_volatility_default = 14.0 if use_v3 else 12.0
+                        max_volatility = st.slider(
+                            "最大波动容忍度（%）",
+                            min_value=5.0, max_value=25.0, value=max_volatility_default, step=0.5,
+                            help="过滤极端异常波动的'电梯股'"
+                        )
+                    with col4:
+                        top_n_default = 25 if use_v3 else 30
+                        top_n = st.slider("优选推荐数量", 5, 100, top_n_default, 5, key="ai_top_n_v3")
             
-            # 统计汇总
-            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-            with col_m1:
-                st.metric("推荐标的", f"{len(stocks)} 只")
-            with col_m2:
-                avg_ret20 = pd.to_numeric(stocks['20日涨幅%'], errors='coerce').mean()
-                avg_ret5 = pd.to_numeric(stocks['5日涨幅%'], errors='coerce').mean() if '5日涨幅%' in stocks.columns else 0
-                st.metric("平均20日涨幅", f"{avg_ret20:.1f}%", delta=f"5日: {avg_ret5:.1f}%")
-            with col_m3:
-                if '放量倍数' in stocks.columns:
-                    avg_vol_ratio = pd.to_numeric(stocks['放量倍数'], errors='coerce').mean()
-                    st.metric("平均放量倍数", f"{avg_vol_ratio:.2f}x")
-                else:
-                    st.metric("平均放量倍数", "—")
-            with col_m4:
-                if '近20日成交额(亿)' in stocks.columns:
-                    avg_amt = pd.to_numeric(stocks['近20日成交额(亿)'], errors='coerce').mean()
-                    st.metric("平均活跃度", f"{avg_amt:.1f} 亿")
-                else:
-                    st.metric("平均活跃度", "—")
+                    with st.expander("📌 市值筛选（可选）", expanded=False):
+                        if use_v3:
+                            default_mcap = (100, 5000)
+                        else:
+                            default_mcap = (0, 5000)
+                        market_cap_range = st.slider(
+                            "流通市值范围（亿）",
+                            min_value=0,
+                            max_value=5000,
+                            value=default_mcap,
+                            step=10,
+                            help="用于过滤过小/过大的流通市值标的"
+                        )
+                        min_market_cap, max_market_cap = market_cap_range
+                    
+                    button_text = "🚀 开启 AI 稳健月度目标 (V5.0)" if use_v3 else "🚀 开启 AI 高收益捕获 (V2.0)"
+                    if st.button(button_text, type="primary", use_container_width=True):
+                        with st.spinner(f"🤖 AI 正在全市场扫描 {'V5.0 稳健月度目标' if use_v3 else 'V2.0 高收益标的'}..."):
+                            try:
+                                conn = sqlite3.connect(PERMANENT_DB_PATH)
+                                start_date = (datetime.now() - timedelta(days=150)).strftime('%Y%m%d')
+                                query = """
+                                    SELECT dtd.ts_code, sb.name, sb.industry, sb.circ_mv,
+                                           dtd.trade_date, dtd.close_price, dtd.vol, dtd.amount, dtd.pct_chg
+                                    FROM daily_trading_data dtd
+                                    INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
+                                    WHERE dtd.trade_date >= ?
+                                    ORDER BY dtd.ts_code, dtd.trade_date
+                                """
+                                df = pd.read_sql_query(query, conn, params=(start_date,))
+                                conn.close()
+                                
+                                if df.empty:
+                                    st.error("数据库为空，请先在'数据中心'更新数据")
+                                else:
+                                    if use_v3:
+                                        stocks = vp_analyzer.select_monthly_target_stocks_v3(
+                                            df,
+                                            target_return=target_return / 100,
+                                            min_amount=min_amount,
+                                            max_volatility=max_volatility / 100,
+                                            min_market_cap=min_market_cap,
+                                            max_market_cap=max_market_cap
+                                        )
+                                        session_key = 'ai_monthly_stocks_v3'
+                                        version_name = "V5.0"
+                                    else:
+                                        stocks = vp_analyzer.select_monthly_target_stocks(
+                                            df,
+                                            target_return=target_return / 100,
+                                            min_amount=min_amount,
+                                            max_volatility=max_volatility / 100
+                                        )
+                                        session_key = 'ai_monthly_stocks_v2'
+                                        version_name = "V2.0"
+                                    
+                                    if not stocks.empty:
+                                        st.session_state[session_key] = stocks
+                                        st.session_state['ai_strategy_version'] = version_name
+                                        st.success(f"✅ {version_name} 扫描完成：找到 {len(stocks)} 只{'综合潜力' if use_v3 else '高收益潜力'}标的")
+                                        sim_account = _get_sim_account()
+                                        buy_count, buy_status = _auto_buy_ai_stocks(
+                                            stocks,
+                                            sim_account['per_buy_amount'],
+                                            sim_account['auto_buy_top_n']
+                                        )
+                                        st.session_state['last_ai_auto_buy'] = {
+                                            'count': buy_count,
+                                            'status': buy_status,
+                                            'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                        }
+                                        st.rerun()
+                                    else:
+                                        if use_v3:
+                                            st.error("⚠️ V5.0 未找到股票，可能的原因：\n1. 数据库数据不足（请先到「数据中心」更新数据）\n2. 数据查询出错（请查看系统日志）\n3. 当前市场偏弱或稳健过滤过严")
+                                            st.info("💡 提示：V5.0已自动从“严格稳健”→“稳健放宽”→“救援筛选”仍未命中。\n可尝试：降低目标收益阈值、提高最大波动容忍度、或暂时放宽回撤/新股过滤。")
+                                            debug_runs = getattr(vp_analyzer, 'last_v5_debug', None)
+                                            if debug_runs:
+                                                lines = []
+                                                for s in debug_runs:
+                                                    lines.append(
+                                                        f"[{s['stage']}] total={s['total_stocks']} cand={s['candidates']} res={s['results']} | "
+                                                        f"history={s['skip_history']} st={s['skip_st']} data={s['skip_len_data']} "
+                                                        f"limitup={s['skip_limitup']} amount={s['skip_amount']} mcap={s['skip_mcap']} turnover={s['skip_turnover']} ret20={s['skip_ret20_gate']} "
+                                                        f"ind_weak={s['skip_industry_weak']} vol_pct={s['skip_vol_percentile']} dd={s['skip_drawdown']} vol={s['skip_volatility']} "
+                                                        f"pull={s['skip_pullback']} bias={s['skip_bias']} score={s['skip_score']}"
+                                                    )
+                                                st.code("\n".join(lines))
+                                        else:
+                                            st.warning("⚠️ 当前市场环境下未发现符合 V2.0 标准的标的，建议：\n1. 切换到V5.0稳健月度目标版（推荐）\n2. 降低门槛或等待大盘企稳")
+                            
+                            except Exception as e:
+                                st.error(f"❌ 运行失败: {e}")
+                                import traceback
+                                st.code(traceback.format_exc())
+                    
+                    # 显示结果
+                    result_key = 'ai_monthly_stocks_v3' if use_v3 else 'ai_monthly_stocks_v2'
+                    if result_key in st.session_state:
+                        stocks = st.session_state[result_key].head(top_n)
+                        version_name = st.session_state.get('ai_strategy_version', 'V5.0' if use_v3 else 'V2.0')
+                        st.divider()
+                        st.subheader(f"📊 AI 优选名单 ({version_name} {'稳健月度目标版' if use_v3 else '追涨版'})")
+                        auto_buy_info = st.session_state.get('last_ai_auto_buy')
+                        if auto_buy_info:
+                            if auto_buy_info.get('status') == 'duplicate':
+                                st.info("ℹ️ 本次 AI 优选名单已自动买入过，无需重复买入。")
+                            elif auto_buy_info.get('status') == 'disabled':
+                                st.warning("⚠️ 自动买入已关闭，本次未执行买入。")
+                            elif auto_buy_info.get('status') in ("empty", "skipped"):
+                                st.info("ℹ️ 本次无可买标的，未执行买入。")
+                            else:
+                                st.info(f"✅ 已自动买入 {auto_buy_info.get('count', 0)} 只标的（{auto_buy_info.get('time', '')}）")
+                        
+                        # 统计汇总
+                        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                        with col_m1:
+                            st.metric("推荐标的", f"{len(stocks)} 只")
+                        with col_m2:
+                            avg_ret20 = pd.to_numeric(stocks['20日涨幅%'], errors='coerce').mean()
+                            avg_ret5 = pd.to_numeric(stocks['5日涨幅%'], errors='coerce').mean() if '5日涨幅%' in stocks.columns else 0
+                            st.metric("平均20日涨幅", f"{avg_ret20:.1f}%", delta=f"5日: {avg_ret5:.1f}%")
+                        with col_m3:
+                            if '放量倍数' in stocks.columns:
+                                avg_vol_ratio = pd.to_numeric(stocks['放量倍数'], errors='coerce').mean()
+                                st.metric("平均放量倍数", f"{avg_vol_ratio:.2f}x")
+                            else:
+                                st.metric("平均放量倍数", "—")
+                        with col_m4:
+                            if '近20日成交额(亿)' in stocks.columns:
+                                avg_amt = pd.to_numeric(stocks['近20日成交额(亿)'], errors='coerce').mean()
+                                st.metric("平均活跃度", f"{avg_amt:.1f} 亿")
+                            else:
+                                st.metric("平均活跃度", "—")
+                        
+                        # 数据表格展示
+                        st.dataframe(
+                            stocks, 
+                            use_container_width=True, 
+                            hide_index=True,
+                            column_config={
+                                "评分": st.column_config.NumberColumn(format="%.1f 🔥"),
+                                "推荐理由": st.column_config.TextColumn(width="large")
+                            }
+                        )
+                        
+                        st.markdown("---")
+                        csv = _df_to_csv_bytes(stocks)
+                        st.download_button(
+                            label=f"📥 导出 {version_name} 结果 (Excel 兼容)",
+                            data=csv,
+                            file_name=f"AI_稳健月度目标{version_name}_结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv; charset=utf-8"
+                        )
             
-            # 数据表格展示
-            st.dataframe(
-                stocks, 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={
-                    "评分": st.column_config.NumberColumn(format="%.1f 🔥"),
-                    "推荐理由": st.column_config.TextColumn(width="large")
-                }
-            )
-            
-            st.markdown("---")
-            csv = _df_to_csv_bytes(stocks)
-            st.download_button(
-                label=f"📥 导出 {version_name} 结果 (Excel 兼容)",
-                data=csv,
-                file_name=f"AI_稳健月度目标{version_name}_结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv; charset=utf-8"
-            )
-
-    # ==================== Tab 5: 🔄 数据与参数管理 ====================
+                # ==================== Tab 5: 🔄 数据与参数管理 ====================
     with tab_data:
         st.header("🔄 数据库管理")
         st.markdown("**一键更新市场数据·保持数据新鲜**")
@@ -11726,13 +11753,14 @@ def main():
             st.info("请确保 trading_assistant.py 文件存在")
 
     # ==================== Tab 6: 📚 实战指南 ====================
-    with tab_guide:
-        st.header("📚 终极实战操作指南")
-        # (内容由原 Tab9 填充)
+    if tab_guide is not None:
+        with tab_guide:
+            st.header("📚 终极实战操作指南")
+            # (内容由原 Tab9 填充)
 
-    # ==========================================================
-    # ✅ 所有Tab内容已整理完毕，旧代码已清理
-    # ==========================================================
+            # ==========================================================
+            # ✅ 所有Tab内容已整理完毕，旧代码已清理
+            # ==========================================================
 
 
 if __name__ == "__main__":

@@ -1,4 +1,6 @@
 {
   "PERMANENT_DB_PATH": "/path/to/permanent_stock_database.db",
-  "TUSHARE_TOKEN": "your_tushare_token_here"
+  "TUSHARE_TOKEN": "your_tushare_token_here",
+  "UPDATE_PASSWORD": "update_password_here",
+  "BACKTEST_PASSWORD": "backtest_password_here"
 }
