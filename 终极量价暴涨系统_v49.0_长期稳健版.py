@@ -627,7 +627,7 @@ st.set_page_config(
     page_title="🎯 终极量价暴涨系统 v49.0 - 长期稳健版",
     page_icon="🎯",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 
@@ -6118,7 +6118,17 @@ class DatabaseManager:
 # ===================== 主界面（完整集成版）=====================
 def main():
     """主界面"""
-    
+    st.markdown("""
+        <style>
+        @media (max-width: 768px) {
+            .block-container {padding-top: 1.0rem; padding-left: 1rem; padding-right: 1rem;}
+            .stMetric {padding: 0.4rem 0.6rem;}
+            .stTabs [data-baseweb="tab-list"] {overflow-x: auto;}
+            .stTabs [data-baseweb="tab-list"] button {white-space: nowrap;}
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.title("🎯 终极量价暴涨系统 v49.0 - 长期稳健版")
     st.markdown("**✅真实数据验证·56.6%胜率·5天黄金周期·年化10-15%·v4.0潜伏为王评分器**")
     st.markdown("---")
@@ -6140,12 +6150,15 @@ def main():
     optimizer = st.session_state.optimizer
     db_manager = st.session_state.db_manager
     scanner = st.session_state.scanner
+
+    status = db_manager.get_database_status()
     
     # 侧边栏
     with st.sidebar:
+        ui_mode = st.radio("界面模式", ["标准", "简洁（手机）"], index=0, horizontal=True)
+        compact_mode = ui_mode != "标准"
+
         st.header("📊 系统状态")
-        
-        status = db_manager.get_database_status()
         
         if 'error' not in status:
             st.metric("活跃股票", f"{status.get('active_stocks', 0):,} 只")
@@ -6165,10 +6178,10 @@ def main():
         else:
             st.error(f"❌ {status['error']}")
         
-        st.divider()
-        
-        st.markdown("### 💎 v46.5暴涨猎手优化版")
-        st.markdown("""
+        if not compact_mode:
+            st.divider()
+            st.markdown("### 💎 v46.5暴涨猎手优化版")
+            st.markdown("""
         **核心升级：**
         - 🔥 区分放量上涨vs放量下跌
         - 💎 十维专业评分系统
@@ -6194,6 +6207,22 @@ def main():
         2. Tab2: 🔥一键智能推荐（v46.1）
         3. 其他模块：回测/优化/板块扫描
         """)
+
+    if compact_mode and 'error' not in status:
+        st.markdown("### 📊 简洁数据看板")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("活跃股票", f"{status.get('active_stocks', 0):,} 只")
+            st.metric("数据量", f"{status.get('total_records', 0):,} 条")
+        with col2:
+            st.metric("行业板块", f"{status.get('total_industries', 0)} 个")
+            st.metric("数据库", f"{status.get('db_size_gb', 0):.2f} GB")
+        st.markdown(f"**最新数据：** {status.get('max_date', 'N/A')}")
+        if status.get('is_fresh'):
+            st.success(f"✅ 最新（{status.get('days_old', 0)}天前）")
+        else:
+            st.warning(f"⚠️ 需更新（{status.get('days_old', 999)}天前）")
+        st.markdown("---")
     
     # 【核心架构】v50.0 极简至尊版 - 6大核心功能区
     tab_core, tab_sector, tab_backtest, tab_ai, tab_assistant, tab_data, tab_guide = st.tabs([
