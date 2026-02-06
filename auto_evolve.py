@@ -100,6 +100,18 @@ def _ensure_table(conn: sqlite3.Connection, ddl: str) -> None:
         pass
 
 
+def _append_df(conn: sqlite3.Connection, table: str, df: pd.DataFrame, trade_date: str | None = None) -> int:
+    if df is None or df.empty:
+        return 0
+    if trade_date and "trade_date" in df.columns:
+        try:
+            conn.execute(f"DELETE FROM {table} WHERE trade_date = ?", (trade_date,))
+        except Exception:
+            pass
+    df.to_sql(table, conn, if_exists="append", index=False)
+    return len(df)
+
+
 def _update_northbound(db_path: str) -> Dict:
     token = _load_tushare_token()
     if not token:
@@ -205,6 +217,116 @@ def _update_margin(db_path: str) -> Dict:
         updated += 1
         if updated % 500 == 0:
             conn.commit()
+    conn.commit()
+    conn.close()
+    return {"success": True, "updated": updated, "last_trade": last_trade}
+
+
+def _update_margin_detail(db_path: str) -> Dict:
+    token = _load_tushare_token()
+    if not token:
+        return {"success": False, "error": "Tushare token not found"}
+    pro = ts.pro_api(token)
+    last_trade = _get_recent_trade_date(pro, lookback_days=60)
+    if not last_trade:
+        return {"success": False, "error": "no recent trade date"}
+    try:
+        df = pro.margin_detail(trade_date=last_trade)
+    except Exception as e:
+        return {"success": False, "error": f"margin_detail failed: {e}"}
+    if df is None or df.empty:
+        return {"success": False, "error": "margin_detail empty"}
+    conn = _connect(db_path)
+    _ensure_table(conn, "CREATE TABLE IF NOT EXISTS margin_detail (dummy TEXT)")
+    updated = _append_df(conn, "margin_detail", df, trade_date=last_trade)
+    conn.commit()
+    conn.close()
+    return {"success": True, "updated": updated, "last_trade": last_trade}
+
+
+def _update_moneyflow_daily(db_path: str) -> Dict:
+    token = _load_tushare_token()
+    if not token:
+        return {"success": False, "error": "Tushare token not found"}
+    pro = ts.pro_api(token)
+    last_trade = _get_recent_trade_date(pro, lookback_days=60)
+    if not last_trade:
+        return {"success": False, "error": "no recent trade date"}
+    try:
+        df = pro.moneyflow(trade_date=last_trade)
+    except Exception as e:
+        return {"success": False, "error": f"moneyflow failed: {e}"}
+    if df is None or df.empty:
+        return {"success": False, "error": "moneyflow empty"}
+    conn = _connect(db_path)
+    _ensure_table(conn, "CREATE TABLE IF NOT EXISTS moneyflow_daily (dummy TEXT)")
+    updated = _append_df(conn, "moneyflow_daily", df, trade_date=last_trade)
+    conn.commit()
+    conn.close()
+    return {"success": True, "updated": updated, "last_trade": last_trade}
+
+
+def _update_moneyflow_industry(db_path: str) -> Dict:
+    token = _load_tushare_token()
+    if not token:
+        return {"success": False, "error": "Tushare token not found"}
+    pro = ts.pro_api(token)
+    last_trade = _get_recent_trade_date(pro, lookback_days=60)
+    if not last_trade:
+        return {"success": False, "error": "no recent trade date"}
+    try:
+        df = pro.moneyflow_ind_ths(trade_date=last_trade)
+    except Exception as e:
+        return {"success": False, "error": f"moneyflow_ind_ths failed: {e}"}
+    if df is None or df.empty:
+        return {"success": False, "error": "moneyflow_ind_ths empty"}
+    conn = _connect(db_path)
+    _ensure_table(conn, "CREATE TABLE IF NOT EXISTS moneyflow_ind_ths (dummy TEXT)")
+    updated = _append_df(conn, "moneyflow_ind_ths", df, trade_date=last_trade)
+    conn.commit()
+    conn.close()
+    return {"success": True, "updated": updated, "last_trade": last_trade}
+
+
+def _update_top_list(db_path: str) -> Dict:
+    token = _load_tushare_token()
+    if not token:
+        return {"success": False, "error": "Tushare token not found"}
+    pro = ts.pro_api(token)
+    last_trade = _get_recent_trade_date(pro, lookback_days=60)
+    if not last_trade:
+        return {"success": False, "error": "no recent trade date"}
+    try:
+        df = pro.top_list(trade_date=last_trade)
+    except Exception as e:
+        return {"success": False, "error": f"top_list failed: {e}"}
+    if df is None or df.empty:
+        return {"success": False, "error": "top_list empty"}
+    conn = _connect(db_path)
+    _ensure_table(conn, "CREATE TABLE IF NOT EXISTS top_list (dummy TEXT)")
+    updated = _append_df(conn, "top_list", df, trade_date=last_trade)
+    conn.commit()
+    conn.close()
+    return {"success": True, "updated": updated, "last_trade": last_trade}
+
+
+def _update_top_inst(db_path: str) -> Dict:
+    token = _load_tushare_token()
+    if not token:
+        return {"success": False, "error": "Tushare token not found"}
+    pro = ts.pro_api(token)
+    last_trade = _get_recent_trade_date(pro, lookback_days=60)
+    if not last_trade:
+        return {"success": False, "error": "no recent trade date"}
+    try:
+        df = pro.top_inst(trade_date=last_trade)
+    except Exception as e:
+        return {"success": False, "error": f"top_inst failed: {e}"}
+    if df is None or df.empty:
+        return {"success": False, "error": "top_inst empty"}
+    conn = _connect(db_path)
+    _ensure_table(conn, "CREATE TABLE IF NOT EXISTS top_inst (dummy TEXT)")
+    updated = _append_df(conn, "top_inst", df, trade_date=last_trade)
     conn.commit()
     conn.close()
     return {"success": True, "updated": updated, "last_trade": last_trade}
@@ -1408,6 +1530,16 @@ def main() -> None:
         LOGGER.info("northbound update: %s", nb_result)
         margin_result = _update_margin(db_path)
         LOGGER.info("margin update: %s", margin_result)
+        margin_detail_result = _update_margin_detail(db_path)
+        LOGGER.info("margin detail update: %s", margin_detail_result)
+        moneyflow_result = _update_moneyflow_daily(db_path)
+        LOGGER.info("moneyflow update: %s", moneyflow_result)
+        industry_flow_result = _update_moneyflow_industry(db_path)
+        LOGGER.info("industry moneyflow update: %s", industry_flow_result)
+        top_list_result = _update_top_list(db_path)
+        LOGGER.info("top list update: %s", top_list_result)
+        top_inst_result = _update_top_inst(db_path)
+        LOGGER.info("top inst update: %s", top_inst_result)
         fund_result = _update_fund_portfolio(db_path)
         LOGGER.info("fund portfolio update: %s", fund_result)
 
