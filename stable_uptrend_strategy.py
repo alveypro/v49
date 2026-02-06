@@ -18,6 +18,8 @@ Expected ctx (self) methods/attrs:
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import os
+import json
 from typing import Any, Dict, Optional
 
 import pandas as pd
@@ -29,6 +31,20 @@ def render_stable_uptrend_strategy(ctx, pro=None) -> None:
     st.header("📈 稳定上涨策略")
     st.caption("目标：筛选“底部启动 / 回撤企稳 / 二次启动”的稳定上涨候选股（非收益保证）")
 
+    # 自动进化参数（可选）
+    evolve_path = os.path.join(os.path.dirname(__file__), "evolution", "stable_uptrend_best.json")
+    evolve = {}
+    if os.path.exists(evolve_path):
+        try:
+            with open(evolve_path, "r", encoding="utf-8") as f:
+                evolve = json.load(f) or {}
+            params = evolve.get("params", {})
+            st.success(f"🧬 已应用自动进化参数（{evolve.get('run_at', 'unknown')}）")
+        except Exception:
+            params = {}
+    else:
+        params = {}
+
     tushare_ok = bool(getattr(ctx, "TUSHARE_AVAILABLE", False))
     if not tushare_ok and not ctx._permanent_db_available():
         st.error("❌ Tushare 未配置且本地数据库不可用")
@@ -37,28 +53,41 @@ def render_stable_uptrend_strategy(ctx, pro=None) -> None:
     # 参数设置
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        lookback_days = st.slider("历史窗口(天)", 60, 180, 120, step=10, key="stable_lookback_days")
+        lb_default = int(params.get("lookback_days", 120)) if isinstance(params.get("lookback_days"), (int, float)) else 120
+        lookback_days = st.slider("历史窗口(天)", 60, 180, lb_default, step=10, key="stable_lookback_days")
     with col2:
-        max_drawdown = st.slider("最大回撤(%)", 5, 30, 15, key="stable_max_drawdown") / 100.0
+        md_default = int(params.get("max_drawdown_pct", 15)) if isinstance(params.get("max_drawdown_pct"), (int, float)) else 15
+        max_drawdown = st.slider("最大回撤(%)", 5, 30, md_default, key="stable_max_drawdown") / 100.0
     with col3:
-        vol_max = st.slider("波动上限(20日日波动%)", 2.0, 8.0, 4.0, key="stable_vol_max") / 100.0
+        vol_default = float(params.get("vol_max_pct", 4.0)) if isinstance(params.get("vol_max_pct"), (int, float)) else 4.0
+        vol_max = st.slider("波动上限(20日日波动%)", 2.0, 8.0, vol_default, key="stable_vol_max") / 100.0
     with col4:
-        rebound_min = st.slider("反弹幅度(%)", 5, 25, 10, key="stable_rebound_min") / 100.0
+        rb_default = int(params.get("rebound_min_pct", 10)) if isinstance(params.get("rebound_min_pct"), (int, float)) else 10
+        rebound_min = st.slider("反弹幅度(%)", 5, 25, rb_default, key="stable_rebound_min") / 100.0
 
     col5, col6, col7 = st.columns(3)
     with col5:
-        candidate_count = st.slider("候选数量(按成交额)", 50, 2000, 200, step=50, key="stable_candidate_count")
+        cc_default = int(params.get("candidate_count", 200)) if isinstance(params.get("candidate_count"), (int, float)) else 200
+        candidate_count = st.slider("候选数量(按成交额)", 50, 2000, cc_default, step=50, key="stable_candidate_count")
     with col6:
-        result_count = st.slider("输出数量", 10, 100, 30, step=5, key="stable_result_count")
+        rc_default = int(params.get("result_count", 30)) if isinstance(params.get("result_count"), (int, float)) else 30
+        result_count = st.slider("输出数量", 10, 100, rc_default, step=5, key="stable_result_count")
     with col7:
-        min_turnover = st.slider("最低成交额(亿)", 1.0, 50.0, 5.0, step=1.0, key="stable_min_turnover")
+        mt_default = float(params.get("min_turnover", 5.0)) if isinstance(params.get("min_turnover"), (int, float)) else 5.0
+        min_turnover = st.slider("最低成交额(亿)", 1.0, 50.0, mt_default, step=1.0, key="stable_min_turnover")
 
     gf = ctx._get_global_filters()
+    evo_min_mv = params.get("min_mv")
+    evo_max_mv = params.get("max_mv")
+    if isinstance(evo_min_mv, (int, float)) and isinstance(evo_max_mv, (int, float)):
+        mv_default = (int(evo_min_mv), int(evo_max_mv))
+    else:
+        mv_default = (gf.get("min_mv", 100), gf.get("max_mv", 5000))
     min_mv, max_mv = st.slider(
         "市值范围(亿)",
         min_value=10,
         max_value=10000,
-        value=(gf.get("min_mv", 100), gf.get("max_mv", 5000)),
+        value=mv_default,
         step=10,
         key="stable_mv_range",
     )

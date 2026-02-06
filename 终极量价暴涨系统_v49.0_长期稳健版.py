@@ -88,6 +88,17 @@ def _df_to_csv_bytes(df: pd.DataFrame) -> bytes:
     csv_text = df.to_csv(index=False)
     return ('\ufeff' + csv_text).encode('utf-8')
 
+
+def _load_evolve_params(filename: str) -> Dict[str, Any]:
+    try:
+        evolve_path = os.path.join(os.path.dirname(__file__), "evolution", filename)
+        if os.path.exists(evolve_path):
+            with open(evolve_path, "r", encoding="utf-8") as f:
+                return json.load(f) or {}
+    except Exception:
+        pass
+    return {}
+
 # 🔥 导入v4.0综合优选评分器（潜伏为王·长期稳健版）
 try:
     from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
@@ -6806,6 +6817,7 @@ def main():
                 render_stable_uptrend_strategy(ctx, pro=getattr(db_manager, "pro", None))
 
         elif "v5.0" in strategy_mode:
+            evolve_v5_core = _load_evolve_params("v5_best.json")
             # 🎨 全新顶级UI设计 - Hero Section
             st.markdown("""
             <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
@@ -6913,6 +6925,14 @@ def main():
                     default_threshold_v5 = 50
                     min_threshold_v5 = 45
                 
+                evo_thr = evolve_v5_core.get("params", {}).get("score_threshold")
+                if isinstance(evo_thr, (int, float)):
+                    default_threshold_v5 = int(round(evo_thr))
+                    if default_threshold_v5 < min_threshold_v5:
+                        default_threshold_v5 = min_threshold_v5
+                    if default_threshold_v5 > 90:
+                        default_threshold_v5 = 90
+
                 score_threshold_v5 = st.slider(
                     "评分阈值",
                     min_value=min_threshold_v5,
@@ -6946,6 +6966,9 @@ def main():
                 )
             
             st.info("ℹ️ v5.0策略将扫描所有符合市值条件的股票（无数量限制）")
+            evo_hold = evolve_v5_core.get("params", {}).get("holding_days")
+            if isinstance(evo_hold, (int, float)):
+                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold)} 天（来源：自动进化）")
             
             # 🚀 开始扫描按钮
             st.markdown("---")
@@ -7152,6 +7175,7 @@ def main():
         
         
         elif "v6.0" in strategy_mode:
+            evolve_v6_core = _load_evolve_params("v6_best.json")
             # --- ⚡ v6.0 超短线·巅峰版 核心逻辑 ---
             
             # 🎨 v6.0版本说明
@@ -7255,6 +7279,10 @@ def main():
                     score_threshold_v6_tab1 = 85
                 else:
                     score_threshold_v6_tab1 = 80
+
+                evo_thr = evolve_v6_core.get("params", {}).get("score_threshold")
+                if isinstance(evo_thr, (int, float)):
+                    score_threshold_v6_tab1 = int(round(evo_thr))
                 
                 st.metric("评分阈值", f"{score_threshold_v6_tab1}分", help="自动根据模式设置")
             
@@ -7281,6 +7309,9 @@ def main():
                         help="0表示不限制。建议5000亿以内",
                         key="cap_max_v6_tab1"
                     )
+            evo_hold_v6 = evolve_v6_core.get("params", {}).get("holding_days")
+            if isinstance(evo_hold_v6, (int, float)):
+                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v6)} 天（来源：自动进化）")
             
             # 扫描按钮
             if st.button("🔥 开始扫描（v6.0巅峰版）", type="primary", use_container_width=True, key="scan_v6_tab1"):
@@ -7509,6 +7540,7 @@ def main():
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
         
         elif "v7.0" in strategy_mode:
+            evolve_v7_core = _load_evolve_params("v7_best.json")
             # --- 🌟 v7.0 终极智能选股系统 核心逻辑 ---
             
             # 🎨 v7.0版本说明
@@ -7604,11 +7636,13 @@ def main():
             col1, col2, col3 = st.columns(3)
             
             with col1:
+                evo_thr = evolve_v7_core.get("params", {}).get("score_threshold")
+                v7_default = int(round(evo_thr)) if isinstance(evo_thr, (int, float)) else 60
                 score_threshold_v7 = st.slider(
                     "评分阈值",
                     min_value=50,
                     max_value=90,
-                    value=60,  # ✅ 降低默认阈值从70到60
+                    value=v7_default,  # ✅ 默认使用自动进化结果
                     step=5,
                     help="推荐70分起步，适应性强",
                     key="score_threshold_v7_tab1"
@@ -7653,6 +7687,9 @@ def main():
                         help="0表示不限制",
                         key="cap_max_v7_tab1"
                     )
+            evo_hold_v7 = evolve_v7_core.get("params", {}).get("holding_days")
+            if isinstance(evo_hold_v7, (int, float)):
+                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v7)} 天（来源：自动进化）")
             
             # 扫描按钮
             if st.button("🚀 开始智能扫描（v7.0）", type="primary", use_container_width=True, key="scan_v7_tab1"):
@@ -7905,6 +7942,7 @@ def main():
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
         elif "v8.0" in strategy_mode:
+            evolve_v8_core = _load_evolve_params("v8_best.json")
             # --- 🚀🚀🚀 v8.0 终极进化版 核心逻辑 ---
             
             # 🎨 v8.0版本说明
@@ -8014,11 +8052,15 @@ def main():
             col1, col2, col3 = st.columns(3)
             
             with col1:
+                default_range = (55, 70)
+                evo_thr = evolve_v8_core.get("params", {}).get("score_threshold")
+                if isinstance(evo_thr, (int, float)):
+                    default_range = (int(round(evo_thr)), 90)
                 score_threshold_v8 = st.slider(
                     "评分阈值区间",
                     min_value=45,
                     max_value=90,
-                    value=(55, 70),
+                    value=default_range,
                     step=5,
                     help="可选最小和最大阈值：55-70建议，60-65稳健，75极致。仅落在区间内的股票会展示。",
                     key="score_threshold_v8_tab1"
@@ -8063,6 +8105,9 @@ def main():
                         help="0表示不限制",
                         key="cap_max_v8_tab1"
                     )
+            evo_hold_v8 = evolve_v8_core.get("params", {}).get("holding_days")
+            if isinstance(evo_hold_v8, (int, float)):
+                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v8)} 天（来源：自动进化）")
             
             # 扫描按钮
             if st.button("🚀 开始终极扫描（v8.0）", type="primary", use_container_width=True, key="scan_v8_tab1"):
@@ -10598,6 +10643,9 @@ def main():
     # ==================== Tab 4: 🤖 AI智能选股 ====================
     with tab_ai:
         st.header("🤖 AI 智能选股（高收益捕获者）")
+
+        evolve_v5 = _load_evolve_params("ai_v5_best.json")
+        evolve_v2 = _load_evolve_params("ai_v2_best.json")
         
         # 策略版本选择
         strategy_version = st.radio(
@@ -10608,6 +10656,11 @@ def main():
         )
         
         use_v3 = "V5.0" in strategy_version
+
+        if use_v3 and evolve_v5.get("params"):
+            st.success(f"🧬 已应用自动进化参数（V5.0，{evolve_v5.get('run_at', 'unknown')}）")
+        elif (not use_v3) and evolve_v2.get("params"):
+            st.success(f"🧬 已应用自动进化参数（V2.0，{evolve_v2.get('run_at', 'unknown')}）")
         
         if use_v3:
             st.markdown("**✅ V5.0 稳健月度目标版：强调安全边际与回撤控制**")
@@ -10653,26 +10706,32 @@ def main():
         
         with col1:
             if use_v3:
+                evo_target = evolve_v5.get("params", {}).get("target_return")
+                target_default = int(round(evo_target * 100)) if isinstance(evo_target, (int, float)) else 18
                 target_return = st.slider(
                     "目标月收益阈值（%）",
-                    min_value=10, max_value=50, value=18, step=1,
+                    min_value=10, max_value=50, value=target_default, step=1,
                     help="预测未来20天可能达到的收益目标"
                 )
             else:
+                evo_target = evolve_v2.get("params", {}).get("target_return")
+                target_default = int(round(evo_target * 100)) if isinstance(evo_target, (int, float)) else 20
                 target_return = st.slider(
                     "目标月收益阈值（%）",
-                    min_value=10, max_value=50, value=20, step=1,
+                    min_value=10, max_value=50, value=target_default, step=1,
                     help="筛选近 20 个交易日涨幅达标的标的"
                 )
         with col2:
-            min_amount_default = 2.5 if use_v3 else 2.0
+            evo_min_amount = (evolve_v5 if use_v3 else evolve_v2).get("params", {}).get("min_amount")
+            min_amount_default = float(evo_min_amount) if isinstance(evo_min_amount, (int, float)) else (2.5 if use_v3 else 2.0)
             min_amount = st.slider(
                 "最低成交活跃度（亿元）",
                 min_value=0.5, max_value=15.0, value=min_amount_default, step=0.5,
                 help="过滤'僵尸股'，确保进出容易"
             )
         with col3:
-            max_volatility_default = 14.0 if use_v3 else 12.0
+            evo_vol = (evolve_v5 if use_v3 else evolve_v2).get("params", {}).get("max_volatility")
+            max_volatility_default = (float(evo_vol) * 100) if isinstance(evo_vol, (int, float)) else (14.0 if use_v3 else 12.0)
             max_volatility = st.slider(
                 "最大波动容忍度（%）",
                 min_value=5.0, max_value=25.0, value=max_volatility_default, step=0.5,
@@ -10684,7 +10743,12 @@ def main():
 
         with st.expander("📌 市值筛选（可选）", expanded=False):
             if use_v3:
-                default_mcap = (100, 5000)
+                evo_min_mc = evolve_v5.get("params", {}).get("min_market_cap")
+                evo_max_mc = evolve_v5.get("params", {}).get("max_market_cap")
+                if isinstance(evo_min_mc, (int, float)) and isinstance(evo_max_mc, (int, float)):
+                    default_mcap = (int(evo_min_mc), int(evo_max_mc))
+                else:
+                    default_mcap = (100, 5000)
             else:
                 default_mcap = (0, 5000)
             market_cap_range = st.slider(
@@ -10877,6 +10941,41 @@ def main():
                 
             except Exception as e:
                 st.error(f"无法读取数据库状态: {e}")
+
+        # 自动进化状态
+        with st.expander("🧬 自动进化状态", expanded=False):
+            try:
+                evolve_path = os.path.join(os.path.dirname(__file__), "evolution", "last_run.json")
+                if os.path.exists(evolve_path):
+                    with open(evolve_path, "r", encoding="utf-8") as f:
+                        evolve = json.load(f)
+                    st.markdown(f"**最近运行时间**：{evolve.get('run_at', 'N/A')}")
+                    st.markdown(f"**综合评分**：{evolve.get('score', 0):.2f}")
+                    params = evolve.get("params", {})
+                    stats = evolve.get("stats", {})
+                    col_a, col_b, col_c, col_d = st.columns(4)
+                    with col_a:
+                        st.metric("阈值", params.get("score_threshold", "—"))
+                    with col_b:
+                        st.metric("持仓天数", params.get("max_holding_days", "—"))
+                    with col_c:
+                        st.metric("止损%", params.get("stop_loss_pct", "—"))
+                    with col_d:
+                        st.metric("止盈%", params.get("take_profit_pct", "—"))
+                    st.caption("说明：自动进化仅做后台优化，不会直接改写前端策略参数。")
+                    if stats:
+                        st.markdown("**回测摘要**")
+                        st.write({
+                            "总信号": stats.get("total_signals"),
+                            "胜率(%)": stats.get("win_rate"),
+                            "加权平均收益(%)": stats.get("weighted_avg_return"),
+                            "夏普比率": stats.get("sharpe_ratio"),
+                            "最大回撤(%)": stats.get("max_drawdown"),
+                        })
+                else:
+                    st.info("未发现自动进化结果文件。后台任务未运行或尚未生成。")
+            except Exception as e:
+                st.error(f"读取自动进化结果失败: {e}")
         
         st.markdown("---")
         
