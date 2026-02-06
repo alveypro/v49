@@ -1467,6 +1467,7 @@ def _git_push() -> None:
             "evolution/best_params.json",
             "evolution/last_run.json",
             "evolution/last_run.csv",
+            "evolution/health_report.json",
             "evolution/ai_v5_best.json",
             "evolution/ai_v2_best.json",
             "evolution/v5_best.json",
@@ -1487,6 +1488,112 @@ def _git_push() -> None:
         LOGGER.info("git push done")
     except Exception as e:
         LOGGER.error("git push failed: %s", e)
+
+
+def _write_health_report(db_path: str) -> None:
+    report = {
+        "run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ok": True,
+        "warnings": [],
+        "stats": {},
+    }
+
+    if not db_path or not os.path.exists(db_path):
+        report["ok"] = False
+        report["warnings"].append("database not found")
+    else:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT MAX(trade_date) FROM daily_trading_data")
+            last_trade = cursor.fetchone()[0]
+            report["stats"]["last_trade_date"] = last_trade
+
+            if last_trade:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM daily_trading_data WHERE trade_date = ?",
+                    (last_trade,),
+                )
+                count_last = cursor.fetchone()[0]
+                report["stats"]["records_last_trade_date"] = count_last
+                if count_last < 2000:
+                    report["warnings"].append(f"daily_trading_data records low: {count_last}")
+
+                cursor.execute(
+                    "SELECT DISTINCT trade_date FROM daily_trading_data ORDER BY trade_date DESC LIMIT 10"
+                )
+                distinct_dates = [row[0] for row in cursor.fetchall() if row and row[0]]
+                report["stats"]["recent_trade_dates"] = distinct_dates
+                if len(distinct_dates) < 5:
+                    report["warnings"].append("recent trade dates < 5")
+
+            def _table_exists(name: str) -> bool:
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    (name,),
+                )
+                return cursor.fetchone() is not None
+
+            table_checks = {
+                "moneyflow_hsgt": "trade_date",
+                "margin": "trade_date",
+                "margin_detail": "trade_date",
+                "moneyflow_daily": "trade_date",
+                "moneyflow_ind_ths": "trade_date",
+                "top_list": "trade_date",
+                "top_inst": "trade_date",
+                "fund_portfolio_cache": "trade_date",
+            }
+            for table, col in table_checks.items():
+                if not _table_exists(table):
+                    report["warnings"].append(f"table missing: {table}")
+                    continue
+                cursor.execute(f"SELECT MAX({col}) FROM {table}")
+                max_date = cursor.fetchone()[0]
+                report["stats"][f"{table}_max_date"] = max_date
+                if last_trade and max_date and str(max_date) < str(last_trade):
+                    report["warnings"].append(f"{table} lagging: {max_date} < {last_trade}")
+        finally:
+            conn.close()
+
+        # Evolution stats warnings
+        try:
+            last_run_path = os.path.join(ROOT, "evolution", "last_run.json")
+            if os.path.exists(last_run_path):
+                with open(last_run_path, "r", encoding="utf-8") as f:
+                    evo = json.load(f)
+                stats = evo.get("stats", {})
+                win_rate = stats.get("win_rate")
+                max_dd = stats.get("max_drawdown")
+                if win_rate is not None and win_rate < 40:
+                    report["warnings"].append(f"win_rate low: {win_rate}")
+                if max_dd is not None and max_dd < -30:
+                    report["warnings"].append(f"max_drawdown high: {max_dd}")
+        except Exception as e:
+            report["warnings"].append(f"evolution stats read failed: {e}")
+
+        try:
+            v9_path = os.path.join(ROOT, "evolution", "v9_best.json")
+            if os.path.exists(v9_path):
+                with open(v9_path, "r", encoding="utf-8") as f:
+                    v9 = json.load(f)
+                v9_score = v9.get("score")
+                if v9_score is not None and v9_score < 0:
+                    report["warnings"].append(f"v9 score negative: {v9_score}")
+        except Exception as e:
+            report["warnings"].append(f"v9 report read failed: {e}")
+
+    if report["warnings"]:
+        report["ok"] = False
+
+    try:
+        out_path = os.path.join(ROOT, "evolution", "health_report.json")
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+        LOGGER.info("health report updated: %s", out_path)
+    except Exception as e:
+        LOGGER.error("health report write failed: %s", e)
 
 
 def main() -> None:
@@ -1622,6 +1729,9 @@ def main() -> None:
             _save_ai_to_db(db_path, "STABLE_UPTREND", stable_params, stable_stats, stable_score)
         else:
             LOGGER.warning("Stable uptrend evolution failed: no params")
+
+        # 9.5) 自动健康检测报告
+        _write_health_report(db_path)
 
         # 10) 可选推送
         _git_push()

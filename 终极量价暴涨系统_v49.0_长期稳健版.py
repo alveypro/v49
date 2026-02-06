@@ -6541,6 +6541,106 @@ class _StableUptrendContext:
         return df
 
 
+def _compute_health_report(db_path: str) -> Dict:
+    report = {
+        "run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ok": True,
+        "warnings": [],
+        "stats": {},
+    }
+
+    if not db_path or not os.path.exists(db_path):
+        report["ok"] = False
+        report["warnings"].append("database not found")
+        return report
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT MAX(trade_date) FROM daily_trading_data")
+        last_trade = cursor.fetchone()[0]
+        report["stats"]["last_trade_date"] = last_trade
+
+        if last_trade:
+            cursor.execute(
+                "SELECT COUNT(*) FROM daily_trading_data WHERE trade_date = ?",
+                (last_trade,),
+            )
+            count_last = cursor.fetchone()[0]
+            report["stats"]["records_last_trade_date"] = count_last
+            if count_last < 2000:
+                report["warnings"].append(f"daily_trading_data records low: {count_last}")
+
+            cursor.execute(
+                "SELECT DISTINCT trade_date FROM daily_trading_data ORDER BY trade_date DESC LIMIT 10"
+            )
+            distinct_dates = [row[0] for row in cursor.fetchall() if row and row[0]]
+            report["stats"]["recent_trade_dates"] = distinct_dates
+            if len(distinct_dates) < 5:
+                report["warnings"].append("recent trade dates < 5")
+
+        def _table_exists(name: str) -> bool:
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (name,),
+            )
+            return cursor.fetchone() is not None
+
+        table_checks = {
+            "moneyflow_hsgt": "trade_date",
+            "margin": "trade_date",
+            "margin_detail": "trade_date",
+            "moneyflow_daily": "trade_date",
+            "moneyflow_ind_ths": "trade_date",
+            "top_list": "trade_date",
+            "top_inst": "trade_date",
+            "fund_portfolio_cache": "trade_date",
+        }
+        for table, col in table_checks.items():
+            if not _table_exists(table):
+                report["warnings"].append(f"table missing: {table}")
+                continue
+            cursor.execute(f"SELECT MAX({col}) FROM {table}")
+            max_date = cursor.fetchone()[0]
+            report["stats"][f"{table}_max_date"] = max_date
+            if last_trade and max_date and str(max_date) < str(last_trade):
+                report["warnings"].append(f"{table} lagging: {max_date} < {last_trade}")
+    finally:
+        conn.close()
+
+    # 进化指标异常提示
+    try:
+        evo_path = os.path.join(os.path.dirname(__file__), "evolution", "last_run.json")
+        if os.path.exists(evo_path):
+            with open(evo_path, "r", encoding="utf-8") as f:
+                evo = json.load(f)
+            stats = evo.get("stats", {})
+            win_rate = stats.get("win_rate")
+            max_dd = stats.get("max_drawdown")
+            if win_rate is not None and win_rate < 40:
+                report["warnings"].append(f"win_rate low: {win_rate}")
+            if max_dd is not None and max_dd < -30:
+                report["warnings"].append(f"max_drawdown high: {max_dd}")
+    except Exception as e:
+        report["warnings"].append(f"evolution stats read failed: {e}")
+
+    try:
+        v9_path = os.path.join(os.path.dirname(__file__), "evolution", "v9_best.json")
+        if os.path.exists(v9_path):
+            with open(v9_path, "r", encoding="utf-8") as f:
+                v9 = json.load(f)
+            v9_score = v9.get("score")
+            if v9_score is not None and v9_score < 0:
+                report["warnings"].append(f"v9 score negative: {v9_score}")
+    except Exception as e:
+        report["warnings"].append(f"v9 report read failed: {e}")
+
+    if report["warnings"]:
+        report["ok"] = False
+
+    return report
+
+
 # ===================== 主界面（完整集成版）=====================
 def main():
     """主界面"""
@@ -6664,7 +6764,8 @@ def main():
              "⚡ v6.0 超短线·巅峰版 (只选市场最强1-3%·胜率80-90%)",
              "🌟 v7.0 终极智能版 (全球顶级标准·动态自适应·预期62-70%胜率)",
              "🚀🚀🚀 v8.0 终极进化版 (ATR动态风控·凯利公式·预期70-78%胜率) NEW!",
-             "🧭 v9.0 中线均衡版 (资金流·动量·趋势·波动·板块强度) NEW!"],
+             "🧭 v9.0 中线均衡版 (资金流·动量·趋势·波动·板块强度) NEW!",
+             "🧩 组合策略 共识评分 (v4/v5/v7/v8/v9) NEW!"],
             horizontal=True,
             help="🏆 v4.0: 适合稳健投资者，持仓5天 | 🚀 v5.0: 适合进取投资者，追求短期爆发 | ⚡ v6.0: 适合超短线高手，三级过滤只选板块龙头 | 🌟 v7.0: 终极智能系统，市场环境识别+行业轮动+动态权重 | 🚀🚀🚀 v8.0: 全球最强！ATR动态风控+凯利公式+18维度+五星评级"
         )
@@ -9155,6 +9256,342 @@ def main():
                 results_df = st.session_state['v9_scan_results_tab1']
                 st.dataframe(results_df, use_container_width=True, hide_index=True)
 
+        elif "组合策略" in strategy_mode:
+            st.markdown("""
+            <div style='background: linear-gradient(135deg, #1f4037 0%, #99f2c8 100%); 
+                        padding: 35px 30px; border-radius: 15px; color: #0b1f17; margin-bottom: 25px;'>
+                <h1 style='margin:0; color: #0b1f17; font-size: 2.1em; font-weight: 700; text-align: center;'>
+                    🧩 组合策略共识评分（v4/v5/v7/v8/v9）
+                </h1>
+                <p style='margin: 12px 0 0 0; font-size: 1.05em; text-align: center; opacity: 0.9;'>
+                    多策略协同共识 · 过滤噪音 · 提升稳定性 · 强调胜率与一致性
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.info("""
+            **共识逻辑：**
+            - v4/v5/v7/v8/v9 五大策略同时评分
+            - 评分按权重融合为“共识分”
+            - 满足最小一致数量（agree_count）后进入候选
+            - 叠加资金加分（北向/龙虎榜/机构/行业资金）
+            """)
+
+            # 参数设置
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                candidate_count = st.slider("候选数量（按市值）", 200, 3000, 800, 100, key="combo_candidate_count")
+            with col_b:
+                min_turnover = st.slider("最低成交额（亿）", 1.0, 50.0, 5.0, 1.0, key="combo_min_turnover")
+            with col_c:
+                min_agree = st.slider("最小一致数量（策略数）", 2, 5, 3, 1, key="combo_min_agree")
+
+            col_d, col_e, col_f = st.columns(3)
+            with col_d:
+                cap_min_combo = st.number_input("最小市值（亿元）", min_value=0, max_value=5000, value=0, step=10, key="combo_cap_min")
+            with col_e:
+                cap_max_combo = st.number_input("最大市值（亿元）", min_value=0, max_value=50000, value=0, step=50, key="combo_cap_max")
+            with col_f:
+                select_mode_combo = st.selectbox("筛选模式", ["分位数筛选(Top%)", "阈值筛选"], index=0, key="combo_select_mode")
+
+            col_g, col_h, col_i = st.columns(3)
+            with col_g:
+                combo_threshold = st.slider("共识阈值", 50, 90, 65, 5, key="combo_threshold")
+            with col_h:
+                top_percent_combo = st.slider("Top百分比", 1, 10, 3, 1, key="combo_top_percent")
+            with col_i:
+                lookback_days_combo = st.slider("评分窗口（天）", 80, 200, 120, 10, key="combo_lookback_days")
+
+            st.markdown("---")
+            st.subheader("⚖️ 权重设置（总和自动归一化）")
+            w1, w2, w3, w4, w5 = st.columns(5)
+            with w1:
+                w_v4 = st.slider("v4权重", 0.0, 1.0, 0.20, 0.05, key="w_v4")
+            with w2:
+                w_v5 = st.slider("v5权重", 0.0, 1.0, 0.20, 0.05, key="w_v5")
+            with w3:
+                w_v7 = st.slider("v7权重", 0.0, 1.0, 0.25, 0.05, key="w_v7")
+            with w4:
+                w_v8 = st.slider("v8权重", 0.0, 1.0, 0.20, 0.05, key="w_v8")
+            with w5:
+                w_v9 = st.slider("v9权重", 0.0, 1.0, 0.15, 0.05, key="w_v9")
+
+            st.markdown("---")
+            st.subheader("✅ 各策略阈值（用于一致性判断）")
+            t1, t2, t3, t4, t5 = st.columns(5)
+            with t1:
+                thr_v4 = st.slider("v4阈值", 50, 90, 60, 5, key="thr_v4")
+            with t2:
+                thr_v5 = st.slider("v5阈值", 50, 90, 60, 5, key="thr_v5")
+            with t3:
+                thr_v7 = st.slider("v7阈值", 50, 90, 65, 5, key="thr_v7")
+            with t4:
+                thr_v8 = st.slider("v8阈值", 50, 90, 65, 5, key="thr_v8")
+            with t5:
+                thr_v9 = st.slider("v9阈值", 50, 90, 60, 5, key="thr_v9")
+
+            def _load_history_full_combo(ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
+                if not os.path.exists(PERMANENT_DB_PATH):
+                    return pd.DataFrame()
+                conn = sqlite3.connect(PERMANENT_DB_PATH)
+                query = """
+                    SELECT trade_date, close_price, high_price, low_price, vol, amount, pct_chg, turnover_rate
+                    FROM daily_trading_data
+                    WHERE ts_code = ? AND trade_date >= ? AND trade_date <= ?
+                    ORDER BY trade_date
+                """
+                try:
+                    return pd.read_sql_query(query, conn, params=(ts_code, start_date, end_date))
+                finally:
+                    conn.close()
+
+            if st.button("🚀 开始扫描（组合共识）", type="primary", use_container_width=True, key="scan_combo"):
+                with st.spinner("🧩 组合共识评分计算中..."):
+                    try:
+                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+
+                        if cap_min_combo == 0 and cap_max_combo == 0:
+                            query = """
+                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                FROM stock_basic sb
+                                WHERE sb.industry IS NOT NULL
+                                ORDER BY sb.circ_mv DESC
+                            """
+                            stocks_df = pd.read_sql_query(query, conn)
+                        else:
+                            cap_min_wan = cap_min_combo * 10000 if cap_min_combo > 0 else 0
+                            cap_max_wan = cap_max_combo * 10000 if cap_max_combo > 0 else 999999999
+                            query = """
+                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                FROM stock_basic sb
+                                WHERE sb.industry IS NOT NULL
+                                  AND sb.circ_mv >= ?
+                                  AND sb.circ_mv <= ?
+                                ORDER BY sb.circ_mv DESC
+                            """
+                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+
+                        if stocks_df.empty:
+                            st.error("❌ 未找到符合条件的股票")
+                            conn.close()
+                            st.stop()
+
+                        stocks_df = stocks_df.head(candidate_count)
+
+                        bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+
+                        # 加载指数数据（供v8评分使用）
+                        index_data = pd.DataFrame()
+                        index_queries = [
+                            """
+                            SELECT trade_date, close_price as close, vol as volume
+                            FROM daily_trading_history
+                            WHERE ts_code = '000001.SH'
+                            ORDER BY trade_date DESC
+                            LIMIT 120
+                            """,
+                            """
+                            SELECT trade_date, close_price as close, vol as volume
+                            FROM daily_trading_data
+                            WHERE ts_code = '000001.SH'
+                            ORDER BY trade_date DESC
+                            LIMIT 120
+                            """
+                        ]
+                        for iq in index_queries:
+                            try:
+                                index_data = pd.read_sql_query(iq, conn)
+                                if len(index_data) > 0:
+                                    break
+                            except Exception:
+                                continue
+                        if len(index_data) >= 60 and 'trade_date' in index_data.columns:
+                            index_data = index_data.sort_values('trade_date').reset_index(drop=True)
+                        else:
+                            index_data = None
+
+                        conn.close()
+
+                        end_date = datetime.now().strftime("%Y%m%d")
+                        start_date = (datetime.now() - timedelta(days=lookback_days_combo + 30)).strftime("%Y%m%d")
+
+                        # 预计算行业强度（20日动量均值）
+                        ind_vals = {}
+                        for _, row in stocks_df.iterrows():
+                            hist = _load_history_full_combo(row["ts_code"], start_date, end_date)
+                            if hist is None or len(hist) < 21:
+                                continue
+                            close = pd.to_numeric(hist["close_price"], errors="coerce").ffill()
+                            if len(close) > 21:
+                                r20 = (close.iloc[-1] / close.iloc[-21] - 1.0) * 100
+                                ind_vals.setdefault(row["industry"], []).append(r20)
+                        industry_scores = {ind: float(np.mean(vals)) for ind, vals in ind_vals.items() if vals}
+
+                        results = []
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+
+                        weights = {
+                            "v4": w_v4,
+                            "v5": w_v5,
+                            "v7": w_v7,
+                            "v8": w_v8,
+                            "v9": w_v9,
+                        }
+
+                        for idx, row in stocks_df.iterrows():
+                            ts_code = row["ts_code"]
+                            stock_name = row["name"]
+                            industry = row["industry"]
+
+                            progress_bar.progress((idx + 1) / len(stocks_df))
+                            status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
+
+                            hist = _load_history_full_combo(ts_code, start_date, end_date)
+                            if hist is None or len(hist) < 80:
+                                continue
+
+                            # 成交额过滤
+                            avg_amount = pd.to_numeric(hist["amount"], errors="coerce").tail(20).mean()
+                            avg_amount_yi = avg_amount / 1e5
+                            if avg_amount_yi < min_turnover:
+                                continue
+
+                            # 构造评分输入
+                            stock_data = hist.copy()
+                            stock_data["name"] = stock_name
+
+                            # v4
+                            v4_res = vp_analyzer.evaluator_v4.evaluate_stock_v4(stock_data)
+                            v4_score = float(v4_res.get("final_score", 0)) if v4_res else None
+
+                            # v5
+                            v5_res = vp_analyzer.evaluator_v5.evaluate_stock_v4(stock_data)
+                            v5_score = float(v5_res.get("final_score", 0)) if v5_res else None
+
+                            # v7
+                            v7_res = vp_analyzer.evaluator_v7.evaluate_stock_v7(
+                                stock_data=stock_data,
+                                ts_code=ts_code,
+                                industry=industry
+                            )
+                            v7_score = float(v7_res.get("final_score", 0)) if v7_res and v7_res.get("success") else None
+
+                            # v8
+                            v8_res = vp_analyzer.evaluator_v8.evaluate_stock_v8(
+                                stock_data=stock_data,
+                                ts_code=ts_code,
+                                index_data=index_data if index_data is not None else None
+                            )
+                            v8_score = float(v8_res.get("final_score", 0)) if v8_res and v8_res.get("success") else None
+
+                            # v9
+                            ind_strength = industry_scores.get(industry, 0.0)
+                            v9_info = vp_analyzer._calc_v9_score_from_hist(hist, industry_strength=ind_strength)
+                            v9_score = float(v9_info.get("score", 0)) if v9_info else None
+
+                            scores = {
+                                "v4": v4_score,
+                                "v5": v5_score,
+                                "v7": v7_score,
+                                "v8": v8_score,
+                                "v9": v9_score,
+                            }
+
+                            agree_count = 0
+                            if v4_score is not None and v4_score >= thr_v4:
+                                agree_count += 1
+                            if v5_score is not None and v5_score >= thr_v5:
+                                agree_count += 1
+                            if v7_score is not None and v7_score >= thr_v7:
+                                agree_count += 1
+                            if v8_score is not None and v8_score >= thr_v8:
+                                agree_count += 1
+                            if v9_score is not None and v9_score >= thr_v9:
+                                agree_count += 1
+
+                            if agree_count < min_agree:
+                                continue
+
+                            weight_sum = sum(weights[k] for k, v in scores.items() if v is not None)
+                            if weight_sum <= 0:
+                                continue
+                            weighted_score = sum(
+                                (scores[k] * weights[k]) for k in scores if scores[k] is not None
+                            ) / weight_sum
+
+                            extra = _calc_external_bonus(
+                                ts_code,
+                                industry,
+                                bonus_global,
+                                bonus_stock_map,
+                                top_list_set,
+                                top_inst_set,
+                                bonus_industry_map,
+                            )
+
+                            final_score = weighted_score + extra
+
+                            row_item = {
+                                "股票代码": ts_code,
+                                "股票名称": stock_name,
+                                "行业": industry,
+                                "流通市值": f"{row['circ_mv']/10000:.1f}亿",
+                                "共识评分": f"{final_score:.1f}",
+                                "资金加分": f"{extra:.1f}",
+                                "一致数": agree_count,
+                                "v4": f"{v4_score:.1f}" if v4_score is not None else "-",
+                                "v5": f"{v5_score:.1f}" if v5_score is not None else "-",
+                                "v7": f"{v7_score:.1f}" if v7_score is not None else "-",
+                                "v8": f"{v8_score:.1f}" if v8_score is not None else "-",
+                                "v9": f"{v9_score:.1f}" if v9_score is not None else "-",
+                                "建议持仓": "5-15天",
+                            }
+
+                            if select_mode_combo == "阈值筛选":
+                                if final_score >= combo_threshold:
+                                    results.append(row_item)
+                            else:
+                                results.append(row_item)
+
+                        progress_bar.empty()
+                        status_text.empty()
+
+                        if results:
+                            results_df = pd.DataFrame(results)
+                            if select_mode_combo != "阈值筛选":
+                                results_df["score_val"] = pd.to_numeric(results_df["共识评分"], errors="coerce")
+                                results_df = results_df.sort_values("score_val", ascending=False)
+                                keep_n = max(1, int(len(results_df) * top_percent_combo / 100))
+                                results_df = results_df.head(keep_n).drop(columns=["score_val"])
+
+                            st.session_state["combo_scan_results"] = results_df
+                            if select_mode_combo == "阈值筛选":
+                                st.success(f"✅ 找到 {len(results_df)} 只符合条件的股票（≥{combo_threshold}分）")
+                            else:
+                                st.success(f"✅ 选出 Top {top_percent_combo}%（{len(results_df)} 只）")
+
+                            st.dataframe(results_df, use_container_width=True, hide_index=True)
+                            st.download_button(
+                                "📥 导出完整结果（CSV）",
+                                data=_df_to_csv_bytes(results_df),
+                                file_name=f"组合策略_共识评分_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                mime="text/csv; charset=utf-8"
+                            )
+                        else:
+                            st.warning("⚠️ 未找到符合条件的股票，请降低阈值或减少一致数量")
+
+                    except Exception as e:
+                        st.error(f"❌ 扫描失败: {e}")
+                        import traceback
+                        st.code(traceback.format_exc())
+
+            if 'combo_scan_results' in st.session_state:
+                st.markdown("---")
+                st.markdown("### 📋 上次扫描结果")
+                results_df = st.session_state['combo_scan_results']
+                st.dataframe(results_df, use_container_width=True, hide_index=True)
+
         else:  # v6.0
             st.header("⚡ v6.0超短线狙击·巅峰版 - 只选市场最强1-3%")
             st.caption("🔥三级过滤+七维严格评分：必要条件淘汰→极度严格评分→精英筛选，胜率80-90%，单次8-15%")
@@ -11643,6 +12080,57 @@ def main():
                     st.info("未发现自动进化结果文件。后台任务未运行或尚未生成。")
             except Exception as e:
                 st.error(f"读取自动进化结果失败: {e}")
+
+        # 自动健康检测
+        with st.expander("🧪 自动健康检测", expanded=False):
+            report_path = os.path.join(os.path.dirname(__file__), "evolution", "health_report.json")
+
+            col_h1, col_h2 = st.columns([1, 3])
+            with col_h1:
+                run_now = st.button("立即检测", use_container_width=True, key="health_check_now")
+            with col_h2:
+                st.caption("说明：后台每日自动生成健康报告，手动检测会立即刷新报告。")
+
+            report = None
+            if run_now:
+                report = _compute_health_report(PERMANENT_DB_PATH)
+                try:
+                    os.makedirs(os.path.dirname(report_path), exist_ok=True)
+                    with open(report_path, "w", encoding="utf-8") as f:
+                        json.dump(report, f, ensure_ascii=False, indent=2)
+                    st.success("✅ 健康报告已刷新")
+                except Exception as e:
+                    st.error(f"写入健康报告失败: {e}")
+            elif os.path.exists(report_path):
+                try:
+                    with open(report_path, "r", encoding="utf-8") as f:
+                        report = json.load(f)
+                except Exception as e:
+                    st.error(f"读取健康报告失败: {e}")
+
+            if report:
+                st.markdown(f"**最近检测时间**：{report.get('run_at', 'N/A')}")
+                if report.get("ok"):
+                    st.success("✅ 系统健康：未发现明显异常")
+                else:
+                    st.warning("⚠️ 发现异常，请根据提示处理")
+
+                warnings = report.get("warnings", [])
+                if warnings:
+                    st.markdown("**异常提示**")
+                    for w in warnings:
+                        st.markdown(f"- {w}")
+
+                stats = report.get("stats", {})
+                if stats:
+                    col_s1, col_s2, col_s3 = st.columns(3)
+                    with col_s1:
+                        st.metric("最新交易日", stats.get("last_trade_date", "N/A"))
+                    with col_s2:
+                        st.metric("最新日记录数", stats.get("records_last_trade_date", "N/A"))
+                    with col_s3:
+                        recent = stats.get("recent_trade_dates", [])
+                        st.metric("近10交易日", f"{len(recent)}天")
         
         st.markdown("---")
         
