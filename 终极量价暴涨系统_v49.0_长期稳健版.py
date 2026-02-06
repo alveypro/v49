@@ -4621,6 +4621,154 @@ class CompleteVolumePriceAnalyzer:
             'backtest_data': backtest_df,
             'details': details
         }
+
+    # ===================== v9.0 中线均衡版（算法优化）=====================
+    def _calc_v9_score_from_hist(self, hist: pd.DataFrame, industry_strength: float = 0.0) -> dict:
+        """计算v9.0中线均衡版评分（资金流/动量/趋势/波动/成交）"""
+        if hist is None or hist.empty or len(hist) < 80:
+            return {"score": 0.0, "details": {}}
+
+        h = hist.sort_values("trade_date")
+        close = pd.to_numeric(h["close_price"], errors="coerce").ffill()
+        vol = pd.to_numeric(h.get("vol", pd.Series(dtype=float)), errors="coerce").fillna(0.0)
+        amount = pd.to_numeric(h.get("amount", pd.Series(dtype=float)), errors="coerce").fillna(0.0)
+        pct = pd.to_numeric(h.get("pct_chg", pd.Series(dtype=float)), errors="coerce")
+        if pct.isna().all():
+            pct = close.pct_change() * 100
+
+        ma20 = close.rolling(20).mean()
+        ma60 = close.rolling(60).mean()
+        ma120 = close.rolling(120).mean()
+
+        trend_ok = bool(ma20.iloc[-1] > ma60.iloc[-1] > ma120.iloc[-1] and ma20.iloc[-1] > ma20.iloc[-5])
+
+        momentum_20 = (close.iloc[-1] / close.iloc[-21] - 1.0) if len(close) > 21 else 0.0
+        momentum_60 = (close.iloc[-1] / close.iloc[-61] - 1.0) if len(close) > 61 else 0.0
+
+        vol_ratio = (vol.iloc[-1] / vol.tail(20).mean()) if vol.tail(20).mean() > 0 else 0.0
+
+        # 资金流向（用成交额与涨跌符号近似）
+        flow_sign = pct.fillna(0).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+        flow_val = (amount * flow_sign).tail(20).sum()
+        flow_base = amount.tail(20).sum() if amount.tail(20).sum() > 0 else 1.0
+        flow_ratio = flow_val / flow_base
+
+        # 波动率（20日）
+        vol_20 = pct.tail(20).std() / 100.0 if pct.tail(20).std() is not None else 0.0
+
+        # 评分模块（总分100）
+        fund_score = max(0.0, min(20.0, (flow_ratio + 0.02) / 0.04 * 20.0))
+        volume_score = max(0.0, min(15.0, (vol_ratio - 0.8) / 1.2 * 15.0))
+        momentum_score = max(0.0, min(8.0, momentum_20 * 100 / 15.0 * 8.0)) + \
+                         max(0.0, min(7.0, momentum_60 * 100 / 30.0 * 7.0))
+        sector_score = max(0.0, min(15.0, (industry_strength + 2.0) / 6.0 * 15.0))
+
+        if vol_20 <= 0.02:
+            vola_score = 8.0
+        elif vol_20 <= 0.05:
+            vola_score = 15.0
+        elif vol_20 <= 0.08:
+            vola_score = 8.0
+        else:
+            vola_score = 0.0
+
+        trend_score = 15.0 if trend_ok else 0.0
+
+        total_score = fund_score + volume_score + momentum_score + sector_score + vola_score + trend_score
+
+        return {
+            "score": round(total_score, 2),
+            "details": {
+                "fund_score": round(fund_score, 2),
+                "volume_score": round(volume_score, 2),
+                "momentum_score": round(momentum_score, 2),
+                "sector_score": round(sector_score, 2),
+                "volatility_score": round(vola_score, 2),
+                "trend_score": round(trend_score, 2),
+                "flow_ratio": round(flow_ratio, 4),
+                "vol_ratio": round(vol_ratio, 3),
+                "momentum_20": round(momentum_20 * 100, 2),
+                "momentum_60": round(momentum_60 * 100, 2),
+                "vol_20": round(vol_20 * 100, 2),
+            },
+        }
+
+    def backtest_v9_midterm(self, df: pd.DataFrame, sample_size: int = 500,
+                            holding_days: int = 15, score_threshold: float = 60.0) -> dict:
+        """📈 v9.0 中线均衡版回测（算法优化版）"""
+        try:
+            logger.info("🚀 开始 v9.0 中线均衡版策略回测...")
+            if df is None or df.empty:
+                return {'success': False, 'error': '无回测数据'}
+
+            df = df.copy()
+            df['trade_date'] = df['trade_date'].astype(str)
+
+            # 计算行业强度（按股票20日收益聚合）
+            industry_strength_map = {}
+            try:
+                ret20 = {}
+                for ts_code, g in df.groupby('ts_code'):
+                    g = g.sort_values('trade_date')
+                    if len(g) >= 21:
+                        r20 = (g['close_price'].iloc[-1] / g['close_price'].iloc[-21] - 1.0) * 100
+                        ret20[ts_code] = r20
+                ind_vals = {}
+                for ts_code, r20 in ret20.items():
+                    ind = df[df['ts_code'] == ts_code]['industry'].iloc[-1] if 'industry' in df.columns else None
+                    if ind:
+                        ind_vals.setdefault(ind, []).append(r20)
+                industry_strength_map = {k: float(np.mean(v)) for k, v in ind_vals.items()}
+            except Exception:
+                industry_strength_map = {}
+
+            all_stocks = list(df['ts_code'].unique())
+            if len(all_stocks) > sample_size:
+                sample_stocks = np.random.choice(all_stocks, sample_size, replace=False)
+            else:
+                sample_stocks = all_stocks
+
+            backtest_records = []
+            analyzed = 0
+
+            for ts_code in sample_stocks:
+                g = df[df['ts_code'] == ts_code].sort_values('trade_date')
+                if len(g) < 80 + holding_days:
+                    continue
+                analyzed += 1
+
+                ind = g['industry'].iloc[-1] if 'industry' in g.columns else None
+                ind_strength = industry_strength_map.get(ind, 0.0)
+
+                window = 80
+                step = 5
+                for i in range(window, len(g) - holding_days, step):
+                    hist = g.iloc[i - window:i].copy()
+                    score_info = self._calc_v9_score_from_hist(hist, industry_strength=ind_strength)
+                    score = score_info["score"]
+                    if score >= score_threshold:
+                        entry_price = g.iloc[i]['close_price']
+                        exit_price = g.iloc[i + holding_days]['close_price']
+                        future_return = (exit_price / entry_price - 1.0) * 100
+                        backtest_records.append({
+                            "ts_code": ts_code,
+                            "trade_date": g.iloc[i]['trade_date'],
+                            "score": score,
+                            "future_return": future_return
+                        })
+
+            if not backtest_records:
+                return {'success': False, 'error': '未产生有效信号', 'stats': {'analyzed_stocks': analyzed}}
+
+            backtest_df = pd.DataFrame(backtest_records)
+            stats = self._calculate_backtest_stats(backtest_df, analyzed, holding_days)
+            return {'success': True, 'strategy': 'v9.0 中线均衡版', 'stats': stats, 'backtest_data': backtest_df}
+
+        except Exception as e:
+            logger.error(f"v9.0回测失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {'success': False, 'error': str(e)}
     
     def select_current_stocks_complete(self, df: pd.DataFrame, min_strength: int = 55, 
                                      investment_cycle: str = 'balanced') -> pd.DataFrame:
@@ -6252,6 +6400,23 @@ class _StableUptrendContext:
             conn.close()
         return df
 
+    def _load_history_full(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """加载用于v9.0评分的完整历史数据"""
+        if not self._permanent_db_available():
+            return pd.DataFrame()
+        conn = self._connect()
+        query = """
+            SELECT trade_date, close_price, vol, amount, pct_chg, turnover_rate
+            FROM daily_trading_data
+            WHERE ts_code = ? AND trade_date >= ? AND trade_date <= ?
+            ORDER BY trade_date
+        """
+        try:
+            df = pd.read_sql_query(query, conn, params=(ts_code, start_date, end_date))
+        finally:
+            conn.close()
+        return df
+
 
 # ===================== 主界面（完整集成版）=====================
 def main():
@@ -6375,7 +6540,8 @@ def main():
              "🚀 v5.0 趋势爆发版 (启动确认·高爆发)", 
              "⚡ v6.0 超短线·巅峰版 (只选市场最强1-3%·胜率80-90%)",
              "🌟 v7.0 终极智能版 (全球顶级标准·动态自适应·预期62-70%胜率)",
-             "🚀🚀🚀 v8.0 终极进化版 (ATR动态风控·凯利公式·预期70-78%胜率) NEW!"],
+             "🚀🚀🚀 v8.0 终极进化版 (ATR动态风控·凯利公式·预期70-78%胜率) NEW!",
+             "🧭 v9.0 中线均衡版 (资金流·动量·趋势·波动·板块强度) NEW!"],
             horizontal=True,
             help="🏆 v4.0: 适合稳健投资者，持仓5天 | 🚀 v5.0: 适合进取投资者，追求短期爆发 | ⚡ v6.0: 适合超短线高手，三级过滤只选板块龙头 | 🌟 v7.0: 终极智能系统，市场环境识别+行业轮动+动态权重 | 🚀🚀🚀 v8.0: 全球最强！ATR动态风控+凯利公式+18维度+五星评级"
         )
@@ -6924,7 +7090,7 @@ def main():
                 else:  # 潜在机会
                     default_threshold_v5 = 50
                     min_threshold_v5 = 45
-                
+
                 evo_thr = evolve_v5_core.get("params", {}).get("score_threshold")
                 if isinstance(evo_thr, (int, float)):
                     default_threshold_v5 = int(round(evo_thr))
@@ -6932,7 +7098,7 @@ def main():
                         default_threshold_v5 = min_threshold_v5
                     if default_threshold_v5 > 90:
                         default_threshold_v5 = 90
-
+                
                 score_threshold_v5 = st.slider(
                     "评分阈值",
                     min_value=min_threshold_v5,
@@ -7285,6 +7451,9 @@ def main():
                     score_threshold_v6_tab1 = int(round(evo_thr))
                 
                 st.metric("评分阈值", f"{score_threshold_v6_tab1}分", help="自动根据模式设置")
+            evo_hold_v6 = evolve_v6_core.get("params", {}).get("holding_days")
+            if isinstance(evo_hold_v6, (int, float)):
+                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v6)} 天（来源：自动进化）")
             
             with col_v6_b:
                 scan_all_stocks = st.checkbox(
@@ -7309,9 +7478,6 @@ def main():
                         help="0表示不限制。建议5000亿以内",
                         key="cap_max_v6_tab1"
                     )
-            evo_hold_v6 = evolve_v6_core.get("params", {}).get("holding_days")
-            if isinstance(evo_hold_v6, (int, float)):
-                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v6)} 天（来源：自动进化）")
             
             # 扫描按钮
             if st.button("🔥 开始扫描（v6.0巅峰版）", type="primary", use_container_width=True, key="scan_v6_tab1"):
@@ -7647,6 +7813,9 @@ def main():
                     help="推荐70分起步，适应性强",
                     key="score_threshold_v7_tab1"
                 )
+            evo_hold_v7 = evolve_v7_core.get("params", {}).get("holding_days")
+            if isinstance(evo_hold_v7, (int, float)):
+                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v7)} 天（来源：自动进化）")
             
             with col2:
                 scan_all_v7 = st.checkbox(
@@ -7687,9 +7856,6 @@ def main():
                         help="0表示不限制",
                         key="cap_max_v7_tab1"
                     )
-            evo_hold_v7 = evolve_v7_core.get("params", {}).get("holding_days")
-            if isinstance(evo_hold_v7, (int, float)):
-                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v7)} 天（来源：自动进化）")
             
             # 扫描按钮
             if st.button("🚀 开始智能扫描（v7.0）", type="primary", use_container_width=True, key="scan_v7_tab1"):
@@ -8052,10 +8218,11 @@ def main():
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                default_range = (55, 70)
                 evo_thr = evolve_v8_core.get("params", {}).get("score_threshold")
                 if isinstance(evo_thr, (int, float)):
                     default_range = (int(round(evo_thr)), 90)
+                else:
+                    default_range = (55, 70)
                 score_threshold_v8 = st.slider(
                     "评分阈值区间",
                     min_value=45,
@@ -8065,6 +8232,9 @@ def main():
                     help="可选最小和最大阈值：55-70建议，60-65稳健，75极致。仅落在区间内的股票会展示。",
                     key="score_threshold_v8_tab1"
                 )
+            evo_hold_v8 = evolve_v8_core.get("params", {}).get("holding_days")
+            if isinstance(evo_hold_v8, (int, float)):
+                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v8)} 天（来源：自动进化）")
             
             with col2:
                 scan_all_v8 = st.checkbox(
@@ -8105,9 +8275,6 @@ def main():
                         help="0表示不限制",
                         key="cap_max_v8_tab1"
                     )
-            evo_hold_v8 = evolve_v8_core.get("params", {}).get("holding_days")
-            if isinstance(evo_hold_v8, (int, float)):
-                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v8)} 天（来源：自动进化）")
             
             # 扫描按钮
             if st.button("🚀 开始终极扫描（v8.0）", type="primary", use_container_width=True, key="scan_v8_tab1"):
@@ -8527,6 +8694,166 @@ def main():
                 display_df = results_df.drop('原始数据', axis=1)
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
+        elif "v9.0" in strategy_mode:
+            st.markdown("""
+            <div style='background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%); 
+                        padding: 35px 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
+                <h1 style='margin:0; color: white; font-size: 2.2em; font-weight: 700; text-align: center;'>
+                    🧭 v9.0 中线均衡版 - 资金流·动量·趋势·波动·板块强度
+                </h1>
+                <p style='margin: 12px 0 0 0; font-size: 1.1em; text-align: center; opacity: 0.9;'>
+                    中线周期 2-6 周 · 平衡风格 · 适合稳健进取型
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.info("""
+            **v9.0 核心逻辑：**
+            - 资金流向：上涨成交额占比越高越好
+            - 动量结构：20/60日动量双确认
+            - 趋势结构：MA20>MA60>MA120 且趋势向上
+            - 波动率：偏好中等波动（2%-5%）
+            - 板块强度：所属行业平均动量加分
+            """)
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                score_threshold_v9 = st.slider("评分阈值（v9.0）", 50, 90, 65, 5, key="score_threshold_v9")
+            with col2:
+                holding_days_v9 = st.slider("建议持仓天数", 10, 30, 20, 1, key="holding_days_v9")
+            with col3:
+                lookback_days_v9 = st.slider("评分窗口（天）", 80, 200, 160, 10, key="lookback_days_v9")
+
+            col4, col5, col6 = st.columns(3)
+            with col4:
+                min_turnover_v9 = st.slider("最低成交额（亿）", 1.0, 50.0, 5.0, 1.0, key="min_turnover_v9")
+            with col5:
+                candidate_count_v9 = st.slider("候选数量（按市值）", 200, 3000, 800, 100, key="candidate_count_v9")
+            with col6:
+                scan_all_v9 = st.checkbox("🌍 全市场扫描", value=True, key="scan_all_v9")
+
+            col7, col8 = st.columns(2)
+            with col7:
+                cap_min_v9 = st.number_input("最小市值（亿元）", min_value=0, max_value=5000, value=0, step=10, key="cap_min_v9")
+            with col8:
+                cap_max_v9 = st.number_input("最大市值（亿元）", min_value=0, max_value=50000, value=0, step=50, key="cap_max_v9")
+
+            if st.button("🚀 开始扫描（v9.0中线均衡版）", type="primary", use_container_width=True, key="scan_v9"):
+                with st.spinner("🧭 v9.0 中线均衡版扫描中..."):
+                    try:
+                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                        if scan_all_v9 and cap_min_v9 == 0 and cap_max_v9 == 0:
+                            query = """
+                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                FROM stock_basic sb
+                                WHERE sb.industry IS NOT NULL
+                                ORDER BY sb.circ_mv DESC
+                            """
+                            stocks_df = pd.read_sql_query(query, conn)
+                        else:
+                            cap_min_wan = cap_min_v9 * 10000 if cap_min_v9 > 0 else 0
+                            cap_max_wan = cap_max_v9 * 10000 if cap_max_v9 > 0 else 999999999
+                            query = """
+                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
+                                FROM stock_basic sb
+                                WHERE sb.industry IS NOT NULL
+                                AND sb.circ_mv >= ?
+                                AND sb.circ_mv <= ?
+                                ORDER BY sb.circ_mv DESC
+                            """
+                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+
+                        if stocks_df.empty:
+                            st.error("❌ 未找到符合条件的股票")
+                            conn.close()
+                            st.stop()
+
+                        stocks_df = stocks_df.head(candidate_count_v9)
+
+                        # 预计算行业强度（20日动量均值）
+                        industry_scores = {}
+                        ind_vals = {}
+                        end_date = datetime.now().strftime("%Y%m%d")
+                        start_date = (datetime.now() - timedelta(days=lookback_days_v9 + 30)).strftime("%Y%m%d")
+
+                        for _, row in stocks_df.iterrows():
+                            ts_code = row["ts_code"]
+                            hist = vp_analyzer._load_history_full(ts_code, start_date, end_date)
+                            if hist is None or len(hist) < 21:
+                                continue
+                            close = pd.to_numeric(hist["close_price"], errors="coerce").ffill()
+                            r20 = (close.iloc[-1] / close.iloc[-21] - 1.0) * 100 if len(close) > 21 else 0.0
+                            ind_vals.setdefault(row["industry"], []).append(r20)
+
+                        for ind, vals in ind_vals.items():
+                            if vals:
+                                industry_scores[ind] = float(np.mean(vals))
+
+                        # 正式评分
+                        results = []
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+
+                        for idx, row in stocks_df.iterrows():
+                            ts_code = row["ts_code"]
+                            status_text.text(f"正在评分: {row['name']} ({idx+1}/{len(stocks_df)})")
+                            progress_bar.progress((idx + 1) / len(stocks_df))
+
+                            hist = vp_analyzer._load_history_full(ts_code, start_date, end_date)
+                            if hist is None or len(hist) < 80:
+                                continue
+
+                            # 成交额过滤
+                            avg_amount = pd.to_numeric(hist["amount"], errors="coerce").tail(20).mean()
+                            if avg_amount < min_turnover_v9 * 1e8:
+                                continue
+
+                            ind_strength = industry_scores.get(row["industry"], 0.0)
+                            score_info = vp_analyzer._calc_v9_score_from_hist(hist, industry_strength=ind_strength)
+                            score = score_info["score"]
+                            if score >= score_threshold_v9:
+                                results.append({
+                                    "股票代码": ts_code,
+                                    "股票名称": row["name"],
+                                    "行业": row["industry"],
+                                    "流通市值": f"{row['circ_mv']/10000:.1f}亿",
+                                    "综合评分": f"{score:.1f}",
+                                    "资金流": score_info["details"].get("fund_score"),
+                                    "动量": score_info["details"].get("momentum_score"),
+                                    "趋势": score_info["details"].get("trend_score"),
+                                    "波动": score_info["details"].get("volatility_score"),
+                                    "板块强度": score_info["details"].get("sector_score"),
+                                    "建议持仓": f"{holding_days_v9}天",
+                                })
+
+                        progress_bar.empty()
+                        status_text.empty()
+                        conn.close()
+
+                        if results:
+                            results_df = pd.DataFrame(results)
+                            st.session_state["v9_scan_results_tab1"] = results_df
+                            st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v9}分）")
+                            st.dataframe(results_df, use_container_width=True, hide_index=True)
+                            st.download_button(
+                                "📥 导出完整结果（CSV）",
+                                data=_df_to_csv_bytes(results_df),
+                                file_name=f"核心策略_V9_中线均衡_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                mime="text/csv; charset=utf-8"
+                            )
+                        else:
+                            st.warning("⚠️ 未找到符合条件的股票，请适当降低阈值或放宽筛选条件")
+                    except Exception as e:
+                        st.error(f"❌ 扫描失败: {e}")
+                        import traceback
+                        st.code(traceback.format_exc())
+
+            if 'v9_scan_results_tab1' in st.session_state:
+                st.markdown("---")
+                st.markdown("### 📋 上次扫描结果")
+                results_df = st.session_state['v9_scan_results_tab1']
+                st.dataframe(results_df, use_container_width=True, hide_index=True)
+
         else:  # v6.0
             st.header("⚡ v6.0超短线狙击·巅峰版 - 只选市场最强1-3%")
             st.caption("🔥三级过滤+七维严格评分：必要条件淘汰→极度严格评分→精英筛选，胜率80-90%，单次8-15%")
@@ -8945,15 +9272,15 @@ def main():
         # 选择回测模式
         backtest_mode = st.radio(
             "选择回测模式",
-            ["📊 v4/v5/v6/v7/v8🚀🚀🚀 策略对比", "🎯 单策略深度回测", "⚙️ 参数优化"],
+            ["📊 v4/v5/v6/v7/v8/v9🚀🚀🚀 策略对比", "🎯 单策略深度回测", "⚙️ 参数优化"],
             horizontal=True,
-            help="策略对比：对比五大策略表现(新增v8.0!) | 单策略回测：深度测试某个策略 | 参数优化：寻找最佳参数"
+            help="策略对比：对比六大策略表现(新增v9.0!) | 单策略回测：深度测试某个策略 | 参数优化：寻找最佳参数"
         )
         
         st.markdown("---")
         
-        if backtest_mode == "📊 v4/v5/v6/v7/v8🚀🚀🚀 策略对比":
-            st.subheader("📊 五大策略全面对比（新增v8.0终极进化版！）")
+        if backtest_mode == "📊 v4/v5/v6/v7/v8/v9🚀🚀🚀 策略对比":
+            st.subheader("📊 六大策略全面对比（新增v9.0中线均衡版！）")
             
             st.info("""
             ### 🎯 策略特点对比
@@ -8982,6 +9309,11 @@ def main():
             - 💫 特点：ATR动态风控+凯利公式+18维度+五星评级+三级择时
             - 📊 适用：追求极致性能的专业投资者
             - 🎯 目标：70-78%胜率，年化35-52%，夏普比率2.5-3.2
+
+            **v9.0 中线均衡版（算法优化）🧭 NEW!**
+            - 🧭 特点：资金流+动量+趋势+波动+板块强度
+            - 📊 适用：中线平衡风格（2-6周）
+            - 🎯 目标：稳健收益与可控回撤
             """)
             
             col1, col2 = st.columns([3, 1])
@@ -9003,7 +9335,7 @@ def main():
                 )
             
             if start_comparison:
-                with st.spinner("正在对比五大策略表现（包含v8.0！）...这可能需要几分钟..."):
+                with st.spinner("正在对比六大策略表现（包含v9.0！）...这可能需要几分钟..."):
                     try:
                         # 获取历史数据
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
@@ -9102,6 +9434,19 @@ def main():
                                         st.info(f"v8.0分析了 {v8_result['stats'].get('analyzed_stocks', 0)} 只股票，找到 {v8_result['stats'].get('total_signals', 0)} 个信号")
                             else:
                                 st.warning("⚠️ v8.0评分器未加载，跳过v8.0回测")
+
+                            # 🧭 v9.0 回测（中线均衡版）
+                            st.info("🔄 正在回测 v9.0 中线均衡版...")
+                            v9_result = vp_analyzer.backtest_v9_midterm(
+                                df,
+                                sample_size=backtest_sample_size,
+                                holding_days=15,
+                                score_threshold=60.0
+                            )
+                            if v9_result.get('success'):
+                                results['v9.0 中线均衡版🧭'] = v9_result['stats']
+                            else:
+                                st.warning(f"⚠️ v9.0回测未产生有效结果: {v9_result.get('error', '未知原因')}")
                             
                             if results:
                                 st.session_state['comparison_results'] = results
@@ -10208,12 +10553,12 @@ def main():
             with col1:
                 selected_strategy = st.selectbox(
                     "选择策略",
-                    ["v4.0 长期稳健版", "v5.0 趋势爆发版", "v6.0 顶级超短线", "v7.0 终极智能版🚀", "v8.0 终极进化版🚀🚀🚀 NEW!"],
-                    help="选择要深度回测的策略。v8.0全新升级：ATR动态风控+市场过滤+凯利仓位！"
+                    ["v4.0 长期稳健版", "v5.0 趋势爆发版", "v6.0 顶级超短线", "v7.0 终极智能版🚀", "v8.0 终极进化版🚀🚀🚀 NEW!", "v9.0 中线均衡版🧭 NEW!"],
+                    help="选择要深度回测的策略。v8.0升级：ATR动态风控+市场过滤+凯利仓位；v9.0为中线均衡策略。"
                 )
             
             with col2:
-                holding_days = st.slider("持仓天数", 1, 10, 5, 1, key="single_backtest_holding_days")
+                holding_days = st.slider("持仓天数", 1, 30, 5, 1, key="single_backtest_holding_days")
             
             col3, col4 = st.columns(2)
             with col3:
@@ -10265,6 +10610,11 @@ def main():
                             elif "v8.0" in selected_strategy:
                                 # 🚀🚀🚀 v8.0 终极进化版回测
                                 result = vp_analyzer.backtest_v8_ultimate(
+                                    df, sample_size=sample_size, holding_days=holding_days,
+                                    score_threshold=score_threshold
+                                )
+                            elif "v9.0" in selected_strategy:
+                                result = vp_analyzer.backtest_v9_midterm(
                                     df, sample_size=sample_size, holding_days=holding_days,
                                     score_threshold=score_threshold
                                 )
