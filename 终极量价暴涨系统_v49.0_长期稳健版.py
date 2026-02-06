@@ -8744,7 +8744,6 @@ def main():
             load_history_full = getattr(vp_analyzer, "_load_history_full", None)
             if not callable(load_history_full):
                 load_history_full = _load_history_full_fallback
-                st.warning("⚠️ 当前版本缺少 v9 完整历史加载器，已降级为基础历史数据读取")
 
             st.info("""
             **v9.0 核心逻辑：**
