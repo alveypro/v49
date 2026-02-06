@@ -178,6 +178,54 @@ def _append_df_safe(
         raise
 
 
+def _normalize_akshare_northbound(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame()
+    cols = df.columns.tolist()
+    date_col = None
+    for c in ("date", "日期", "trade_date"):
+        if c in cols:
+            date_col = c
+            break
+    value_col = None
+    for c in ("value", "当日成交净买额", "当日资金流入"):
+        if c in cols:
+            value_col = c
+            break
+    if not date_col or not value_col:
+        return pd.DataFrame()
+    out = df[[date_col, value_col]].copy()
+    out.columns = ["trade_date", "north_money"]
+    out["trade_date"] = out["trade_date"].astype(str).str.replace("-", "")
+    out["north_money"] = pd.to_numeric(out["north_money"], errors="coerce").fillna(0.0)
+    return out
+
+
+def _fetch_akshare_northbound() -> pd.DataFrame:
+    try:
+        import akshare as ak  # type: ignore
+    except Exception:
+        return pd.DataFrame()
+    # Try multiple function names across versions
+    fn_candidates = [
+        ("stock_em_hsgt_north_net_flow_in", {"indicator": "北上"}),
+        ("stock_hsgt_north_net_flow_in_em", {"symbol": "北上"}),
+        ("stock_hsgt_hist_em", {"symbol": "北向资金"}),
+    ]
+    for fn_name, kwargs in fn_candidates:
+        fn = getattr(ak, fn_name, None)
+        if not callable(fn):
+            continue
+        try:
+            df = fn(**kwargs)
+            norm = _normalize_akshare_northbound(df)
+            if not norm.empty:
+                return norm
+        except Exception:
+            continue
+    return pd.DataFrame()
+
+
 def _update_northbound(db_path: str) -> Dict:
     token = _load_tushare_token()
     if not token:
@@ -205,15 +253,9 @@ def _update_northbound(db_path: str) -> Dict:
         db_last, df_max = None, None
 
     if df is None or df.empty or (db_last and df_max and df_max < db_last):
-        try:
-            import akshare as ak  # type: ignore
-            ak_df = ak.stock_em_hsgt_north_net_flow_in(indicator="北上")
-            if ak_df is not None and not ak_df.empty:
-                ak_df = ak_df.rename(columns={"date": "trade_date", "value": "north_money"})
-                ak_df["trade_date"] = ak_df["trade_date"].astype(str).str.replace("-", "")
-                df = ak_df
-        except Exception:
-            pass
+        ak_df = _fetch_akshare_northbound()
+        if ak_df is not None and not ak_df.empty:
+            df = ak_df
 
     if df is None or df.empty:
         return {"success": False, "error": "moneyflow_hsgt empty"}
