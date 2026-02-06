@@ -2,59 +2,59 @@
 # -*- coding: utf-8 -*-
 
 """
-🎯 终极量价暴涨系统 v49.0 - 长期稳健版
+ 终极量价暴涨系统 v49.0 - 长期稳健版
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     真实数据验证·56.6%胜率·5天黄金周期·年化10-15%
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔥 v49.0 核心突破（基于2000只股票、274个真实信号验证）：
+ v49.0 核心突破（基于2000只股票、274个真实信号验证）：
 
-【📊 真实回测数据】
-✅ 样本量：2000只股票
-✅ 信号数：274个（充足）
-✅ 胜率：56.6%（超过目标52%）⭐⭐⭐
-✅ 平均持仓：4.9天（接近5天黄金周期）
-✅ 最大回撤：-3.27%（风险极小）
-✅ 夏普比率：0.59（稳健）
+【 真实回测数据】
+ 样本量：2000只股票
+ 信号数：274个（充足）
+ 胜率：56.6%（超过目标52%）⭐⭐⭐
+ 平均持仓：4.9天（接近5天黄金周期）
+ 最大回撤：-3.27%（风险极小）
+ 夏普比率：0.59（稳健）
 
-【🎯 黄金策略参数（已验证）】
-📌 评分器：v4.0潜伏为王版
-📌 评分阈值：60分起（平衡点）
-📌 持仓周期：5天（数据验证最优）
-📌 止损：-3%（严格控制）
-📌 止盈：+4%（快速获利）
-📌 单只仓位：18-20%（最多5只）
+【 黄金策略参数（已验证）】
+ 评分器：v4.0潜伏为王版
+ 评分阈值：60分起（平衡点）
+ 持仓周期：5天（数据验证最优）
+ 止损：-3%（严格控制）
+ 止盈：+4%（快速获利）
+ 单只仓位：18-20%（最多5只）
 
-【💡 核心发现（数据揭示）】
+【 核心发现（数据揭示）】
 1. ⏰ 5天持仓胜率最高53.3%！
-2. 💰 止盈的100%赢（+7.90%）！
-3. 📈 胜率>评分（持仓时间更重要）
+2.  止盈的100%赢（+7.90%）！
+3.  胜率>评分（持仓时间更重要）
 
-【🎯 8维100分评分体系（v4.0潜伏为王）】
-1. 💎 潜伏价值（20分）- 即将启动但未启动
-2. 📍 底部特征（20分）- 价格低位+超跌反弹
-3. 📊 量价配合（15分）- 温和放量+价升
-4. 🎯 MACD趋势（15分）- 金叉初期+能量柱递增
-5. 📈 均线多头（10分）- 均线粘合+即将发散
-6. 🏦 主力行为（10分）- 大单流入+筹码集中
-7. 🚀 启动确认（5分）- 刚开始启动
-8. ⚡ 涨停基因（5分）- 历史爆发力
+【 8维100分评分体系（v4.0潜伏为王）】
+1.  潜伏价值（20分）- 即将启动但未启动
+2.  底部特征（20分）- 价格低位+超跌反弹
+3.  量价配合（15分）- 温和放量+价升
+4.  MACD趋势（15分）- 金叉初期+能量柱递增
+5.  均线多头（10分）- 均线粘合+即将发散
+6.  主力行为（10分）- 大单流入+筹码集中
+7.  启动确认（5分）- 刚开始启动
+8.  涨停基因（5分）- 历史爆发力
 
-【📊 功能模块（整合为6个Tab）】
-✅ Tab1: 💎核心策略中心（v4.0/v5.0/v6.0/v7.0四大实战策略）
-✅ Tab2: 🚀板块热点分析（实时热点追踪）
-✅ Tab3: 📊超级回测系统（已验证56.6%胜率）
-✅ Tab4: 🤖AI智能选股（智能推荐系统）
-✅ Tab5: 🔄数据与参数管理（全自动数据中心）
-✅ Tab6: 📚实战指南（策略使用说明）
+【 功能模块（整合为6个Tab）】
+ Tab1: 核心策略中心（v4.0/v5.0/v6.0/v7.0四大实战策略）
+ Tab2: 板块热点分析（实时热点追踪）
+ Tab3: 超级回测系统（已验证56.6%胜率）
+ Tab4: AI智能选股（智能推荐系统）
+ Tab5: 数据与参数管理（全自动数据中心）
+ Tab6: 实战指南（策略使用说明）
 
-【🎉 版本信息】
+【 版本信息】
 版本号：v49.0 长期稳健版
 发布日期：2025-12-19
 核心升级：集成v4.0评分器+5天黄金周期+真实数据验证
 真实效果：胜率56.6%·年化10-15%·最大回撤<5%
 作者：AI量化专家
-状态：✅ 2000只股票验证·274个真实信号·策略界面完全同步
+状态： 2000只股票验证·274个真实信号·策略界面完全同步
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -211,70 +211,70 @@ def _calc_external_bonus(
         extra -= 1.0
     return extra
 
-# 🔥 导入v4.0综合优选评分器（潜伏为王·长期稳健版）
+#  导入v4.0综合优选评分器（潜伏为王·长期稳健版）
 try:
     from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
     V4_EVALUATOR_AVAILABLE = True
-    logger.info("✅ v4.0综合优选评分器（潜伏为王版）加载成功！")
+    logger.info("v4.0综合优选评分器（潜伏为王版）加载成功！")
 except ImportError as e:
     V4_EVALUATOR_AVAILABLE = False
-    logger.warning(f"⚠️ v4.0评分器未找到，将使用v3.0版本: {e}")
+    logger.warning(f"v4.0评分器未找到，将使用v3.0版本: {e}")
     # 尝试导入v3.0作为备用
     try:
         from comprehensive_stock_evaluator_v3 import ComprehensiveStockEvaluatorV3
         V3_EVALUATOR_AVAILABLE = True
-        logger.info("✅ v3.0综合优选评分器加载成功（备用）！")
+        logger.info("v3.0综合优选评分器加载成功（备用）！")
     except ImportError:
         V3_EVALUATOR_AVAILABLE = False
 
-# 🔥 导入v5.0启动确认型评分器（基于v4.0，权重优化版）
+#  导入v5.0启动确认型评分器（基于v4.0，权重优化版）
 try:
     from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
     # v5.0是v4.0的别名，使用相同的八维评分体系，但在UI上更关注启动确认维度
     ComprehensiveStockEvaluatorV5 = ComprehensiveStockEvaluatorV4
     V5_EVALUATOR_AVAILABLE = True
-    logger.info("✅ v5.0启动确认型评分器加载成功（基于v4.0八维体系）！")
+    logger.info("v5.0启动确认型评分器加载成功（基于v4.0八维体系）！")
 except ImportError as e:
     V5_EVALUATOR_AVAILABLE = False
-    logger.warning(f"⚠️ v5.0评分器未找到: {e}")
+    logger.warning(f"v5.0评分器未找到: {e}")
 
-# 🔥 导入v6.0超短线狙击评分器·巅峰版（胜率80-90%，单次8-15%，只选市场最强1-3%）
+#  导入v6.0超短线狙击评分器·巅峰版（胜率80-90%，单次8-15%，只选市场最强1-3%）
 try:
     from comprehensive_stock_evaluator_v6_ultimate import ComprehensiveStockEvaluatorV6Ultimate as ComprehensiveStockEvaluatorV6
     V6_EVALUATOR_AVAILABLE = True
-    logger.info("✅ v6.0超短线狙击评分器·巅峰版加载成功！")
+    logger.info("v6.0超短线狙击评分器·巅峰版加载成功！")
 except ImportError as e:
     V6_EVALUATOR_AVAILABLE = False
-    logger.warning(f"⚠️ v6.0评分器未找到: {e}")
+    logger.warning(f"v6.0评分器未找到: {e}")
 
-# 🚀 导入v7.0终极智能选股系统（全球顶级标准）
+#  导入v7.0终极智能选股系统（全球顶级标准）
 try:
     from comprehensive_stock_evaluator_v7_ultimate import ComprehensiveStockEvaluatorV7Ultimate
     V7_EVALUATOR_AVAILABLE = True
-    logger.info("✅ v7.0终极智能选股系统加载成功！")
+    logger.info("v7.0终极智能选股系统加载成功！")
 except ImportError as e:
     V7_EVALUATOR_AVAILABLE = False
-    logger.warning(f"⚠️ v7.0评分器未找到: {e}")
+    logger.warning(f"v7.0评分器未找到: {e}")
 
-# 🚀🚀🚀 导入v8.0终极进化版（世界级量化策略）
+#  导入v8.0终极进化版（世界级量化策略）
 try:
     from comprehensive_stock_evaluator_v8_ultimate import ComprehensiveStockEvaluatorV8Ultimate
     from kelly_position_manager import KellyPositionManager
     from dynamic_rebalance_manager import DynamicRebalanceManager
     V8_EVALUATOR_AVAILABLE = True
-    logger.info("✅ v8.0终极进化版加载成功！ATR风控+市场过滤+凯利仓位+动态再平衡")
+    logger.info("v8.0终极进化版加载成功！ATR风控+市场过滤+凯利仓位+动态再平衡")
 except ImportError as e:
     V8_EVALUATOR_AVAILABLE = False
-    logger.warning(f"⚠️ v8.0评分器未找到: {e}")
+    logger.warning(f"v8.0评分器未找到: {e}")
 
-# 📈 导入稳定上涨策略
+#  导入稳定上涨策略
 try:
     from stable_uptrend_strategy import render_stable_uptrend_strategy
     STABLE_UPTREND_AVAILABLE = True
-    logger.info("✅ 稳定上涨策略模块加载成功！")
+    logger.info("稳定上涨策略模块加载成功！")
 except ImportError as e:
     STABLE_UPTREND_AVAILABLE = False
-    logger.warning(f"⚠️ 稳定上涨策略模块未找到: {e}")
+    logger.warning(f"稳定上涨策略模块未找到: {e}")
 
 # 配置
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -290,7 +290,7 @@ def _load_config() -> Dict[str, Any]:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             return json.load(f) or {}
     except Exception as e:
-        logger.warning(f"⚠️ 读取配置文件失败，将使用默认配置: {e}")
+        logger.warning(f"读取配置文件失败，将使用默认配置: {e}")
         return {}
 
 _CONFIG = _load_config()
@@ -762,8 +762,8 @@ def _auto_buy_ai_stocks(stocks: pd.DataFrame, per_buy_amount: float, top_n: int)
 
 
 st.set_page_config(
-    page_title="🎯 终极量价暴涨系统 v49.0 - 长期稳健版",
-    page_icon="🎯",
+    page_title="终极量价暴涨系统 v49.0 - 长期稳健版",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -881,6 +881,9 @@ code, pre, .stCodeBlock {
 """, unsafe_allow_html=True)
 
 def _render_page_header(title: str, subtitle: str = "", tag: str = ""):
+    title = (title or "").strip()
+    subtitle = (subtitle or "").strip()
+    tag = (tag or "").strip()
     tag_html = f"<span style='background:#e2e8f0;color:#0f172a;padding:4px 10px;border-radius:999px;font-size:0.75rem;font-weight:600;margin-left:10px;'>{tag}</span>" if tag else ""
     st.markdown(
         f"""
@@ -949,54 +952,54 @@ class CompleteVolumePriceAnalyzer:
         self.backtest_results = None
         self.signal_cache = {}
         
-        # 🔥 初始化缓存数据库表
+        #  初始化缓存数据库表
         self._init_cache_tables()
         
-        # 🔥 初始化v4.0评分器（潜伏为王·长期稳健版）
+        #  初始化v4.0评分器（潜伏为王·长期稳健版）
         if V4_EVALUATOR_AVAILABLE:
             self.evaluator_v4 = ComprehensiveStockEvaluatorV4()
             self.use_v4 = True  # 默认使用v4.0
             self.use_v3 = False  # 不使用v3
-            logger.info("✅ v4.0评分器（潜伏为王·长期稳健版）已初始化")
+            logger.info("v4.0评分器（潜伏为王·长期稳健版）已初始化")
         elif V3_EVALUATOR_AVAILABLE:
             self.evaluator_v3 = ComprehensiveStockEvaluatorV3()
             self.use_v4 = False
             self.use_v3 = True
-            logger.info("✅ v3.0评分器（启动为王版）已初始化（备用）")
+            logger.info("v3.0评分器（启动为王版）已初始化（备用）")
         else:
             self.evaluator_v4 = None
             self.evaluator_v3 = None
             self.use_v4 = False
             self.use_v3 = False
-            logger.info("ℹ️ 使用v2.0评分器（筹码版）")
+            logger.info(" 使用v2.0评分器（筹码版）")
         
-        # 🔥 初始化v5.0评分器（启动确认版）
+        #  初始化v5.0评分器（启动确认版）
         if V5_EVALUATOR_AVAILABLE:
             self.evaluator_v5 = ComprehensiveStockEvaluatorV5()
-            logger.info("✅ v5.0评分器（启动确认版）已初始化")
+            logger.info("v5.0评分器（启动确认版）已初始化")
         else:
             self.evaluator_v5 = None
         
-        # 🔥 初始化v6.0评分器（顶级高回报版）
+        #  初始化v6.0评分器（顶级高回报版）
         if V6_EVALUATOR_AVAILABLE:
             self.evaluator_v6 = ComprehensiveStockEvaluatorV6()
-            logger.info("✅ v6.0评分器·巅峰版已初始化")
+            logger.info("v6.0评分器·巅峰版已初始化")
         else:
             self.evaluator_v6 = None
         
-        # 🚀 初始化v7.0评分器（终极智能选股系统 - 全球顶级标准）
+        #  初始化v7.0评分器（终极智能选股系统 - 全球顶级标准）
         if V7_EVALUATOR_AVAILABLE:
             self.evaluator_v7 = ComprehensiveStockEvaluatorV7Ultimate(self.db_path)
-            logger.info("✅ v7.0终极智能选股系统已初始化")
+            logger.info("v7.0终极智能选股系统已初始化")
         else:
             self.evaluator_v7 = None
         
-        # 🚀🚀🚀 初始化v8.0评分器（终极进化版 - 世界级量化策略）
+        #  初始化v8.0评分器（终极进化版 - 世界级量化策略）
         if V8_EVALUATOR_AVAILABLE:
             self.evaluator_v8 = ComprehensiveStockEvaluatorV8Ultimate(self.db_path)
             self.kelly_manager = KellyPositionManager()
             self.rebalance_manager = DynamicRebalanceManager()
-            logger.info("✅ v8.0终极进化版已初始化: ATR风控+市场过滤+凯利仓位+动态再平衡")
+            logger.info("v8.0终极进化版已初始化: ATR风控+市场过滤+凯利仓位+动态再平衡")
         else:
             self.evaluator_v8 = None
             self.kelly_manager = None
@@ -1057,9 +1060,9 @@ class CompleteVolumePriceAnalyzer:
             
             conn.commit()
             conn.close()
-            logger.info("✅ 扫描结果缓存表初始化成功")
+            logger.info("扫描结果缓存表初始化成功")
         except Exception as e:
-            logger.error(f"❌ 缓存表初始化失败: {e}")
+            logger.error(f"缓存表初始化失败: {e}")
     
     def save_scan_results_to_cache(self, results: list, version: str, scan_params: dict):
         """保存扫描结果到缓存数据库"""
@@ -1093,10 +1096,10 @@ class CompleteVolumePriceAnalyzer:
             
             conn.commit()
             conn.close()
-            logger.info(f"✅ 已保存 {len(results)} 条{version}扫描结果到缓存")
+            logger.info(f"已保存 {len(results)} 条{version}扫描结果到缓存")
             return True
         except Exception as e:
-            logger.error(f"❌ 保存扫描结果失败: {e}")
+            logger.error(f"保存扫描结果失败: {e}")
             return False
     
     def load_scan_results_from_cache(self, version: str, scan_params: dict):
@@ -1121,23 +1124,23 @@ class CompleteVolumePriceAnalyzer:
             conn.close()
             
             if len(df) > 0:
-                logger.info(f"✅ 从缓存加载了 {len(df)} 条{version}扫描结果")
+                logger.info(f"从缓存加载了 {len(df)} 条{version}扫描结果")
                 return df
             else:
                 return None
         except Exception as e:
-            logger.error(f"⚠️ 加载缓存失败: {e}")
+            logger.error(f"加载缓存失败: {e}")
             return None
         
     def get_market_trend(self, days: int = 5) -> Dict:
         """
-        🔥 新增：获取大盘趋势分析
+         新增：获取大盘趋势分析
         返回市场环境判断和建议
         
         使用Tushare Pro直接获取上证指数数据
         """
         try:
-            # 🔥 使用Tushare Pro获取大盘数据
+            #  使用Tushare Pro获取大盘数据
             import tushare as ts
             pro = ts.pro_api(TUSHARE_TOKEN)
             
@@ -1149,7 +1152,7 @@ class CompleteVolumePriceAnalyzer:
             if df is None or len(df) == 0:
                 return {
                     'status': 'unknown',
-                    'trend': '⚠️ 无法获取大盘数据',
+                    'trend': ' 无法获取大盘数据',
                     'recommendation': '暂无建议',
                     'details': 'Tushare数据获取失败',
                     'color': 'warning'
@@ -1161,7 +1164,7 @@ class CompleteVolumePriceAnalyzer:
             if len(df) < 5:
                 return {
                     'status': 'unknown',
-                    'trend': '⚠️ 无法获取大盘数据',
+                    'trend': ' 无法获取大盘数据',
                     'recommendation': '暂无建议',
                     'details': '数据不足',
                     'color': 'warning'
@@ -1178,23 +1181,23 @@ class CompleteVolumePriceAnalyzer:
             # 判断市场环境
             if change_5d > 3:
                 status = 'excellent'
-                trend = '🟢 大盘强势上涨'
-                recommendation = '✅ 市场环境极佳，适合积极操作'
+                trend = ' 大盘强势上涨'
+                recommendation = ' 市场环境极佳，适合积极操作'
                 color = 'success'
             elif change_5d > 0:
                 status = 'good'
-                trend = '🟡 大盘温和上涨'
-                recommendation = '✅ 市场环境良好，可以正常操作'
+                trend = ' 大盘温和上涨'
+                recommendation = ' 市场环境良好，可以正常操作'
                 color = 'info'
             elif change_5d > -2:
                 status = 'neutral'
-                trend = '🟠 大盘震荡整理'
-                recommendation = '⚠️ 市场震荡，谨慎选股，严格止损'
+                trend = ' 大盘震荡整理'
+                recommendation = ' 市场震荡，谨慎选股，严格止损'
                 color = 'warning'
             else:
                 status = 'bad'
-                trend = '🔴 大盘下跌趋势'
-                recommendation = '❌ 市场走弱，建议空仓观望'
+                trend = ' 大盘下跌趋势'
+                recommendation = ' 市场走弱，建议空仓观望'
                 color = 'error'
             
             details = f"近5日涨跌：{change_5d:+.2f}%"
@@ -1217,7 +1220,7 @@ class CompleteVolumePriceAnalyzer:
             logger.error(f"获取市场趋势失败: {e}")
             return {
                 'status': 'unknown',
-                'trend': '⚠️ 数据获取失败',
+                'trend': ' 数据获取失败',
                 'recommendation': '暂无建议',
                 'details': str(e),
                 'color': 'warning'
@@ -1225,13 +1228,13 @@ class CompleteVolumePriceAnalyzer:
     
     def analyze_market_during_backtest(self, start_date: str, end_date: str) -> Dict:
         """
-        🔥 分析回测期间的市场环境
+         分析回测期间的市场环境
         这是诊断策略表现的关键！
         
         方法：直接从Tushare Pro获取上证指数数据
         """
         try:
-            # 🔥 直接从Tushare Pro获取大盘数据
+            #  直接从Tushare Pro获取大盘数据
             import tushare as ts
             pro = ts.pro_api(TUSHARE_TOKEN)
             
@@ -1265,19 +1268,19 @@ class CompleteVolumePriceAnalyzer:
             
             # 判断市场环境
             if total_change > 10:
-                market_type = "🟢 牛市行情"
+                market_type = " 牛市行情"
                 expected_winrate = "60-70%"
             elif total_change > 5:
-                market_type = "🟡 上涨趋势"
+                market_type = " 上涨趋势"
                 expected_winrate = "55-65%"
             elif total_change > -5:
-                market_type = "🟠 震荡行情"
+                market_type = " 震荡行情"
                 expected_winrate = "48-55%"
             elif total_change > -10:
-                market_type = "🔴 下跌趋势"
+                market_type = " 下跌趋势"
                 expected_winrate = "40-48%"
             else:
-                market_type = "⚫ 熊市行情"
+                market_type = " 熊市行情"
                 expected_winrate = "35-45%"
             
             # 计算波动率
@@ -1359,7 +1362,7 @@ class CompleteVolumePriceAnalyzer:
                                    signal_strength_threshold: float = 0.55,
                                    investment_cycle: str = 'balanced') -> pd.DataFrame:
         """
-        🔥🔥🔥 三周期专业优化版 🔥🔥🔥
+         三周期专业优化版 
         
         investment_cycle参数：
         - 'short': 短期（1-5天）- 60分起，关注放量突破、强势股、突破信号
@@ -1375,7 +1378,7 @@ class CompleteVolumePriceAnalyzer:
             if not all(col in stock_data.columns for col in required_cols):
                 return pd.DataFrame()
             
-            # ✅✅✅ 第一层过滤：排除高风险股票 ✅✅✅
+            #  第一层过滤：排除高风险股票 
             stock_name = stock_data['name'].iloc[0] if 'name' in stock_data.columns else ''
             
             # 1. 排除ST股（风险太高）
@@ -1409,7 +1412,7 @@ class CompleteVolumePriceAnalyzer:
                 if avg_vol_20 > 0 and recent_vol_5 < avg_vol_20 * 0.15:  # 量能<20日均量15%
                     return pd.DataFrame()
             
-            # 4. 排除价格在历史最高位（追高风险）- 🔥 加强过滤
+            # 4. 排除价格在历史最高位（追高风险）-  加强过滤
             if len(data) >= 60:
                 current_price = data['close_price'].iloc[-1]
                 max_price_60 = data['close_price'].tail(60).max()
@@ -1419,7 +1422,7 @@ class CompleteVolumePriceAnalyzer:
                 if max_price_60 > 0 and current_price >= max_price_60 * 0.95:  # 从0.98改为0.95
                     return pd.DataFrame()
                 
-                # 🔥 新增：排除在60日涨幅区间高位的股票
+                #  新增：排除在60日涨幅区间高位的股票
                 if max_price_60 > min_price_60:
                     price_range_position = (current_price - min_price_60) / (max_price_60 - min_price_60)
                     if price_range_position > 0.80:  # 在60日区间的80%以上位置
@@ -1428,9 +1431,9 @@ class CompleteVolumePriceAnalyzer:
             signals = []
             signals_found = 0  # 调试计数器
             
-            # 🔥 改进：包含最新数据用于当前选股！
+            #  改进：包含最新数据用于当前选股！
             # v46.1的-5是为了计算未来收益，但我们要选当前的股票
-            for i in range(20, len(data)):  # ✅ 包括最新一天
+            for i in range(20, len(data)):  #  包括最新一天
                 try:
                     window = data.iloc[max(0, i-60):i+1].copy()
                     
@@ -1441,16 +1444,16 @@ class CompleteVolumePriceAnalyzer:
                     if len(close) < 20 or len(volume) < 20:
                         continue
                     
-                    # 🔥 关键改进：即使indicators失败也继续评分！
+                    #  关键改进：即使indicators失败也继续评分！
                     indicators = self._calculate_technical_indicators(
                         tuple(close), tuple(volume)
                     )
                     
-                    # ❌ 移除这个限制！不再因为indicators失败就跳过
+                    #  移除这个限制！不再因为indicators失败就跳过
                     # if not indicators:
                     #     continue
                     
-                    # ✅ 完全复制v46.1的评分逻辑
+                    #  完全复制v46.1的评分逻辑
                     price_range = np.max(close[-20:]) - np.min(close[-20:])
                     if price_range > 0:
                         price_position = (close[-1] - np.min(close[-20:])) / price_range
@@ -1461,9 +1464,9 @@ class CompleteVolumePriceAnalyzer:
                     historical_vol = np.mean(volume[-17:-3])
                     volume_surge = recent_vol / (historical_vol + 1) if historical_vol > 0 else 1.0
                     
-                    # ✅✅✅ 三周期专业评分系统 ✅✅✅
+                    #  三周期专业评分系统 
                     
-                    # 🎯 根据投资周期设置权重（🔥 大幅提高底部位置权重）
+                    #  根据投资周期设置权重（ 大幅提高底部位置权重）
                     if investment_cycle == 'short':
                         # 短期（1-5天）：爆发力、突破信号
                         vol_weight, price_weight, ma_weight, pos_weight, momentum_weight = 30, 25, 15, 20, 10
@@ -1476,11 +1479,11 @@ class CompleteVolumePriceAnalyzer:
                         # 长期（20天+）：底部、价值
                         vol_weight, price_weight, ma_weight, pos_weight, momentum_weight = 15, 15, 20, 40, 10
                         min_threshold = 50
-                    else:  # balanced（🔥 核心修改：pos_weight从15%提升到30%）
+                    else:  # balanced（ 核心修改：pos_weight从15%提升到30%）
                         vol_weight, price_weight, ma_weight, pos_weight, momentum_weight = 20, 20, 20, 30, 10
                         min_threshold = 55
                     
-                    # 📊 1. 放量评分（0-100分）
+                    #  1. 放量评分（0-100分）
                     vol_score = 0
                     if price_position < 0.3 and volume_surge > 1.8:
                         vol_score = 100
@@ -1493,13 +1496,13 @@ class CompleteVolumePriceAnalyzer:
                     elif volume_surge > 1.05:
                         vol_score = 25
                     
-                    # 📊 2. 量价配合（🔥 加入位置动态调节 - 核心修复）
+                    #  2. 量价配合（ 加入位置动态调节 - 核心修复）
                     price_vol_score = 0
                     if len(close) >= 10:
                         price_trend = (close[-1] - close[-5]) / (close[-5] + 0.0001)
                         vol_trend = (np.mean(volume[-3:]) - np.mean(volume[-8:-3])) / (np.mean(volume[-8:-3]) + 1)
                         
-                        # ✅ 连续确认：最近3天连续上涨+放量
+                        #  连续确认：最近3天连续上涨+放量
                         last_3_up = sum(1 for i in range(-3, 0) if close[i] > close[i-1])
                         last_3_vol_up = sum(1 for i in range(-3, 0) if volume[i] > volume[i-1])
                         
@@ -1517,7 +1520,7 @@ class CompleteVolumePriceAnalyzer:
                         elif price_trend > -0.02:
                             base_score = 15
                         
-                        # 🔥 位置动态调节（关键修复）
+                        #  位置动态调节（关键修复）
                         if price_position < 0.3:
                             position_factor = 1.0  # 低位，满分
                         elif price_position < 0.5:
@@ -1531,7 +1534,7 @@ class CompleteVolumePriceAnalyzer:
                         
                         price_vol_score = base_score * position_factor
                     
-                    # 📊 3. 均线系统（✅ 金叉确认）
+                    #  3. 均线系统（ 金叉确认）
                     ma_score = 0
                     if indicators:
                         ma5 = indicators.get('ma5', 0)
@@ -1549,7 +1552,7 @@ class CompleteVolumePriceAnalyzer:
                         elif ma5 > 0:
                             ma_score = 20
                     
-                    # 📊 4. 底部位置（越低越好）
+                    #  4. 底部位置（越低越好）
                     pos_score = 0
                     if price_position < 0.2:
                         pos_score = 100
@@ -1564,7 +1567,7 @@ class CompleteVolumePriceAnalyzer:
                     elif price_position < 0.7:
                         pos_score = 25
                     
-                    # 📊 5. 动量（🔥 加入位置动态调节）
+                    #  5. 动量（ 加入位置动态调节）
                     momentum_score = 0
                     if indicators:
                         momentum_5 = indicators.get('momentum_5', 0)
@@ -1582,7 +1585,7 @@ class CompleteVolumePriceAnalyzer:
                         elif momentum_5 > 0:
                             base_momentum = 20
                         
-                        # 🔥 位置动态调节（防止追高）
+                        #  位置动态调节（防止追高）
                         if price_position < 0.3:
                             momentum_factor = 1.0  # 低位突破，满分
                         elif price_position < 0.5:
@@ -1605,7 +1608,7 @@ class CompleteVolumePriceAnalyzer:
                         momentum_score * momentum_weight / 100
                     )
                     
-                    # 🔥 第三层保护：高位强制惩罚机制（兜底）
+                    #  第三层保护：高位强制惩罚机制（兜底）
                     if price_position > 0.8:
                         score *= 0.4  # 极高位（80%以上），打4折
                     elif price_position > 0.7:
@@ -1621,51 +1624,51 @@ class CompleteVolumePriceAnalyzer:
                     
                     signal_types = []
                     
-                    # ✅✅✅ 第三层过滤：专业信号识别（更严格，提高质量） ✅✅✅
+                    #  第三层过滤：专业信号识别（更严格，提高质量） 
                     
-                    # 🎯 1. 底部放量信号
+                    #  1. 底部放量信号
                     if vol_score >= 85:
-                        signal_types.append('💎底部强放量')
+                        signal_types.append('底部强放量')
                     elif vol_score >= 70:
-                        signal_types.append('📈中低位放量')
+                        signal_types.append('中低位放量')
                     elif vol_score >= 50:
-                        signal_types.append('📊温和放量')
+                        signal_types.append('温和放量')
                     
-                    # 🎯 2. 量价配合信号
+                    #  2. 量价配合信号
                     if price_vol_score >= 80:
-                        signal_types.append('🔥连续量价齐升')
+                        signal_types.append('连续量价齐升')
                     elif price_vol_score >= 60:
-                        signal_types.append('⬆️温和上涨')
+                        signal_types.append('⬆温和上涨')
                     elif price_vol_score >= 35:
-                        signal_types.append('➡️价格微涨')
+                        signal_types.append('价格微涨')
                     
-                    # 🎯 3. 均线系统信号
+                    #  3. 均线系统信号
                     if ma_score >= 100:
-                        signal_types.append('🚀完美多头')
+                        signal_types.append('完美多头')
                     elif ma_score >= 80:
-                        signal_types.append('📈均线多头')
+                        signal_types.append('均线多头')
                     elif ma_score >= 60:
-                        signal_types.append('🔼短期向上')
+                        signal_types.append('短期向上')
                     elif ma_score >= 40:
-                        signal_types.append('🟢站上5日线')
+                        signal_types.append('站上5日线')
                     
-                    # 🎯 4. 动量信号
+                    #  4. 动量信号
                     if momentum_score >= 80:
-                        signal_types.append('⚡超强势')
+                        signal_types.append('超强势')
                     elif momentum_score >= 60:
-                        signal_types.append('💪强势')
+                        signal_types.append('强势')
                     elif momentum_score >= 40:
-                        signal_types.append('🔋正动量')
+                        signal_types.append('正动量')
                     
-                    # 🎯 5. 底部位置信号
+                    #  5. 底部位置信号
                     if pos_score >= 85:
-                        signal_types.append('🎯极低位')
+                        signal_types.append('极低位')
                     elif pos_score >= 70:
-                        signal_types.append('📍底部区域')
+                        signal_types.append('底部区域')
                     elif pos_score >= 55:
-                        signal_types.append('🔹低位')
+                        signal_types.append('低位')
                     
-                    # ✅ 专业标准：必须有至少1个明确信号
+                    #  专业标准：必须有至少1个明确信号
                     if len(signal_types) == 0:
                         continue  # 没有明确信号，跳过
                     
@@ -1680,9 +1683,9 @@ class CompleteVolumePriceAnalyzer:
                                       f"signals={signal_types}, vol={vol_score}, price_vol={price_vol_score}, "
                                       f"ma={ma_score}, pos={pos_score}, momentum={momentum_score}")
                     
-                    # ✅ 专业过滤：必须达到对应周期的阈值 + 有明确信号
+                    #  专业过滤：必须达到对应周期的阈值 + 有明确信号
                     if normalized_score >= threshold_score and len(signal_types) > 0:
-                        # 🔥 关键修复：安全获取ma5等变量（可能indicators为空）
+                        #  关键修复：安全获取ma5等变量（可能indicators为空）
                         safe_ma5 = indicators.get('ma5', 0) if indicators else 0
                         safe_ma10 = indicators.get('ma10', 0) if indicators else 0
                         safe_ma20 = indicators.get('ma20', 0) if indicators else 0
@@ -1708,10 +1711,10 @@ class CompleteVolumePriceAnalyzer:
             
             if signals:
                 df_result = pd.DataFrame(signals)
-                logger.info(f"🎉 成功返回 {len(df_result)} 条信号！")
+                logger.info(f"成功返回 {len(df_result)} 条信号！")
                 return df_result
             else:
-                logger.warning(f"⚠️ signals列表为空，虽然扫描了 {signals_found} 只股票")
+                logger.warning(f"signals列表为空，虽然扫描了 {signals_found} 只股票")
             return pd.DataFrame()
             
         except Exception as e:
@@ -1720,7 +1723,7 @@ class CompleteVolumePriceAnalyzer:
     
     def get_market_environment(self) -> str:
         """
-        🔥 优化1：识别当前市场环境
+         优化1：识别当前市场环境
         
         返回：'bull'（牛市）, 'bear'（熊市）, 'oscillation'（震荡市）
         
@@ -1765,7 +1768,7 @@ class CompleteVolumePriceAnalyzer:
     
     def get_dynamic_weights(self, market_env: str) -> Dict:
         """
-        🔥 优化1：根据市场环境动态调整权重
+         优化1：根据市场环境动态调整权重
         
         核心理念：
         - 牛市：追涨为主，加大资金面权重（量价+主力）
@@ -1805,7 +1808,7 @@ class CompleteVolumePriceAnalyzer:
     
     def calculate_synergy_bonus(self, scores: Dict) -> float:
         """
-        🔥 优化2：计算维度间的协同加成
+         优化2：计算维度间的协同加成
         
         核心理念：某些维度组合的价值 > 各自独立的价值之和
         """
@@ -1833,7 +1836,7 @@ class CompleteVolumePriceAnalyzer:
     
     def calculate_industry_heat(self, industry: str) -> Dict:
         """
-        🔥 优化4：计算行业热度（0-20分加成）
+         优化4：计算行业热度（0-20分加成）
         
         维度：
         1. 行业平均涨幅（10分）
@@ -1889,13 +1892,13 @@ class CompleteVolumePriceAnalyzer:
             
             # 确定热度等级
             if heat_score >= 15:
-                heat_level = '🔥 超级热门'
+                heat_level = ' 超级热门'
             elif heat_score >= 10:
                 heat_level = '⭐ 热门'
             elif heat_score >= 5:
-                heat_level = '💡 温和'
+                heat_level = ' 温和'
             else:
-                heat_level = '❄️ 冷门'
+                heat_level = ' 冷门'
             
             return {
                 'heat_score': min(20, heat_score),
@@ -1910,7 +1913,7 @@ class CompleteVolumePriceAnalyzer:
     
     def apply_time_decay(self, signal_age_days: int, base_score: float) -> float:
         """
-        🔥 优化5：应用时间衰减因子
+         优化5：应用时间衰减因子
         
         理念：信号越新鲜，价值越高
         - 1天内：100%价值
@@ -1936,7 +1939,7 @@ class CompleteVolumePriceAnalyzer:
     
     def calculate_stop_loss(self, stock_data: pd.DataFrame, entry_price: float) -> Dict:
         """
-        🔥 优化6：计算止损位置
+         优化6：计算止损位置
         
         方法：
         1. 技术止损：跌破关键支撑（MA20/MA30）
@@ -1997,7 +2000,7 @@ class CompleteVolumePriceAnalyzer:
     
     def calculate_risk_score(self, stock_data: pd.DataFrame) -> Dict:
         """
-        🔥 优化3：计算风险评分（0-100分，越低越安全）
+         优化3：计算风险评分（0-100分，越低越安全）
         
         风险维度：
         1. 波动率风险（30分）- 价格波动越大越危险
@@ -2078,11 +2081,11 @@ class CompleteVolumePriceAnalyzer:
             
             # 确定风险等级
             if risk_score >= 60:
-                risk_level = '⚠️ 高风险'
+                risk_level = ' 高风险'
             elif risk_score >= 30:
-                risk_level = '💡 中等风险'
+                risk_level = ' 中等风险'
             else:
-                risk_level = '✅ 低风险'
+                risk_level = ' 低风险'
             
             return {
                 'risk_score': min(100, risk_score),
@@ -2092,27 +2095,27 @@ class CompleteVolumePriceAnalyzer:
             
         except Exception as e:
             logger.error(f"风险评分失败: {e}")
-            return {'risk_score': 50, 'risk_level': '💡 中等风险', 'details': {}}
+            return {'risk_score': 50, 'risk_level': ' 中等风险', 'details': {}}
     
     def evaluate_stock_ultimate_fusion(self, stock_data: pd.DataFrame) -> Dict:
         """
-        🏆 综合优选终极优化版：6维100分评分体系 + 7大优化
+         综合优选终极优化版：6维100分评分体系 + 7大优化
         
-        🔥 7大优化已全部集成：
-        1. ✅ 动态权重系统：根据市场环境（牛/熊/震荡）自动调整权重
-        2. ✅ 协同效应加成：识别黄金组合，+10-20分加成
-        3. ✅ 风险评分维度：5个风险指标，0-100分风险评分
-        4. ✅ 行业热度加成：热门行业+5-20分加成（待实现）
-        5. ✅ 时间衰减因子：新鲜信号优先（待实现）
-        6. ✅ 止损位置建议：自动计算止损位（待实现）
-        7. ✅ 性能优化：向量化计算（已优化）
+         7大优化已全部集成：
+        1.  动态权重系统：根据市场环境（牛/熊/震荡）自动调整权重
+        2.  协同效应加成：识别黄金组合，+10-20分加成
+        3.  风险评分维度：5个风险指标，0-100分风险评分
+        4.  行业热度加成：热门行业+5-20分加成（待实现）
+        5.  时间衰减因子：新鲜信号优先（待实现）
+        6.  止损位置建议：自动计算止损位（待实现）
+        7.  性能优化：向量化计算（已优化）
         
         新的6维评分系统（总分100分）：
         1. 量价配合（25分）- 25% 强势放量上涨
         2. 均线多头（20分）- 20% 5/15/30天均线多头排列
         3. MACD趋势（25分）- 25% 三向判断（DIF↑+DEA↑+MACD柱↑）
-        4. 底部特征（15分）- 15% 🔥 新增！股价历史低位+筹码集中（核心2）
-        5. 主力吸筹（10分）- 10% 🔥 新增！连续温和放量+价格不跌（核心3）
+        4. 底部特征（15分）- 15%  新增！股价历史低位+筹码集中（核心2）
+        5. 主力吸筹（10分）- 10%  新增！连续温和放量+价格不跌（核心3）
         6. 涨停基因（5分）- 5% 近5天涨停记录
         
         动态权重（根据市场环境）：
@@ -2175,7 +2178,7 @@ class CompleteVolumePriceAnalyzer:
             # ==================【维度1】量价配合（25分）==================
             score_volume_price = 0
             
-            # 🔥 优化：移除一票否决，改为扣分机制
+            #  优化：移除一票否决，改为扣分机制
             # 放量下跌：扣除评分，但不直接返回0
             severe_decline = vol_ratio > 2.0 and price_chg_3d < -0.05  # 严重放量下跌
             
@@ -2199,7 +2202,7 @@ class CompleteVolumePriceAnalyzer:
                 details['volume_price'] = '缩量横盘'
             elif severe_decline:  # 严重放量下跌
                 score_volume_price = 0
-                details['volume_price'] = '严重放量下跌⚠️'
+                details['volume_price'] = '严重放量下跌'
             else:
                 score_volume_price = 1
                 details['volume_price'] = '量价配合一般'
@@ -2266,7 +2269,7 @@ class CompleteVolumePriceAnalyzer:
                 # 完美三向上（25分）- 最强信号
                 if dif_up and dea_up and macd_up:
                     score_macd = 25
-                    details['macd'] = '完美三向上🔥'
+                    details['macd'] = '完美三向上'
                 # 0轴附近金叉+双向上（20分）
                 elif dif[-2] <= dea[-2] and abs(dif[-1]) < 0.5 and (dif_up and dea_up):
                     score_macd = 20
@@ -2309,7 +2312,7 @@ class CompleteVolumePriceAnalyzer:
             
             total_score += score_macd
             
-            # ==================【维度4】底部特征（15分）🔥 新增！核心2==================
+            # ==================【维度4】底部特征（15分） 新增！核心2==================
             score_bottom = 0
             
             # 计算前期缩量程度
@@ -2345,7 +2348,7 @@ class CompleteVolumePriceAnalyzer:
             
             total_score += score_bottom
             
-            # ==================【维度5】主力吸筹（10分）🔥 新增！核心3==================
+            # ==================【维度5】主力吸筹（10分） 新增！核心3==================
             score_accumulation = 0
             
             # 连续温和放量判断（2-3天）
@@ -2419,17 +2422,17 @@ class CompleteVolumePriceAnalyzer:
             
             total_score += score_limit
             
-            # ========== 🔥 优化1：动态权重调整 ==========
+            # ==========  优化1：动态权重调整 ==========
             # 获取市场环境
             market_env = self.get_market_environment()
             weights = self.get_dynamic_weights(market_env)
             
-            # ⚠️ 修复Bug：6维度分数已经按100分制设计好了（25+20+25+15+10+5=100）
+            #  修复Bug：6维度分数已经按100分制设计好了（25+20+25+15+10+5=100）
             # 直接使用原始分数，不再乘以权重！
             # 如果需要动态权重，应该在每个维度的内部调整，而不是最后统一加权
             base_score = total_score  # 直接使用6维度的原始总分
             
-            # ========== 🔥 优化2：协同效应加成 ==========
+            # ==========  优化2：协同效应加成 ==========
             scores_dict = {
                 'volume_price': score_volume_price,
                 'ma': score_ma,
@@ -2440,15 +2443,15 @@ class CompleteVolumePriceAnalyzer:
             }
             synergy_bonus = self.calculate_synergy_bonus(scores_dict)
             
-            # ========== 🔥 优化3：风险评分 ==========
+            # ==========  优化3：风险评分 ==========
             risk_result = self.calculate_risk_score(stock_data)
             risk_score = risk_result['risk_score']
             risk_level = risk_result['risk_level']
             
-            # ⚠️ 降低风险惩罚系数：从0.15降到0.05（风险100分只扣5分）
+            #  降低风险惩罚系数：从0.15降到0.05（风险100分只扣5分）
             risk_penalty = risk_score * 0.05  # 风险惩罚系数0.05（大幅降低）
             
-            # ========== 🔥 优化4：行业热度加成 ==========
+            # ==========  优化4：行业热度加成 ==========
             industry = stock_data['industry'].iloc[0] if 'industry' in stock_data.columns else None
             if industry and not pd.isna(industry):
                 industry_result = self.calculate_industry_heat(industry)
@@ -2459,13 +2462,13 @@ class CompleteVolumePriceAnalyzer:
                 industry_level = '未知'
                 industry_result = {'heat_score': 0, 'heat_level': '未知', 'industry_return': 0}
             
-            # ========== 🔥 优化6：止损位置建议 ==========
+            # ==========  优化6：止损位置建议 ==========
             entry_price = close[-1]
             stop_loss_result = self.calculate_stop_loss(stock_data, entry_price)
             
             # ========== 最终评分 ==========
             # 基础分 + 协同加成 + 行业加成 - 风险惩罚
-            # ⚠️ 暂时简化：主要使用基础分，减少复杂优化的影响
+            #  暂时简化：主要使用基础分，减少复杂优化的影响
             final_score = base_score + synergy_bonus * 0.5 + industry_bonus * 0.5 - risk_penalty
             final_score = max(0, min(100, final_score))  # 限制在0-100
             
@@ -2490,12 +2493,12 @@ class CompleteVolumePriceAnalyzer:
             details['weights'] = weights
             
             return {
-                # ✅ 添加success字段供回测使用
+                #  添加success字段供回测使用
                 'success': True,
                 
                 # 核心评分
                 'score': round(final_score, 1),
-                'final_score': round(final_score, 1),  # ✅ 添加final_score字段供回测使用
+                'final_score': round(final_score, 1),  #  添加final_score字段供回测使用
                 'level': level,
                 
                 # 评分组成（7大优化）
@@ -2504,7 +2507,7 @@ class CompleteVolumePriceAnalyzer:
                 'industry_bonus': round(industry_bonus, 1),      # 优化4：行业热度
                 'risk_penalty': round(risk_penalty, 1),          # 优化3：风险惩罚
                 
-                # ✅ 6维评分明细（供回测显示）
+                #  6维评分明细（供回测显示）
                 'volume_price_score': score_volume_price,
                 'ma_trend_score': score_ma,
                 'macd_trend_score': score_macd,
@@ -2541,7 +2544,7 @@ class CompleteVolumePriceAnalyzer:
     
     def evaluate_stock_comprehensive(self, stock_data: pd.DataFrame) -> Dict:
         """
-        🏆 综合优选终极版：真正的6维100分评分体系 + 7大AI优化
+         综合优选终极版：真正的6维100分评分体系 + 7大AI优化
         
         【6维100分评分体系】
         1. 量价配合（25分）：放量上涨vs放量下跌，主力行为识别
@@ -2552,13 +2555,13 @@ class CompleteVolumePriceAnalyzer:
         6. 涨停基因（5分）：历史涨停记录
         
         【7大AI优化】
-        1. ✅ 动态权重系统（市场环境自适应）
-        2. ✅ 非线性评分 + 协同效应（黄金组合加分）
-        3. ✅ 风险评分维度（系统性风险扣分）
-        4. ✅ 行业热度加分（行业共振）
-        5. ✅ 时间衰减因子（新信号优先）
-        6. ✅ 止损位推荐（智能风控）
-        7. ✅ 性能优化（向量化计算）
+        1.  动态权重系统（市场环境自适应）
+        2.  非线性评分 + 协同效应（黄金组合加分）
+        3.  风险评分维度（系统性风险扣分）
+        4.  行业热度加分（行业共振）
+        5.  时间衰减因子（新信号优先）
+        6.  止损位推荐（智能风控）
+        7.  性能优化（向量化计算）
         
         返回：{
             'comprehensive_score': 最终综合得分（0-100）,
@@ -2797,7 +2800,7 @@ class CompleteVolumePriceAnalyzer:
         elif price_chg > 0 and vol_ratio > 1.1:
             score = 10
         elif price_chg < -0.02 and vol_ratio > 1.5:
-            # ⚠️ 放量下跌 = 主力出货
+            #  放量下跌 = 主力出货
             score = 0  # 一票否决！
         elif price_chg > 0:
             score = 5  # 上涨但缩量
@@ -2978,7 +2981,7 @@ class CompleteVolumePriceAnalyzer:
         """【AI优化2】协同效应加分（0-20分）"""
         bonus = 0
         
-        # 🔥 黄金组合1：完美启动（低位+强势放量+MACD金叉）
+        #  黄金组合1：完美启动（低位+强势放量+MACD金叉）
         if (ind['price_position'] < 0.20 and 
             ind['vol_ratio'] > 2.0 and 
             len(ind['dif']) >= 2 and 
@@ -2986,20 +2989,20 @@ class CompleteVolumePriceAnalyzer:
             ind['dif'][-2] <= ind['dea'][-2]):
             bonus += 10
         
-        # 🔥 黄金组合2：主力吸筹（温和放量+价格稳定+低位）
+        #  黄金组合2：主力吸筹（温和放量+价格稳定+低位）
         if (1.3 <= ind['vol_ratio'] <= 1.8 and
             ind['price_stable_days'] >= 4 and
             ind['price_position'] < 0.35 and
             0 <= ind['price_chg_5d'] <= 0.03):
             bonus += 8
         
-        # 🔥 黄金组合3：突破确认（多头排列+放量+涨停基因）
+        #  黄金组合3：突破确认（多头排列+放量+涨停基因）
         if (ind['ma5'] > ind['ma10'] > ind['ma20'] and
             ind['vol_ratio'] > 1.8 and
             ind['limit_up_count_5d'] >= 1):
             bonus += 8
         
-        # 🔥 黄金组合4：底部蓄势完成（低位+缩量+开始放量）
+        #  黄金组合4：底部蓄势完成（低位+缩量+开始放量）
         if (ind['price_position'] < 0.25 and
             ind['volatility'] < 0.06 and
             ind['vol_ratio'] > 1.5):
@@ -3112,7 +3115,7 @@ class CompleteVolumePriceAnalyzer:
             evaluator_attr, eval_method, strategy_name = version_map[version]
             evaluator = getattr(self, evaluator_attr)
             
-            logger.info(f"📊 使用真实{version}评分器回测...")
+            logger.info(f"使用真实{version}评分器回测...")
             
             # 确保列名标准化
             if 'close_price' not in df.columns and 'close' in df.columns:
@@ -3203,7 +3206,7 @@ class CompleteVolumePriceAnalyzer:
                     '信号原因': row['reasons']
                 })
             
-            logger.info(f"✅ {version}真实评分器回测完成：{stats['total_signals']}个信号，"
+            logger.info(f"{version}真实评分器回测完成：{stats['total_signals']}个信号，"
                        f"平均收益{stats['avg_return']:.2f}%，胜率{stats['win_rate']:.1f}%")
             
             return {
@@ -3252,7 +3255,7 @@ class CompleteVolumePriceAnalyzer:
         stats['avg_win'] = float(avg_win) if len(winning_trades) > 0 else 0
         stats['avg_loss'] = float(avg_loss) if len(losing_trades) > 0 else 0
         
-        # 🆕 高级风险指标
+        #  高级风险指标
         # 最大回撤 (Max Drawdown)
         cumulative_returns = (1 + backtest_df['future_return'] / 100).cumprod()
         running_max = cumulative_returns.expanding().max()
@@ -3326,7 +3329,7 @@ class CompleteVolumePriceAnalyzer:
         
         stats['strength_performance'] = strength_performance
         
-        # 🆕 计算资金曲线数据 (用于后续绘制)
+        #  计算资金曲线数据 (用于后续绘制)
         stats['cumulative_returns'] = cumulative_returns.tolist()[-100:] if len(cumulative_returns) > 100 else cumulative_returns.tolist()
         
         return stats
@@ -3335,7 +3338,7 @@ class CompleteVolumePriceAnalyzer:
                                          min_score: float = 60, max_score: float = 85) -> dict:
         """使用真实的v4.0八维评分器进行回测（支持自定义阈值）"""
         try:
-            logger.info("📊 使用真实v4.0评分器回测...")
+            logger.info("使用真实v4.0评分器回测...")
             
             # 确保列名标准化
             if 'close_price' not in df.columns and 'close' in df.columns:
@@ -3356,7 +3359,7 @@ class CompleteVolumePriceAnalyzer:
             else:
                 sample_stocks = unique_stocks
             
-            logger.info(f"📊 将使用真实v4.0评分器回测 {len(sample_stocks)} 只股票")
+            logger.info(f"将使用真实v4.0评分器回测 {len(sample_stocks)} 只股票")
             
             for ts_code in sample_stocks:
                 analyzed_count += 1
@@ -3421,7 +3424,7 @@ class CompleteVolumePriceAnalyzer:
                 logger.warning(f"未找到有效信号（分析了{analyzed_count}只股票）")
                 return {
                     'success': False,
-                    'error': f'未找到有效信号（60-85分区间）\n分析了{analyzed_count}只股票\n\n💡 说明：v4.0策略专注于60-85分的潜伏期股票',
+                    'error': f'未找到有效信号（60-85分区间）\n分析了{analyzed_count}只股票\n\n 说明：v4.0策略专注于60-85分的潜伏期股票',
                     'strategy': 'v4.0 长期稳健版',
                     'stats': {'total_signals': 0, 'analyzed_stocks': analyzed_count}
                 }
@@ -3429,7 +3432,7 @@ class CompleteVolumePriceAnalyzer:
             # 转换为DataFrame并计算统计
             backtest_df = pd.DataFrame(all_signals)
             
-            logger.info(f"✅ 找到 {len(backtest_df)} 个v4.0真实评分信号")
+            logger.info(f"找到 {len(backtest_df)} 个v4.0真实评分信号")
             
             stats = {
                 'total_signals': len(backtest_df),
@@ -3446,13 +3449,13 @@ class CompleteVolumePriceAnalyzer:
             std_return = backtest_df['future_return'].std()
             stats['sharpe_ratio'] = float(stats['avg_return'] / std_return) if std_return > 0 else 0
             
-            # 🔧 计算最大回撤（模拟累计收益曲线）
+            #  计算最大回撤（模拟累计收益曲线）
             cumulative_returns = (1 + backtest_df['future_return'] / 100).cumprod()
             running_max = cumulative_returns.expanding().max()
             drawdowns = (cumulative_returns - running_max) / running_max * 100
             stats['max_drawdown'] = float(abs(drawdowns.min())) if len(drawdowns) > 0 else 0
             
-            # 🔧 计算盈亏比
+            #  计算盈亏比
             winning_trades = backtest_df[backtest_df['future_return'] > 0]
             losing_trades = backtest_df[backtest_df['future_return'] < 0]
             if len(losing_trades) > 0:
@@ -3502,7 +3505,7 @@ class CompleteVolumePriceAnalyzer:
                     f'{holding_days}天收益': f"{row['future_return']:.2f}%"
                 })
             
-            logger.info(f"✅ v4.0真实评分器回测完成：{stats['total_signals']}个信号，"
+            logger.info(f"v4.0真实评分器回测完成：{stats['total_signals']}个信号，"
                        f"平均收益{stats['avg_return']:.2f}%，胜率{stats['win_rate']:.1f}%")
             
             return {
@@ -3646,7 +3649,7 @@ class CompleteVolumePriceAnalyzer:
                                    signal_strength: float = 0.5, holding_days: int = 5) -> dict:
         """完整回测系统（v49增强版 - 健壮性优化）"""
         try:
-            logger.info(f"🚀 开始完整回测，参数：信号强度={signal_strength}, 持仓={holding_days}天")
+            logger.info(f"开始完整回测，参数：信号强度={signal_strength}, 持仓={holding_days}天")
             
             # 确保列名标准化
             if 'close_price' in df.columns:
@@ -3677,7 +3680,7 @@ class CompleteVolumePriceAnalyzer:
             else:
                 sample_stocks = unique_stocks
             
-            logger.info(f"📊 将回测 {len(sample_stocks)} 只股票")
+            logger.info(f"将回测 {len(sample_stocks)} 只股票")
             
             # 将信号强度从0-1转换为0-100分制
             min_score = signal_strength * 100
@@ -3753,7 +3756,7 @@ class CompleteVolumePriceAnalyzer:
                 logger.warning(f"回测未发现有效信号（分析了{analyzed_count}只股票，信号强度阈值={min_score}分）")
                 return {
                     'success': False, 
-                    'error': f'回测未发现有效信号（分析了{analyzed_count}只股票，信号强度阈值={min_score}分）\n\n💡 建议：\n1. 降低信号强度阈值（当前{min_score}分）\n2. 增加回测样本数量\n3. 检查数据是否完整',
+                    'error': f'回测未发现有效信号（分析了{analyzed_count}只股票，信号强度阈值={min_score}分）\n\n 建议：\n1. 降低信号强度阈值（当前{min_score}分）\n2. 增加回测样本数量\n3. 检查数据是否完整',
                     'strategy': '未知策略',
                     'stats': {
                         'total_signals': 0,
@@ -3782,11 +3785,11 @@ class CompleteVolumePriceAnalyzer:
                     }
                 }
             
-            logger.info(f"✅ 找到 {len(backtest_df)} 个有效回测信号")
+            logger.info(f"找到 {len(backtest_df)} 个有效回测信号")
             
             # 如果信号数太少，给出警告但仍返回结果
             if len(backtest_df) < 10:
-                logger.warning(f"⚠️ 回测信号数量较少：{len(backtest_df)}个，结果可能不够稳定")
+                logger.warning(f"回测信号数量较少：{len(backtest_df)}个，结果可能不够稳定")
             
             # 统计
             stats = {
@@ -3857,7 +3860,7 @@ class CompleteVolumePriceAnalyzer:
             stats['strength_performance'] = strength_performance
             self.backtest_results = backtest_df
             
-            logger.info(f"✅ 回测完成：{stats['total_signals']}个信号，"
+            logger.info(f"回测完成：{stats['total_signals']}个信号，"
                        f"平均收益{stats['avg_return']:.2f}%，胜率{stats['win_rate']:.1f}%，"
                        f"夏普比率{stats['sharpe_ratio']:.2f}")
             
@@ -3896,7 +3899,7 @@ class CompleteVolumePriceAnalyzer:
     def backtest_explosive_hunter(self, df: pd.DataFrame, sample_size: int = 800, holding_days: int = 5,
                                   min_score: float = 60, max_score: float = 85) -> dict:
         """
-        💎 v4.0策略回测（长期稳健版 - 潜伏为王）使用真实评分器
+         v4.0策略回测（长期稳健版 - 潜伏为王）使用真实评分器
         
         八维评分体系：
         1. 潜伏价值（20分）- 即将启动但未启动
@@ -3910,15 +3913,15 @@ class CompleteVolumePriceAnalyzer:
         
         阈值：可自定义（默认60-85分，潜伏期特征，不追高）
         """
-        logger.info(f"🚀 开始 v4.0 长期稳健版策略回测（使用真实八维评分器，阈值{min_score}-{max_score}）...")
+        logger.info(f"开始 v4.0 长期稳健版策略回测（使用真实八维评分器，阈值{min_score}-{max_score}）...")
         
         # 检查是否有真实的v4.0评分器
         if hasattr(self, 'evaluator_v4') and self.evaluator_v4 is not None:
-            logger.info("✅ 使用真实的v4.0八维评分器进行回测")
+            logger.info("使用真实的v4.0八维评分器进行回测")
             # 使用真实评分器回测（传递阈值）
             return self._backtest_with_real_evaluator_v4(df, sample_size, holding_days, min_score, max_score)
         else:
-            logger.warning("⚠️ v4.0评分器未加载，使用简化评分逻辑")
+            logger.warning("v4.0评分器未加载，使用简化评分逻辑")
             # 降低阈值以确保有足够样本
             result = self.backtest_strategy_complete(df, sample_size, 0.60, holding_days)
             result['strategy'] = 'v4.0 长期稳健版'
@@ -3926,7 +3929,7 @@ class CompleteVolumePriceAnalyzer:
     
     def backtest_bottom_breakthrough(self, df: pd.DataFrame, sample_size: int = 800, holding_days: int = 5) -> dict:
         """
-        🎯 v5.0策略回测（趋势爆发版 - 启动确认）
+         v5.0策略回测（趋势爆发版 - 启动确认）
         
         核心逻辑：趋势确认后介入，追求爆发力
         - 启动确认：已经开始启动，趋势明确
@@ -3935,27 +3938,27 @@ class CompleteVolumePriceAnalyzer:
         
         阈值：65-75分（已启动但未过热）
         """
-        logger.info("🚀 开始 v5.0 趋势爆发版策略回测...")
+        logger.info("开始 v5.0 趋势爆发版策略回测...")
         
         # 检查是否有真实的v5.0评分器
         if hasattr(self, 'evaluator_v5') and self.evaluator_v5 is not None:
-            logger.info("✅ 使用真实的v5.0评分器进行回测")
+            logger.info("使用真实的v5.0评分器进行回测")
             # 使用真实评分器回测（v5.0的评分逻辑与v4.0类似，但更关注启动确认）
             return self._backtest_with_evaluator(df, sample_size, holding_days, 'v5', 65, 85)
         else:
-            logger.warning("⚠️ v5.0评分器未加载，使用简化评分逻辑")
+            logger.warning("v5.0评分器未加载，使用简化评分逻辑")
             result = self.backtest_strategy_complete(df, sample_size, 0.65, holding_days)
             result['strategy'] = 'v5.0 趋势爆发版'
         return result
     
     def backtest_ultimate_hunter(self, df: pd.DataFrame, sample_size: int = 800, holding_days: int = 5) -> dict:
         """
-        👑 终极猎手策略回测（完全对齐Tab11逻辑）
+         终极猎手策略回测（完全对齐Tab11逻辑）
         
         双类型评分：A型(底部突破型)+B型(高位反弹型)，自动选择最高分
         阈值：80分（对标Tab11的S级和A级股票，实盘推荐标准）
         """
-        logger.info("🚀 开始终极猎手策略回测...")
+        logger.info("开始终极猎手策略回测...")
         # 使用80分阈值，对齐实盘使用标准（S级≥90分，A级80-89分）
         result = self.backtest_strategy_complete(df, sample_size, 0.80, holding_days)
         
@@ -3995,7 +3998,7 @@ class CompleteVolumePriceAnalyzer:
                     result['stats']['type_b_avg_return'] = float(type_b_signals['future_return'].mean())
                     result['stats']['type_b_win_rate'] = float((type_b_signals['future_return'] > 0).sum() / len(type_b_signals) * 100)
                 
-                logger.info(f"📊 类型分布 - A型(底部突破):{len(type_a_signals)}个，B型(高位反弹):{len(type_b_signals)}个")
+                logger.info(f"类型分布 - A型(底部突破):{len(type_a_signals)}个，B型(高位反弹):{len(type_b_signals)}个")
         
         return result
     
@@ -4003,11 +4006,11 @@ class CompleteVolumePriceAnalyzer:
                                            holding_days: int = 5, score_threshold: float = 60.0,
                                            market_cap_min: float = 100, market_cap_max: float = 500) -> dict:
         """
-        🎯 综合优选策略回测（v49.0长期稳健版·真实验证·100%对齐Tab12）
+         综合优选策略回测（v49.0长期稳健版·真实验证·100%对齐Tab12）
         
         ⭐ v4.0八维100分评分体系 + AI深度优化 + 真实数据验证
         
-        📊 v4.0八维评分（潜伏为王）：
+         v4.0八维评分（潜伏为王）：
         - 潜伏价值（20分）：即将启动但未启动的潜伏期特征
         - 底部特征（20分）：价格位置、超跌反弹、底部形态
         - 量价配合（15分）：放量倍数、量价关系、持续性
@@ -4017,17 +4020,17 @@ class CompleteVolumePriceAnalyzer:
         - 启动确认（5分）：刚开始启动（不能太晚）
         - 涨停基因（5分）：历史涨停、涨停质量
         
-        🤖 AI深度优化：
+         AI深度优化：
         1. 协同效应加分（0-15分）
         2. 风险评分扣分（0-30分）
         3. 动态权重（市场环境自适应）
         4. 智能止损推荐
         5. 性能优化（向量化）
         
-        💰 市值筛选：
+         市值筛选：
         - 默认100-500亿（黄金区间，对标Tab12实盘）
         
-        📊 真实验证效果（2000只股票·274个信号）：
+         真实验证效果（2000只股票·274个信号）：
         - 胜率：56.6%（超过目标52%）
         - 平均持仓：4.9天（接近5天黄金周期）
         - 最大回撤：-3.27%（风险极小）
@@ -4035,8 +4038,8 @@ class CompleteVolumePriceAnalyzer:
         
         阈值：60分起（经真实数据验证的最优平衡点）
         """
-        logger.info("🚀 开始综合优选策略回测...")
-        logger.info(f"📊 参数：样本={sample_size}, 持仓={holding_days}天, 阈值={score_threshold}分, 市值={market_cap_min}-{market_cap_max}亿")
+        logger.info("开始综合优选策略回测...")
+        logger.info(f"参数：样本={sample_size}, 持仓={holding_days}天, 阈值={score_threshold}分, 市值={market_cap_min}-{market_cap_max}亿")
         
         try:
             all_signals = []
@@ -4050,7 +4053,7 @@ class CompleteVolumePriceAnalyzer:
             else:
                 sample_stocks = unique_stocks
             
-            logger.info(f"📈 开始扫描 {len(sample_stocks)} 只股票...")
+            logger.info(f"开始扫描 {len(sample_stocks)} 只股票...")
             
             for ts_code in sample_stocks:
                 analyzed_count += 1
@@ -4071,7 +4074,7 @@ class CompleteVolumePriceAnalyzer:
                     # 按日期排序
                     stock_data = stock_data.sort_values('trade_date')
                     
-                    # 🔥 性能优化：只评分最后一个有效时间点（确保有足够的未来数据）
+                    #  性能优化：只评分最后一个有效时间点（确保有足够的未来数据）
                     # 找到最后一个可以计算未来收益的时间点
                     last_valid_idx = len(stock_data) - holding_days - 1
                     
@@ -4082,7 +4085,7 @@ class CompleteVolumePriceAnalyzer:
                     # 获取截止到该点的历史数据
                     historical_data = stock_data.iloc[:last_valid_idx + 1].copy()
                     
-                    # 🎯 使用v4.0全新8维100分评分体系（潜伏为王·长期稳健版）- 与Tab12完全对齐
+                    #  使用v4.0全新8维100分评分体系（潜伏为王·长期稳健版）- 与Tab12完全对齐
                     if self.use_v4 and self.evaluator_v4:
                         # 使用v4.0评分器（潜伏为王·长期稳健版）
                         score_result = self.evaluator_v4.evaluate_stock_v4(historical_data)
@@ -4092,7 +4095,7 @@ class CompleteVolumePriceAnalyzer:
                         score_result = self.evaluator_v3.evaluate_stock_v3(historical_data)
                         final_score = score_result.get('comprehensive_score', 0) or score_result.get('final_score', 0)
                     else:
-                        # 回退到v2.0评分器（筹码版）- 🔥 与Tab12完全一致
+                        # 回退到v2.0评分器（筹码版）-  与Tab12完全一致
                         score_result = self.evaluate_stock_comprehensive(historical_data)
                         final_score = score_result.get('comprehensive_score', 0)
                     
@@ -4117,7 +4120,7 @@ class CompleteVolumePriceAnalyzer:
                         qualified_count += 1
                         
                         # 记录信号
-                        # 🎯 v4.0评分器：提取8维评分和关键指标，与Tab12完全对齐
+                        #  v4.0评分器：提取8维评分和关键指标，与Tab12完全对齐
                         dimension_scores = score_result.get('dimension_scores', {})
                         
                         signal_dict = {
@@ -4128,7 +4131,7 @@ class CompleteVolumePriceAnalyzer:
                             'close_price': buy_price,
                             'final_score': final_score,
                             
-                            # 🔥 v4.0八维评分（与Tab12一致）
+                            #  v4.0八维评分（与Tab12一致）
                             'lurking_value_score': dimension_scores.get('潜伏价值', 0),
                             'bottom_feature_score': dimension_scores.get('底部特征', 0),
                             'volume_price_score': dimension_scores.get('量价配合', 0),
@@ -4138,16 +4141,16 @@ class CompleteVolumePriceAnalyzer:
                             'launch_score': dimension_scores.get('启动确认', 0),
                             'limit_up_gene_score': dimension_scores.get('涨停基因', 0),
                             
-                            # 🔥 AI优化
+                            #  AI优化
                             'synergy_bonus': score_result.get('synergy_bonus', 0),
                             'risk_penalty': score_result.get('risk_penalty', 0),
                             
-                            # 🔥 关键指标（与Tab12一致）
+                            #  关键指标（与Tab12一致）
                             'price_position': score_result.get('price_position', 0),  # v4返回0-100
                             'vol_ratio': score_result.get('vol_ratio', 1.0),
                             'price_chg_5d': score_result.get('price_chg_5d', 0),
                             
-                            # 🔥 止损止盈建议
+                            #  止损止盈建议
                             'stop_loss': score_result.get('stop_loss', 0),
                             'take_profit': score_result.get('take_profit', 0),
                             
@@ -4159,9 +4162,9 @@ class CompleteVolumePriceAnalyzer:
                     logger.debug(f"处理{ts_code}时出错: {e}")
                     continue
             
-            logger.info(f"✅ 扫描完成！分析了{analyzed_count}只股票，发现{len(all_signals)}个信号")
+            logger.info(f"扫描完成！分析了{analyzed_count}只股票，发现{len(all_signals)}个信号")
             
-            # 📊 生成评分分布诊断信息
+            #  生成评分分布诊断信息
             score_distribution = {}
             if all_scores:
                 scores_df = pd.DataFrame(all_scores)
@@ -4179,17 +4182,17 @@ class CompleteVolumePriceAnalyzer:
                     'score_60+': len(scores_df[scores_df['final_score'] >= 60]),
                     'score_50+': len(scores_df[scores_df['final_score'] >= 50])
                 }
-                logger.info(f"📊 评分分布: 最高{max_score:.1f}分, 平均{avg_score:.1f}分")
-                logger.info(f"   60+:{score_distribution['score_60+']}只, 70+:{score_distribution['score_70+']}只, 75+:{score_distribution['score_75+']}只")
+                logger.info(f"评分分布: 最高{max_score:.1f}分, 平均{avg_score:.1f}分")
+                logger.info(f"  60+:{score_distribution['score_60+']}只, 70+:{score_distribution['score_70+']}只, 75+:{score_distribution['score_75+']}只")
             
             if not all_signals:
                 # 根据评分分布给出建议
                 suggestion = ""
                 if all_scores:
                     if max_score < score_threshold:
-                        suggestion = f"\n\n💡 建议：最高分仅{max_score:.1f}分，低于阈值{score_threshold}分。建议降低阈值到{int(max_score * 0.9)}分重试。"
+                        suggestion = f"\n\n 建议：最高分仅{max_score:.1f}分，低于阈值{score_threshold}分。建议降低阈值到{int(max_score * 0.9)}分重试。"
                     elif score_distribution.get('score_60+', 0) > 0:
-                        suggestion = f"\n\n💡 建议：有{score_distribution['score_60+']}只股票≥60分。建议降低阈值到60-65分。"
+                        suggestion = f"\n\n 建议：有{score_distribution['score_60+']}只股票≥60分。建议降低阈值到60-65分。"
                 
                 logger.warning(f"回测未发现有效信号（阈值={score_threshold}分）{suggestion}")
                 return {
@@ -4261,11 +4264,11 @@ class CompleteVolumePriceAnalyzer:
                         'win_rate': (level_data['future_return'] > 0).sum() / len(level_data) * 100
                     }
             
-            logger.info(f"📊 回测结果：")
-            logger.info(f"  总信号数：{total_signals}")
-            logger.info(f"  平均收益：{avg_return:.2f}%")
-            logger.info(f"  胜率：{win_rate:.1f}%")
-            logger.info(f"  夏普比率：{sharpe_ratio:.2f}")
+            logger.info(f"回测结果：")
+            logger.info(f" 总信号数：{total_signals}")
+            logger.info(f" 平均收益：{avg_return:.2f}%")
+            logger.info(f" 胜率：{win_rate:.1f}%")
+            logger.info(f" 夏普比率：{sharpe_ratio:.2f}")
             
             result = {
                 'success': True,
@@ -4305,7 +4308,7 @@ class CompleteVolumePriceAnalyzer:
     def backtest_v6_ultra_short(self, df: pd.DataFrame, sample_size: int = 500, 
                                holding_days: int = 3, score_threshold: float = 80.0) -> dict:
         """
-        ⚡ v6.0顶级超短线策略回测（快进快出 - 热点狙击）
+         v6.0顶级超短线策略回测（快进快出 - 热点狙击）
         
         核心逻辑：
         - 超短线操作：2-3天快进快出
@@ -4324,15 +4327,15 @@ class CompleteVolumePriceAnalyzer:
         
         阈值：70-80分（已爆发的强势股）
         """
-        logger.info("🚀 开始 v6.0 顶级超短线策略回测...")
+        logger.info("开始 v6.0 顶级超短线策略回测...")
         
         # 检查是否有真实的v6.0评分器
         if hasattr(self, 'evaluator_v6') and self.evaluator_v6 is not None:
-            logger.info(f"✅ 使用真实的v6.0评分器进行回测（阈值{score_threshold}分）")
+            logger.info(f"使用真实的v6.0评分器进行回测（阈值{score_threshold}分）")
             # v6.0专注于强势股，使用传入的阈值
             return self._backtest_with_evaluator(df, sample_size, holding_days, 'v6', score_threshold, 100)
         else:
-            logger.warning("⚠️ v6.0评分器未加载，使用简化评分逻辑")
+            logger.warning("v6.0评分器未加载，使用简化评分逻辑")
             result = self.backtest_strategy_complete(df, sample_size, score_threshold/100, holding_days)
             result['strategy'] = 'v6.0 顶级超短线'
             return result
@@ -4340,7 +4343,7 @@ class CompleteVolumePriceAnalyzer:
     def backtest_v7_intelligent(self, df: pd.DataFrame, sample_size: int = 500, 
                                 holding_days: int = 5, score_threshold: float = 60.0) -> dict:
         """
-        🌟 v7.0终极智能版策略回测（动态自适应 - 全球顶级标准）
+         v7.0终极智能版策略回测（动态自适应 - 全球顶级标准）
         
         核心创新：
         - 市场环境识别：自动识别5种市场环境，动态调整策略
@@ -4349,11 +4352,11 @@ class CompleteVolumePriceAnalyzer:
         - 三层智能过滤：市场情绪+行业景气度+资金流向
         
         五大智能系统：
-        1. 🌡️ 市场环境识别器（牛市/熊市/震荡市/急跌恐慌）
-        2. 😊 市场情绪计算器（-1恐慌到+1贪婪）
-        3. 🔄 行业轮动分析器（自动Top8热门行业）
-        4. ⚖️ 动态权重系统（环境自适应）
-        5. 🎯 三层智能过滤器（多重验证）
+        1.  市场环境识别器（牛市/熊市/震荡市/急跌恐慌）
+        2.  市场情绪计算器（-1恐慌到+1贪婪）
+        3.  行业轮动分析器（自动Top8热门行业）
+        4.  动态权重系统（环境自适应）
+        5.  三层智能过滤器（多重验证）
         
         预期效果：
         - 胜率：62-70%
@@ -4363,11 +4366,11 @@ class CompleteVolumePriceAnalyzer:
         
         阈值：70分（动态调整，市场差时自动提高门槛）
         """
-        logger.info("🌟 开始 v7.0 终极智能版策略回测...")
+        logger.info("开始 v7.0 终极智能版策略回测...")
         
         # 检查是否有真实的v7.0评分器
         if hasattr(self, 'evaluator_v7') and self.evaluator_v7 is not None:
-            logger.info("✅ 使用真实的v7.0终极智能评分器进行回测")
+            logger.info("使用真实的v7.0终极智能评分器进行回测")
             
             try:
                 # v7.0需要特殊的回测逻辑，因为它需要ts_code和industry
@@ -4380,7 +4383,7 @@ class CompleteVolumePriceAnalyzer:
                     'strategy': 'v7.0 终极智能版'
                 }
         else:
-            logger.warning("⚠️ v7.0评分器未加载，无法进行v7.0回测")
+            logger.warning("v7.0评分器未加载，无法进行v7.0回测")
             return {
                 'success': False,
                 'error': 'v7.0评分器未加载',
@@ -4428,7 +4431,7 @@ class CompleteVolumePriceAnalyzer:
                 # 获取当前时点的数据（不包含未来数据）
                 current_data = stock_data.iloc[:i+1].copy()
                 
-                # ✅ 确保列名一致性
+                #  确保列名一致性
                 if 'close' in current_data.columns and 'close_price' not in current_data.columns:
                     current_data = current_data.rename(columns={'close': 'close_price'})
                 
@@ -4447,7 +4450,7 @@ class CompleteVolumePriceAnalyzer:
                     
                     # 检查是否符合阈值
                     if final_score >= score_threshold:
-                        # ✅ 计算未来收益 - 使用正确的列名
+                        #  计算未来收益 - 使用正确的列名
                         close_col = 'close' if 'close' in stock_data.columns else 'close_price'
                         buy_price = stock_data.iloc[i][close_col]
                         sell_price = stock_data.iloc[i + holding_days][close_col]
@@ -4575,7 +4578,7 @@ class CompleteVolumePriceAnalyzer:
             'max_consecutive_losses': max_consecutive_losses
         }
         
-        logger.info(f"✅ v7.0回测完成: 胜率{win_rate:.1f}%, 平均收益{avg_return:.2f}%, 信号数{total_signals}")
+        logger.info(f"v7.0回测完成: 胜率{win_rate:.1f}%, 平均收益{avg_return:.2f}%, 信号数{total_signals}")
         
         # 准备详细记录（转换为字典列表，与v4.0格式一致）
         details = []
@@ -4603,7 +4606,7 @@ class CompleteVolumePriceAnalyzer:
     def backtest_v8_ultimate(self, df: pd.DataFrame, sample_size: int = 500,
                             holding_days: int = 5, score_threshold: float = 50.0) -> dict:
         """
-        🚀🚀🚀 v8.0终极进化版回测（世界级量化策略）
+         v8.0终极进化版回测（世界级量化策略）
         
         革命性升级：
         1. ATR动态止损止盈（不再固定-4%/+6%）
@@ -4621,11 +4624,11 @@ class CompleteVolumePriceAnalyzer:
         阈值：50分起（v8采用软过滤，市场不好时评分会自动降低）
         推荐：50-55分（平衡信号数量和质量）
         """
-        logger.info("🚀 开始 v8.0 终极进化版策略回测...")
+        logger.info("开始 v8.0 终极进化版策略回测...")
         
         # 检查v8评分器
         if not hasattr(self, 'evaluator_v8') or self.evaluator_v8 is None:
-            logger.warning("⚠️ v8.0评分器未加载")
+            logger.warning("v8.0评分器未加载")
             return {
                 'success': False,
                 'error': 'v8.0评分器未加载',
@@ -4665,7 +4668,7 @@ class CompleteVolumePriceAnalyzer:
             index_df = pd.read_sql_query(index_query, conn)
             if len(index_df) > 0:
                 index_data = index_df.sort_values('trade_date')
-                logger.info(f"✅ 大盘数据加载成功: {len(index_data)}条")
+                logger.info(f"大盘数据加载成功: {len(index_data)}条")
             conn.close()
         except Exception as e:
             logger.warning(f"大盘数据加载失败: {e}，将不使用市场过滤")
@@ -4881,7 +4884,7 @@ class CompleteVolumePriceAnalyzer:
             'max_consecutive_losses': max_consecutive_losses
         }
         
-        logger.info(f"✅ v8.0回测完成: 胜率{win_rate:.1f}%, 平均收益{avg_return:.2f}%, 信号数{total_signals}")
+        logger.info(f"v8.0回测完成: 胜率{win_rate:.1f}%, 平均收益{avg_return:.2f}%, 信号数{total_signals}")
         
         # 详细记录
         details = []
@@ -5000,9 +5003,9 @@ class CompleteVolumePriceAnalyzer:
 
     def backtest_v9_midterm(self, df: pd.DataFrame, sample_size: int = 500,
                             holding_days: int = 15, score_threshold: float = 60.0) -> dict:
-        """📈 v9.0 中线均衡版回测（算法优化版）"""
+        """ v9.0 中线均衡版回测（算法优化版）"""
         try:
-            logger.info("🚀 开始 v9.0 中线均衡版策略回测...")
+            logger.info("开始 v9.0 中线均衡版策略回测...")
             if df is None or df.empty:
                 return {'success': False, 'error': '无回测数据'}
 
@@ -5078,7 +5081,7 @@ class CompleteVolumePriceAnalyzer:
     def select_current_stocks_complete(self, df: pd.DataFrame, min_strength: int = 55, 
                                      investment_cycle: str = 'balanced') -> pd.DataFrame:
         """
-        🔥🔥🔥 三周期AI智能选股 🔥🔥🔥
+         三周期AI智能选股 
         
         investment_cycle参数：
         - 'short': 短期（1-5天）- 60分起，追求爆发力
@@ -5093,7 +5096,7 @@ class CompleteVolumePriceAnalyzer:
                 'long': '长期（20天+）价值型',
                 'balanced': '平衡模式'
             }
-            logger.info(f"🤖 AI智能选股中【{cycle_names.get(investment_cycle, investment_cycle)}】...")
+            logger.info(f"AI智能选股中【{cycle_names.get(investment_cycle, investment_cycle)}】...")
             
             current_signals = []
             processed_count = 0
@@ -5109,7 +5112,7 @@ class CompleteVolumePriceAnalyzer:
                     if len(recent_data) < 30:
                         continue
                     
-                    # ✅ 使用简化但有效的信号识别系统
+                    #  使用简化但有效的信号识别系统
                     signals = self._identify_volume_price_signals(recent_data, min_strength)
                     
                     if not signals.empty:
@@ -5140,14 +5143,14 @@ class CompleteVolumePriceAnalyzer:
                         })
                 
                 except Exception as e:
-                    logger.error(f"❌ {ts_code} 处理失败: {e}")
+                    logger.error(f"{ts_code} 处理失败: {e}")
                     continue
             
             if current_signals:
                 result_df = pd.DataFrame(current_signals)
                 result_df = result_df.sort_values('buy_value', ascending=False)
                 
-                logger.info(f"🎉 AI找到 {len(result_df)} 只高价值股票！详细信息：前3只 {result_df.head(3)[['ts_code', 'name', 'signal_strength', 'buy_value']].to_dict('records')}")
+                logger.info(f"AI找到 {len(result_df)} 只高价值股票！详细信息：前3只 {result_df.head(3)[['ts_code', 'name', 'signal_strength', 'buy_value']].to_dict('records')}")
                 return result_df
             
             return pd.DataFrame()
@@ -5166,11 +5169,11 @@ class CompleteVolumePriceAnalyzer:
         max_market_cap: float = 5000.0
     ) -> pd.DataFrame:
         """
-        🛡️ AI 高收益捕获者 V5.0 - 稳健月度目标版
+         AI 高收益捕获者 V5.0 - 稳健月度目标版
         
         核心目标：在控制回撤的前提下，争取月度目标收益
         
-        ✅ V5.0 核心特点：
+         V5.0 核心特点：
         1. **回撤控制优先**：20日回撤过大直接剔除
         2. **回踩确认**：回踩均线后企稳反弹优先
         3. **板块强度**：板块共振强势的更可靠
@@ -5201,13 +5204,13 @@ class CompleteVolumePriceAnalyzer:
                     
                     if current_idx > idx_ma20:
                         market_multiplier = 1.1
-                        market_status = "🟢 多头"
+                        market_status = " 多头"
                     elif current_idx < idx_ma20 and idx_ret20 < -0.05:
                         market_multiplier = 0.85
-                        market_status = "🔴 弱势"
+                        market_status = " 弱势"
                     else:
                         market_multiplier = 0.9
-                        market_status = "🟡 震荡"
+                        market_status = " 震荡"
                     logger.info(f"大盘状态: {market_status}, 系数: {market_multiplier}")
             except Exception as e:
                 logger.warning(f"大盘数据获取失败: {e}")
@@ -5394,7 +5397,7 @@ class CompleteVolumePriceAnalyzer:
                         industry_info = industry_metrics.get(industry, {})
                         industry_median = industry_info.get('median_ret20', 0)
                         industry_pos_ratio = industry_info.get('pos_ratio', 0)
-                        if market_status == "🔴 弱势" and industry_median < -0.02:
+                        if market_status == " 弱势" and industry_median < -0.02:
                             stats['skip_industry_weak'] += 1
                             continue
 
@@ -5580,11 +5583,11 @@ class CompleteVolumePriceAnalyzer:
                         predicted_return = max(ret_20 * 0.9, 0.05)
                         
                         if score >= 70:
-                            grade = "🌟🌟🌟 强烈推荐"
+                            grade = " 强烈推荐"
                         elif score >= 50:
-                            grade = "🌟🌟 推荐"
+                            grade = " 推荐"
                         elif score >= 35:
-                            grade = "🌟 关注"
+                            grade = " 关注"
                         else:
                             grade = "观察"
                         
@@ -5720,7 +5723,7 @@ class CompleteVolumePriceAnalyzer:
             result_df = pd.DataFrame(results)
             result_df = result_df.sort_values('评分', ascending=False)
             
-            logger.info(f"✅ V5.0选股完成: 找到{len(result_df)}只标的, 最高分{result_df['评分'].max():.1f}, 最低分{result_df['评分'].min():.1f}")
+            logger.info(f"V5.0选股完成: 找到{len(result_df)}只标的, 最高分{result_df['评分'].max():.1f}, 最低分{result_df['评分'].min():.1f}")
             return result_df
 
         except Exception as e:
@@ -5737,7 +5740,7 @@ class CompleteVolumePriceAnalyzer:
         max_volatility: float = 0.12
     ) -> pd.DataFrame:
         """
-        🚀 AI 高收益捕获者 V2.0 - 顶级重构版
+         AI 高收益捕获者 V2.0 - 顶级重构版
         目标：月收益率 20%+ 的稳健捕获
         
         新增核心逻辑：
@@ -5766,10 +5769,10 @@ class CompleteVolumePriceAnalyzer:
                     # 如果大盘在20日线下，属于空头市场
                     if current_idx < idx_ma20:
                         market_score = 0.6  # 大幅扣分
-                        market_warning = "⚠️ 大盘走弱(20日线下)，追高风险极高"
+                        market_warning = " 大盘走弱(20日线下)，追高风险极高"
                     elif current_idx < idx_closes[5]:
                         market_score = 0.8  # 小幅扣分
-                        market_warning = "⚠️ 大盘处于短线调整"
+                        market_warning = " 大盘处于短线调整"
             except Exception as e:
                 logger.warning(f"大盘数据获取失败: {e}")
 
@@ -5901,7 +5904,7 @@ class StrategyOptimizer:
     def optimize_parameters(self, df: pd.DataFrame, sample_size: int = 500) -> Dict:
         """旧版参数优化（兼容性保留）"""
         try:
-            logger.info("🔍 开始参数优化...")
+            logger.info("开始参数优化...")
             
             param_grid = {
                 'signal_strength': [0.4, 0.5, 0.6, 0.7]
@@ -5947,7 +5950,7 @@ class StrategyOptimizer:
                     logger.warning(f"参数测试失败: {e}")
                     continue
             
-            logger.info(f"✅ 参数优化完成！")
+            logger.info(f"参数优化完成！")
             
             return {
                 'success': True,
@@ -5963,7 +5966,7 @@ class StrategyOptimizer:
         """
         优化单个策略的持仓天数
         """
-        logger.info(f"🔍 开始优化{strategy_name}的持仓天数...")
+        logger.info(f"开始优化{strategy_name}的持仓天数...")
         
         try:
             holding_days_options = [3, 5, 7, 10]
@@ -6035,7 +6038,7 @@ class StrategyOptimizer:
                     'is_comparison': False
                 }
             
-            logger.info(f"✅ {strategy_name}参数优化完成！最佳持仓天数：{best_params['holding_days']}天")
+            logger.info(f"{strategy_name}参数优化完成！最佳持仓天数：{best_params['holding_days']}天")
             
             return {
                 'success': True,
@@ -6059,7 +6062,7 @@ class StrategyOptimizer:
         """
         优化所有策略，对比表现
         """
-        logger.info("🚀 开始全策略参数优化...")
+        logger.info("开始全策略参数优化...")
         
         try:
             strategies = ["暴涨猎手", "底部突破猎手", "终极猎手"]
@@ -6090,7 +6093,7 @@ class StrategyOptimizer:
             best_strategies_df = pd.DataFrame(best_strategies)
             best_strategies_df = best_strategies_df.sort_values('score', ascending=False)
             
-            logger.info("✅ 全策略参数优化完成！")
+            logger.info("全策略参数优化完成！")
             
             return {
                 'success': True,
@@ -6230,9 +6233,9 @@ class DatabaseManager:
         try:
             ts.set_token(TUSHARE_TOKEN)
             self.pro = ts.pro_api()
-            logger.info("✅ Tushare初始化成功")
+            logger.info("Tushare初始化成功")
         except Exception as e:
-            logger.error(f"❌ Tushare初始化失败: {e}")
+            logger.error(f"Tushare初始化失败: {e}")
     
     def get_database_status(self) -> Dict:
         """获取数据库状态"""
@@ -6875,21 +6878,21 @@ def _run_funding_repair(db_path: str) -> Dict[str, Dict]:
 def main():
     """主界面"""
     
-    st.title("🎯 终极量价暴涨系统 v49.0 - 长期稳健版")
-    st.markdown("**✅真实数据验证·56.6%胜率·5天黄金周期·年化10-15%·v4.0潜伏为王评分器**")
+    st.title("终极量价暴涨系统 v49.0 - 长期稳健版")
+    st.markdown("**真实数据验证·56.6%胜率·5天黄金周期·年化10-15%·v4.0潜伏为王评分器**")
     st.markdown("---")
     
     # 初始化
     if 'vp_analyzer' not in st.session_state:
-        with st.spinner("🤖 正在初始化完整系统..."):
+        with st.spinner("正在初始化完整系统..."):
             try:
                 st.session_state.vp_analyzer = CompleteVolumePriceAnalyzer()
                 st.session_state.optimizer = StrategyOptimizer(st.session_state.vp_analyzer)
                 st.session_state.db_manager = DatabaseManager()
                 st.session_state.scanner = MarketScanner()
-                st.success("✅ 系统初始化成功！")
+                st.success("系统初始化成功！")
             except Exception as e:
-                st.error(f"❌ 系统初始化失败: {e}")
+                st.error(f"系统初始化失败: {e}")
                 return
 
     if "enable_fund_bonus" not in st.session_state:
@@ -6902,7 +6905,7 @@ def main():
     
     # 侧边栏
     with st.sidebar:
-        st.header("📊 系统状态")
+        st.header("系统状态")
         
         status = db_manager.get_database_status()
         
@@ -6918,11 +6921,11 @@ def main():
             st.markdown(f"- 最新：{status.get('max_date', 'N/A')}")
             
             if status.get('is_fresh'):
-                st.success(f"✅ 最新（{status.get('days_old', 0)}天前）")
+                st.success(f"最新（{status.get('days_old', 0)}天前）")
             else:
-                st.warning(f"⚠️ 需更新（{status.get('days_old', 999)}天前）")
+                st.warning(f"需更新（{status.get('days_old', 999)}天前）")
         else:
-            st.error(f"❌ {status['error']}")
+            st.error(f"{status['error']}")
 
         # 侧边栏健康警报（读取最近报告）
         try:
@@ -6933,27 +6936,27 @@ def main():
                 if report and not report.get("ok", True):
                     warnings = report.get("warnings", [])
                     preview = "\n".join(warnings[:3]) if warnings else "存在异常"
-                    st.warning(f"⚠️ 健康警报\n{preview}")
+                    st.warning(f"健康警报\n{preview}")
         except Exception:
             pass
         
         st.divider()
         
-        st.markdown("### 💎 v46.5暴涨猎手优化版")
+        st.markdown("###  v46.5暴涨猎手优化版")
         st.markdown("""
         **核心升级：**
-        - 🔥 区分放量上涨vs放量下跌
-        - 💎 十维专业评分系统
-        - 🎯 识别主力吸筹vs出货
-        - 📈 K线形态+MACD分析
-        - ⚡ 涨停基因+洗盘识别
+        -  区分放量上涨vs放量下跌
+        -  十维专业评分系统
+        -  识别主力吸筹vs出货
+        -  K线形态+MACD分析
+        -  涨停基因+洗盘识别
         
-        **五重风控：** 🛡️ 新增！
-        - ⛔ 放量下跌=主力出货，直接排除
-        - ⛔ ST/*股，直接排除
-        - ⛔ 近5日跌停，排除
-        - ⛔ 高位回落，排除
-        - ⛔ 短期均线向下，排除
+        **五重风控：**  新增！
+        -  放量下跌=主力出货，直接排除
+        -  ST/*股，直接排除
+        -  近5日跌停，排除
+        -  高位回落，排除
+        -  短期均线向下，排除
         
         **评分标准：**
         - 精选级：≥70分（更严格！）
@@ -6962,31 +6965,32 @@ def main():
         - 稳健型：70-75分
         
         **使用方法：**
-        1. Tab1: 💎暴涨猎手（十维专业分析）
-        2. Tab2: 🔥一键智能推荐（v46.1）
+        1. Tab1: 暴涨猎手（十维专业分析）
+        2. Tab2: 一键智能推荐（v46.1）
         3. 其他模块：回测/优化/板块扫描
         """)
     
     # 【核心架构】v50.0 极简至尊版 - 6大核心功能区
-    tab_core, tab_sector, tab_backtest, tab_ai, tab_assistant, tab_data, tab_guide = st.tabs([
-        "💎 核心策略中心 (v4/v5/v6/v7🚀)",
-        "🚀 板块热点分析",
-        "📊 超级回测系统",
-        "🤖 AI智能选股",
-        "🎯 智能交易助手",
-        "🔄 数据与参数管理",
-        "📚 实战指南"
-    ])
+    _tabs = [
+        " 核心策略中心 (v4/v5/v6/v7)",
+        " 板块热点分析",
+        " 超级回测系统",
+        " AI智能选股",
+        " 智能交易助手",
+        " 数据与参数管理",
+        " 实战指南",
+    ]
+    tab_core, tab_sector, tab_backtest, tab_ai, tab_assistant, tab_data, tab_guide = st.tabs([t.strip() for t in _tabs])
     
-    # ==================== Tab 1: 💎 核心策略中心 ====================
+    # ==================== Tab 1:  核心策略中心 ====================
     with tab_core:
-        with st.expander("💎 核心策略中心说明", expanded=False):
+        with st.expander("核心策略中心说明", expanded=False):
             st.markdown("""
             <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                         padding: 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
-                <h1 style='margin:0; color: white;'>💎 核心策略中心 - 四维一体顶级系统</h1>
+                <h1 style='margin:0; color: white;'> 核心策略中心 - 四维一体顶级系统</h1>
                 <p style='margin:10px 0 0 0; font-size:1.2em; opacity:0.9;'>
-                    v4.0 潜伏型 | v5.0 爆发型 | v6.0 超短型 | 🚀v7.0 终极智能型 · 全球顶级标准
+                    v4.0 潜伏型 | v5.0 爆发型 | v6.0 超短型 | v7.0 终极智能型 · 全球顶级标准
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -7003,33 +7007,36 @@ def main():
         </style>
         """, unsafe_allow_html=True)
         
+        _modes = [
+            " v4.0 长期稳健版 (潜伏为王·56.6%胜率)",
+            " 稳定上涨策略 (底部启动/回撤企稳/二次启动)",
+            " v5.0 趋势爆发版 (启动确认·高爆发)",
+            " v6.0 超短线·巅峰版 (只选市场最强1-3%·胜率80-90%)",
+            " v7.0 终极智能版 (全球顶级标准·动态自适应·预期62-70%胜率)",
+            " v8.0 终极进化版 (ATR动态风控·凯利公式·预期70-78%胜率)",
+            " v9.0 中线均衡版 (资金流·动量·趋势·波动·板块强度)",
+            " 组合策略 共识评分 (v4/v5/v7/v8/v9)",
+        ]
         strategy_mode = st.radio(
             "选择实战模式",
-            ["🏆 v4.0 长期稳健版 (潜伏为王·56.6%胜率)", 
-             "📈 稳定上涨策略 (底部启动/回撤企稳/二次启动)",
-             "🚀 v5.0 趋势爆发版 (启动确认·高爆发)", 
-             "⚡ v6.0 超短线·巅峰版 (只选市场最强1-3%·胜率80-90%)",
-             "🌟 v7.0 终极智能版 (全球顶级标准·动态自适应·预期62-70%胜率)",
-             "🚀🚀🚀 v8.0 终极进化版 (ATR动态风控·凯利公式·预期70-78%胜率) NEW!",
-             "🧭 v9.0 中线均衡版 (资金流·动量·趋势·波动·板块强度) NEW!",
-             "🧩 组合策略 共识评分 (v4/v5/v7/v8/v9) NEW!"],
+            [m.strip() for m in _modes],
             horizontal=True,
-            help="🏆 v4.0: 适合稳健投资者，持仓5天 | 🚀 v5.0: 适合进取投资者，追求短期爆发 | ⚡ v6.0: 适合超短线高手，三级过滤只选板块龙头 | 🌟 v7.0: 终极智能系统，市场环境识别+行业轮动+动态权重 | 🚀🚀🚀 v8.0: 全球最强！ATR动态风控+凯利公式+18维度+五星评级"
+            help="v4.0: 适合稳健投资者，持仓5天 | v5.0: 适合进取投资者，追求短期爆发 | v6.0: 适合超短线高手，三级过滤只选板块龙头 | v7.0: 市场环境识别+行业轮动+动态权重 | v8.0: ATR动态风控+凯利公式+18维度+五星评级",
         )
         
         st.markdown("---")
         
         if "v4.0" in strategy_mode:
-            # --- 🏆 v4.0 潜伏为王 核心逻辑 ---
+            # ---  v4.0 潜伏为王 核心逻辑 ---
             
-            # 🎨 v4.0版本说明
-            exp_v4 = st.expander("📘 v4.0 策略说明", expanded=False)
+            #  v4.0版本说明
+            exp_v4 = st.expander("v4.0 策略说明", expanded=False)
             exp_v4.markdown("""
             <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                    🏆 v4.0 长期稳健版 - 潜伏为王策略
+                     v4.0 长期稳健版 - 潜伏为王策略
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
                     真实验证·56.6%胜率·5天黄金周期·年化10-15%·在启动前潜伏
@@ -7055,30 +7062,30 @@ def main():
             </div>
             """, unsafe_allow_html=True)
             
-            # 🔥 v4.0版本特别提示
+            #  v4.0版本特别提示
             if V4_EVALUATOR_AVAILABLE:
                 exp_v4.success("""
-                ✅ **当前使用v4.0潜伏为王版（已验证56.6%胜率）**
+                 **当前使用v4.0潜伏为王版（已验证56.6%胜率）**
                 
-                **🎯 核心理念：在启动前潜伏，而不是启动后追高！**
+                ** 核心理念：在启动前潜伏，而不是启动后追高！**
                 
-                **📊 8维100分评分体系：**
-                - 💎 **潜伏价值**：20分（全新！识别即将启动的底部股票）
-                - 📍 **底部特征**：20分（价格低位+超跌反弹）
-                - 📊 **量价配合**：15分（温和放量+主力吸筹）
-                - 🎯 **MACD趋势**：15分（金叉初期+能量柱递增）
-                - 📈 **均线多头**：10分（均线粘合+即将发散）
-                - 🏦 **主力行为**：10分（大单流入+筹码集中）
-                - 🚀 **启动确认**：5分（刚开始启动，不追高）
-                - ⚡ **涨停基因**：5分（历史爆发力）
+                ** 8维100分评分体系：**
+                -  **潜伏价值**：20分（全新！识别即将启动的底部股票）
+                -  **底部特征**：20分（价格低位+超跌反弹）
+                -  **量价配合**：15分（温和放量+主力吸筹）
+                -  **MACD趋势**：15分（金叉初期+能量柱递增）
+                -  **均线多头**：10分（均线粘合+即将发散）
+                -  **主力行为**：10分（大单流入+筹码集中）
+                -  **启动确认**：5分（刚开始启动，不追高）
+                -  **涨停基因**：5分（历史爆发力）
                 
-                **💡 适用场景：**
-                - ✅ 追求稳健收益的投资者
-                - ✅ 愿意等待潜伏期（3-7天）
-                - ✅ 注重安全边际和买入成本
-                - ✅ 持仓周期5天左右
+                ** 适用场景：**
+                -  追求稳健收益的投资者
+                -  愿意等待潜伏期（3-7天）
+                -  注重安全边际和买入成本
+                -  持仓周期5天左右
                 
-                **📈 真实回测数据（2000只股票）：**
+                ** 真实回测数据（2000只股票）：**
                 - 胜率：56.6%（超过目标52%）⭐⭐⭐
                 - 平均持仓：4.9天（接近5天黄金周期）
                 - 最大回撤：-3.27%（风险极小）
@@ -7086,37 +7093,37 @@ def main():
                 """)
             else:
                 exp_v4.error("""
-                ❌ **v4.0潜伏为王版评分器未找到**
+                 **v4.0潜伏为王版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v4.py` 文件存在
                 - 建议重启应用后重试
                 """)
                 st.stop()
             
-            # 🎯 选择扫描模式
-            st.markdown("### 🎯 选择扫描模式")
+            #  选择扫描模式
+            st.markdown("###  选择扫描模式")
             
             scan_mode = st.radio(
                 "扫描模式（v4.0）",
-                ["💎 综合优选 (100-500亿)", "👀 底部蓄势监控"],
+                [" 综合优选 (100-500亿)", " 底部蓄势监控"],
                 horizontal=True,
                 key="v4_scan_mode",
-                help="💡 综合优选：100-500亿黄金区间，流动性好 | 底部蓄势：监控即将启动的股票"
+                help=" 综合优选：100-500亿黄金区间，流动性好 | 底部蓄势：监控即将启动的股票"
             )
             
-            # 🎯 参数设置
+            #  参数设置
             st.markdown("---")
-            st.markdown("### ⚙️ 参数设置")
+            st.markdown("###  参数设置")
             
             # 市场环境提示
             st.info("""
-            **📊 v4.0策略说明：**
+            ** v4.0策略说明：**
             
             根据2000只股票真实回测，v4.0"潜伏为王"版本：
             - **60分起**：平衡点，信号数量充足（274个），胜率56.6%
             - **65分起**：更严格筛选，胜率会更高但信号数量减少
             - **70分起**：精选标准，适合保守投资者
             
-            **💡 建议：**
+            ** 建议：**
             - 新手建议从**60分**开始
             - 市值选择**100-500亿**黄金区间
             - 持仓周期**5天**左右
@@ -7137,14 +7144,14 @@ def main():
             
             with param_col2_v4:
                 scan_all_v4 = st.checkbox(
-                    "🌍 全市场扫描（推荐）",
+                    " 全市场扫描（推荐）",
                     value=True,
                     help="扫描所有A股，不限制市值范围",
                     key="scan_all_v4"
                 )
             
             # 高级选项（折叠）
-            with st.expander("⚙️ 高级筛选选项（可选）"):
+            with st.expander("高级筛选选项（可选）"):
                 col1, col2 = st.columns(2)
                 with col1:
                     cap_min_v4 = st.number_input(
@@ -7167,19 +7174,19 @@ def main():
                         key="cap_max_v4"
                     )
                 
-                st.info("💡 提示：勾选「全市场扫描」且市值都为0时，将扫描所有A股（约3000-5000只）")
+                st.info("提示：勾选「全市场扫描」且市值都为0时，将扫描所有A股（约3000-5000只）")
             
-            # 🚀 开始扫描按钮
+            #  开始扫描按钮
             st.markdown("---")
             
-            if st.button("🚀 开始扫描（v4.0潜伏为王）", type="primary", use_container_width=True, key="scan_btn_v4"):
-                with st.spinner(f"🔍 正在扫描全市场股票..."):
+            if st.button("开始扫描（v4.0潜伏为王）", type="primary", use_container_width=True, key="scan_btn_v4"):
+                with st.spinner(f"正在扫描全市场股票..."):
                     try:
                         # 获取数据
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
                         bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
                         
-                        # 🔥 构建查询条件（对齐v6.0逻辑）
+                        #  构建查询条件（对齐v6.0逻辑）
                         if scan_all_v4 and cap_min_v4 == 0 and cap_max_v4 == 0:
                             # 真正的全市场扫描（无市值限制）
                             query = """
@@ -7188,13 +7195,13 @@ def main():
                                 ORDER BY sb.circ_mv DESC
                             """
                             stocks_df = pd.read_sql_query(query, conn)
-                            st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
+                            st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
                         else:
                             # 按市值筛选
                             cap_min_wan = cap_min_v4 * 10000 if cap_min_v4 > 0 else 0
                             cap_max_wan = cap_max_v4 * 10000 if cap_max_v4 > 0 else 999999999
                             
-                            # 🔍 先统计数据库中所有股票的市值情况
+                            #  先统计数据库中所有股票的市值情况
                             total_query = """
                                 SELECT 
                                     COUNT(*) as total,
@@ -7215,7 +7222,7 @@ def main():
                             stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
                             
                             # 显示详细的统计信息
-                            with st.expander("📊 数据库统计信息", expanded=False):
+                            with st.expander("数据库统计信息", expanded=False):
                                 col1, col2, col3 = st.columns(3)
                                 with col1:
                                     st.metric("数据库总股票数", f"{total_stats['total'].iloc[0]}只")
@@ -7224,20 +7231,20 @@ def main():
                                 with col3:
                                     st.metric("市值范围", f"{total_stats['min_mv'].iloc[0]:.1f}-{total_stats['max_mv'].iloc[0]:.1f}亿")
                                 
-                                st.info(f"🔍 查询条件：{cap_min_wan}万元 ≤ 市值 ≤ {cap_max_wan}万元（即{cap_min_v4}亿-{cap_max_v4}亿）")
+                                st.info(f"查询条件：{cap_min_wan}万元 ≤ 市值 ≤ {cap_max_wan}万元（即{cap_min_v4}亿-{cap_max_v4}亿）")
                             
-                            st.info(f"📊 市值筛选模式：找到{len(stocks_df)}只股票（{cap_min_v4 if cap_min_v4 > 0 else 0}-{cap_max_v4 if cap_max_v4 > 0 else '不限'}亿）")
+                            st.info(f"市值筛选模式：找到{len(stocks_df)}只股票（{cap_min_v4 if cap_min_v4 > 0 else 0}-{cap_max_v4 if cap_max_v4 > 0 else '不限'}亿）")
                         
                         if stocks_df.empty:
-                            st.error(f"❌ 未找到符合条件的股票，请检查是否已更新市值数据")
-                            st.info("💡 提示：请先到Tab1（数据中心）点击「更新市值数据」")
+                            st.error(f"未找到符合条件的股票，请检查是否已更新市值数据")
+                            st.info("提示：请先到Tab1（数据中心）点击「更新市值数据」")
                             conn.close()
                         else:
                             # 显示市值范围确认
                             if len(stocks_df) > 0:
                                 actual_min_mv = stocks_df['circ_mv'].min() / 10000
                                 actual_max_mv = stocks_df['circ_mv'].max() / 10000
-                                st.success(f"✅ 实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元，开始八维评分...")
+                                st.success(f"实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元，开始八维评分...")
                             
                             # 评分结果列表
                             results = []
@@ -7323,10 +7330,12 @@ def main():
                             
                             # 显示结果
                             if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v4}分）")
+                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v4}分）")
                                 
                                 # 转换为DataFrame
                                 results_df = pd.DataFrame(results)
+                                _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
+                                _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
                                 
                                 # 保存到session_state
                                 st.session_state['v4_scan_results'] = results_df
@@ -7347,23 +7356,24 @@ def main():
                                     st.metric("S+A级", f"{grade_s+grade_a}只")
                                 
                                 st.markdown("---")
-                                st.subheader("🏆 推荐股票列表（v4.0潜伏为王·8维评分）")
+                                st.subheader("推荐股票列表（v4.0潜伏为王·8维评分）")
                                 
                                 # 选择显示模式
+                                _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
                                 view_mode = st.radio(
                                     "显示模式",
-                                    ["📊 完整评分", "🎯 核心指标", "💡 简洁模式"],
+                                    [m.strip() for m in _view_modes],
                                     horizontal=True,
                                     key="v4_view_mode"
                                 )
                                 
                                 # 根据模式选择列
-                                if view_mode == "📊 完整评分":
+                                if view_mode == "完整评分":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分', '评级',
                                                    '潜伏价值', '底部特征', '量价配合', 'MACD趋势', 
                                                    '均线多头', '主力行为', '启动确认', '涨停基因',
                                                    '最新价格', '止损价', '止盈价', '推荐理由']
-                                elif view_mode == "🎯 核心指标":
+                                elif view_mode == "核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分', '评级',
                                                    '潜伏价值', '底部特征', '最新价格', '止损价', '止盈价', '推荐理由']
                                 else:  # 简洁模式
@@ -7371,6 +7381,7 @@ def main():
                                                    '评级', '最新价格', '推荐理由']
                                 
                                 display_df = results_df[display_cols]
+                                display_df = _standardize_result_df(display_df, score_col="综合评分")
                                 
                                 # 显示表格（添加颜色）
                                 st.dataframe(
@@ -7399,28 +7410,28 @@ def main():
                                 # 操作建议
                                 st.markdown("---")
                                 st.info("""
-                                ### 💡 v4.0策略操作建议（潜伏为王）
+                                ###  v4.0策略操作建议（潜伏为王）
                                 
-                                **🎯 核心理念**: 在启动前潜伏，而不是启动后追高
+                                ** 核心理念**: 在启动前潜伏，而不是启动后追高
                                 
-                                **📊 评级说明**:
-                                - **S级(≥80分)**: 🔥 完美潜伏机会，重点关注，建议仓位18-20%
+                                ** 评级说明**:
+                                - **S级(≥80分)**:  完美潜伏机会，重点关注，建议仓位18-20%
                                 - **A级(70-79分)**: ⭐ 优质潜伏标的，积极关注，建议仓位15-18%
-                                - **B级(60-69分)**: 💡 良好机会，谨慎关注，建议仓位10-15%
-                                - **C级(50-59分)**: 📊 合格标的，保持观察，建议仓位5-10%
+                                - **B级(60-69分)**:  良好机会，谨慎关注，建议仓位10-15%
+                                - **C级(50-59分)**:  合格标的，保持观察，建议仓位5-10%
                                 
                                 **⏰ 持仓周期**: 5天（数据验证的黄金周期）
                                 
-                                **💰 止盈止损**:
+                                ** 止盈止损**:
                                 - 止损：严格执行-3%止损，或跌破止损价
                                 - 止盈：达到+4%或止盈价时分批止盈
                                 
-                                **📈 仓位管理**:
+                                ** 仓位管理**:
                                 - 单只股票：不超过20%仓位
                                 - 总仓位：最多持有3-5只
                                 - 分批建仓：首次50%，确认后加仓50%
                                 
-                                **⚠️ 风险提示**:
+                                ** 风险提示**:
                                 - 本策略经2000只股票、274个真实信号验证，胜率56.6%
                                 - 严格执行纪律，不追涨不抄底
                                 - 设置好止损，控制单笔亏损<3%
@@ -7431,35 +7442,35 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
-                                    label="📥 导出完整结果（CSV）",
+                                    label=" 导出完整结果（CSV）",
                                     data=csv,
                                     file_name=f"核心策略_V4_潜伏为王_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
                                 )
                                 
                             else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v4}分的股票\n\n**建议：**\n1. 降低评分阈值到50-55分\n2. 扩大市值范围\n3. 增加候选股票数量")
+                                st.warning(f"未找到≥{score_threshold_v4}分的股票\n\n**建议：**\n1. 降低评分阈值到50-55分\n2. 扩大市值范围\n3. 增加候选股票数量")
                     
                     except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
+                        st.error(f"扫描失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
             
             # 显示之前的扫描结果
             if 'v4_scan_results' in st.session_state:
                 st.markdown("---")
-                st.markdown("### 📋 上次扫描结果")
+                st.markdown("###  上次扫描结果")
                 results_df = st.session_state['v4_scan_results']
                 display_df = results_df.drop('原始数据', axis=1)
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 
         elif "稳定上涨" in strategy_mode:
-            exp_uptrend = st.expander("📘 稳定上涨策略说明", expanded=False)
+            exp_uptrend = st.expander("稳定上涨策略说明", expanded=False)
             exp_uptrend.markdown("""
             <div style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); 
                         padding: 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
-                <h2 style='margin:0; color: white;'>📈 稳定上涨策略</h2>
+                <h2 style='margin:0; color: white;'> 稳定上涨策略</h2>
                 <p style='margin:10px 0 0 0; font-size:1.05em; opacity:0.95;'>
                     目标：筛选“底部启动 / 回撤企稳 / 二次启动”的稳定上涨候选股（非收益保证）
                 </p>
@@ -7467,21 +7478,21 @@ def main():
             """, unsafe_allow_html=True)
 
             if not STABLE_UPTREND_AVAILABLE:
-                st.error("❌ 稳定上涨策略模块未找到，请确认 stable_uptrend_strategy.py 已放在系统目录")
+                st.error("稳定上涨策略模块未找到，请确认 stable_uptrend_strategy.py 已放在系统目录")
             else:
                 ctx = _StableUptrendContext(PERMANENT_DB_PATH, db_manager=db_manager)
                 render_stable_uptrend_strategy(ctx, pro=getattr(db_manager, "pro", None))
 
         elif "v5.0" in strategy_mode:
             evolve_v5_core = _load_evolve_params("v5_best.json")
-            # 🎨 全新顶级UI设计 - Hero Section
-            exp_v5 = st.expander("📘 v5.0 策略说明", expanded=False)
+            #  全新顶级UI设计 - Hero Section
+            exp_v5 = st.expander("v5.0 策略说明", expanded=False)
             exp_v5.markdown("""
             <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                    🚀 启动确认型选股 - 趋势爆发捕手 v5.0
+                     启动确认型选股 - 趋势爆发捕手 v5.0
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
                     启动确认版 · 8维度100分评分体系 · 重视趋势确认 · 追求爆发力
@@ -7507,48 +7518,48 @@ def main():
             </div>
             """, unsafe_allow_html=True)
             
-            # 🔥 v5.0版本特别提示
+            #  v5.0版本特别提示
             if V5_EVALUATOR_AVAILABLE:
                 exp_v5.success("""
-                ✅ **当前使用v5.0启动确认版**
+                 **当前使用v5.0启动确认版**
                 
-                **🎯 核心差异（对比v4.0潜伏为王版）：**
-                - 🚀 **启动确认**：10分 → 20分（翻倍！）
-                - 💰 **主力行为**：15分 → 18分（提权！）
-                - ⚡ **涨停基因**：5分 → 8分（提权！）
-                - 💎 **潜伏价值**：20分 → 10分（降权）
-                - 📍 **底部特征**：20分 → 10分（降权）
+                ** 核心差异（对比v4.0潜伏为王版）：**
+                -  **启动确认**：10分 → 20分（翻倍！）
+                -  **主力行为**：15分 → 18分（提权！）
+                -  **涨停基因**：5分 → 8分（提权！）
+                -  **潜伏价值**：20分 → 10分（降权）
+                -  **底部特征**：20分 → 10分（降权）
                 
-                **💡 适用场景：**
-                - ✅ 想要确认趋势后买入
-                - ✅ 追求短期爆发力
-                - ✅ 不想等待潜伏期
-                - ✅ 愿意承担适度追高风险
+                ** 适用场景：**
+                -  想要确认趋势后买入
+                -  追求短期爆发力
+                -  不想等待潜伏期
+                -  愿意承担适度追高风险
                 
-                **⚠️ 注意：**
+                ** 注意：**
                 - 启动确认型买入点相对较高
                 - 适合短期操作，需及时止盈
                 - 建议配合技术面分析
                 """)
             else:
                 exp_v5.error("""
-                ❌ **v5.0启动确认版评分器未找到**
+                 **v5.0启动确认版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v5.py` 文件存在
                 - 建议重启应用后重试
                 """)
                 st.stop()
             
-            # 🎯 选择模式
-            st.markdown("### 🎯 选择扫描模式")
+            #  选择模式
+            st.markdown("###  选择扫描模式")
             
-            # 🔥 市场环境提示
+            #  市场环境提示
             exp_v5.info("""
-            **📊 当前市场环境说明：**
+            ** 当前市场环境说明：**
             
             v5.0"启动确认版"要求股票已经明确启动（站上均线、连续阳线、放量上涨），评分标准较严格。
             根据500只股票测试，平均分约36分，≥60分的股票约占4.6%。
             
-            **💡 建议：**
+            ** 建议：**
             - 当前市场环境下，建议使用**50-60分**作为筛选标准
             - 如果想要更保守的潜伏策略，建议使用**v4.0"潜伏为王"**
             - v5.0适合追求"确认趋势后买入"的投资者
@@ -7556,17 +7567,17 @@ def main():
             
             scan_mode_v5 = st.radio(
                 "选择模式（v5.0）",
-                ["🚀 强势启动（≥60分）- 趋势明确", 
-                 "🔥 即将爆发（55-59分）- 蓄势待发",
-                 "👀 潜在机会（50-54分）- 提前关注"],
-                help="💡 强势启动：60分起，趋势已确认 | 即将爆发：准备启动 | 潜在机会：提前布局",
+                [" 强势启动（≥60分）- 趋势明确", 
+                 " 即将爆发（55-59分）- 蓄势待发",
+                 " 潜在机会（50-54分）- 提前关注"],
+                help=" 强势启动：60分起，趋势已确认 | 即将爆发：准备启动 | 潜在机会：提前布局",
                 horizontal=True,
                 key="scan_mode_v5"
             )
             
-            # 🎯 参数设置
+            #  参数设置
             st.markdown("---")
-            st.markdown("### ⚙️ 参数设置")
+            st.markdown("###  参数设置")
             
             param_col1_v5, param_col2_v5, param_col3_v5 = st.columns(3)
             
@@ -7622,15 +7633,15 @@ def main():
                     key="cap_max_v5"
                 )
             
-            st.info("ℹ️ v5.0策略将扫描所有符合市值条件的股票（无数量限制）")
+            st.info("v5.0策略将扫描所有符合市值条件的股票（无数量限制）")
             evo_hold = evolve_v5_core.get("params", {}).get("holding_days")
             if isinstance(evo_hold, (int, float)):
-                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold)} 天（来源：自动进化）")
+                st.caption(f"自动进化建议持仓周期：{int(evo_hold)} 天（来源：自动进化）")
             
-            # 🚀 开始扫描按钮
+            #  开始扫描按钮
             st.markdown("---")
             
-            if st.button("🚀 开始扫描（v5.0启动确认型）", type="primary", use_container_width=True, key="scan_btn_v5"):
+            if st.button("开始扫描（v5.0启动确认型）", type="primary", use_container_width=True, key="scan_btn_v5"):
                 with st.spinner("正在扫描..."):
                     try:
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
@@ -7650,17 +7661,17 @@ def main():
                         stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
                         
                         if stocks_df.empty:
-                            st.error(f"❌ 未找到符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，请检查是否已更新市值数据")
-                            st.info("💡 提示：请先到Tab5（数据中心）点击「更新市值数据」")
+                            st.error(f"未找到符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，请检查是否已更新市值数据")
+                            st.info("提示：请先到Tab5（数据中心）点击「更新市值数据」")
                             conn.close()
                         else:
-                            st.success(f"✅ 找到 {len(stocks_df)} 只符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，开始评分...")
+                            st.success(f"找到 {len(stocks_df)} 只符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，开始评分...")
                             
                             # 显示市值范围确认
                             if len(stocks_df) > 0:
                                 actual_min_mv = stocks_df['circ_mv'].min() / 10000
                                 actual_max_mv = stocks_df['circ_mv'].max() / 10000
-                                st.info(f"📊 实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元")
+                                st.info(f"实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元")
                             
                             # 评分结果列表
                             results = []
@@ -7746,7 +7757,7 @@ def main():
                             
                             # 显示结果
                             if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v5}分）")
+                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v5}分）")
                                 
                                 # 转换为DataFrame
                                 results_df = pd.DataFrame(results)
@@ -7770,23 +7781,24 @@ def main():
                                     st.metric("S+A级", f"{grade_s+grade_a}只")
                                 
                                 st.markdown("---")
-                                st.subheader("🏆 推荐股票列表（v5.0启动确认·8维评分）")
+                                st.subheader("推荐股票列表（v5.0启动确认·8维评分）")
                                 
                                 # 选择显示模式
+                                _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
                                 view_mode = st.radio(
                                     "显示模式",
-                                    ["📊 完整评分", "🎯 核心指标", "💡 简洁模式"],
+                                    [m.strip() for m in _view_modes],
                                     horizontal=True,
                                     key="v5_view_mode"
                                 )
                                 
                                 # 根据模式选择列
-                                if view_mode == "📊 完整评分":
+                                if view_mode == "完整评分":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '启动确认', '主力行为', '涨停基因', 'MACD趋势', 
                                                    '量价配合', '均线多头', '潜伏价值', '底部特征',
                                                    '最新价格', '止损价', '止盈价', '推荐理由']
-                                elif view_mode == "🎯 核心指标":
+                                elif view_mode == "核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '启动确认', '主力行为', '最新价格', '止损价', '止盈价', '推荐理由']
                                 else:  # 简洁模式
@@ -7794,6 +7806,7 @@ def main():
                                                    '资金加分', '评级', '最新价格', '推荐理由']
                                 
                                 display_df = results_df[display_cols]
+                                display_df = _standardize_result_df(display_df, score_col="综合评分")
                                 
                                 # 显示表格
                                 st.dataframe(
@@ -7824,24 +7837,24 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
-                                    label="📥 导出完整结果（CSV）",
+                                    label=" 导出完整结果（CSV）",
                                     data=csv,
                                     file_name=f"核心策略_V5_启动确认_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
                                 )
                                 
                             else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v5}分的股票\n\n**建议：**\n1. 降低评分阈值到50-55分\n2. 扩大市值范围")
+                                st.warning(f"未找到≥{score_threshold_v5}分的股票\n\n**建议：**\n1. 降低评分阈值到50-55分\n2. 扩大市值范围")
                     
                     except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
+                        st.error(f"扫描失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
             
             # 显示之前的扫描结果
             if 'v5_scan_results' in st.session_state:
                 st.markdown("---")
-                st.markdown("### 📋 上次扫描结果")
+                st.markdown("###  上次扫描结果")
                 results_df = st.session_state['v5_scan_results']
                 display_df = results_df.drop('原始数据', axis=1)
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
@@ -7849,16 +7862,16 @@ def main():
         
         elif "v6.0" in strategy_mode:
             evolve_v6_core = _load_evolve_params("v6_best.json")
-            # --- ⚡ v6.0 超短线·巅峰版 核心逻辑 ---
+            # ---  v6.0 超短线·巅峰版 核心逻辑 ---
             
-            # 🎨 v6.0版本说明
-            exp_v6 = st.expander("📘 v6.0 策略说明", expanded=False)
+            #  v6.0版本说明
+            exp_v6 = st.expander("v6.0 策略说明", expanded=False)
             exp_v6.markdown("""
             <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                    ⚡ v6.0 超短线狙击·巅峰版 - 只选市场最强1-3%
+                     v6.0 超短线狙击·巅峰版 - 只选市场最强1-3%
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
                     三级过滤·七维严格评分·精英筛选·胜率80-90%·单次8-15%
@@ -7884,63 +7897,63 @@ def main():
             </div>
             """, unsafe_allow_html=True)
             
-            # 🔥 v6.0版本特别提示
+            #  v6.0版本特别提示
             if V6_EVALUATOR_AVAILABLE:
                 exp_v6.success("""
-                ✅ **当前使用v6.0超短线狙击·巅峰版**
+                 **当前使用v6.0超短线狙击·巅峰版**
                 
-                **🎯 核心理念：三级过滤，只选市场最强的1-3%！**
+                ** 核心理念：三级过滤，只选市场最强的1-3%！**
                 
                 **【第一级】必要条件过滤（硬性淘汰）：**
-                - ✅ 板块3日涨幅 > 1%（板块必须走强）
-                - ✅ 资金净流入 > 0（必须有资金）
-                - ✅ 股票3日涨幅 > 0（必须上涨）
-                - ✅ 板块内排名 ≤ 30%（必须是板块前列）
-                - ✅ 价格位置 < 85%（不追高）
-                - ✅ 放量 > 0.8倍（不能严重缩量）
+                -  板块3日涨幅 > 1%（板块必须走强）
+                -  资金净流入 > 0（必须有资金）
+                -  股票3日涨幅 > 0（必须上涨）
+                -  板块内排名 ≤ 30%（必须是板块前列）
+                -  价格位置 < 85%（不追高）
+                -  放量 > 0.8倍（不能严重缩量）
                 
                 **【第二级】七维严格评分（极度严格）：**
-                - 💰 **资金流向**：30分（连续3天+20000万才给15分）
-                - 🔥 **板块热度**：25分（涨幅>8%才给12分）
-                - 🚀 **短期动量**：20分（涨幅>15%才给12分）
-                - 👑 **龙头属性**：10分（板块前3名才给4分以上）
-                - 💪 **相对强度**：8分（跑赢>10%才给8分）
-                - 📈 **技术突破**：5分（放量>2.5倍才给5分）
-                - 🛡️ **安全边际**：2分
+                -  **资金流向**：30分（连续3天+20000万才给15分）
+                -  **板块热度**：25分（涨幅>8%才给12分）
+                -  **短期动量**：20分（涨幅>15%才给12分）
+                -  **龙头属性**：10分（板块前3名才给4分以上）
+                -  **相对强度**：8分（跑赢>10%才给8分）
+                -  **技术突破**：5分（放量>2.5倍才给5分）
+                -  **安全边际**：2分
                 
                 **【第三级】精英筛选：**
                 - 协同加分（0-30分）：板块总龙头+15分，资金爆发+12分
                 - 风险扣分（0-60分）：追高-25分，暴涨-20分，连续涨停-15分
                 
-                **💡 适用场景：**
-                - ✅ 超短线高手
-                - ✅ 只做板块龙头
-                - ✅ 追求极致精准
-                - ✅ 宁缺毋滥
+                ** 适用场景：**
+                -  超短线高手
+                -  只做板块龙头
+                -  追求极致精准
+                -  宁缺毋滥
                 
-                **📈 预期效果：**
+                ** 预期效果：**
                 - 85分门槛：10-50只精选标的，胜率80-85%
                 - 90分门槛：3-10只极品标的，胜率85-90%
                 - 95分门槛：1-3只顶级标的，胜率90%+
                 """)
             else:
                 exp_v6.error("""
-                ❌ **v6.0超短线狙击·巅峰版评分器未找到**
+                 **v6.0超短线狙击·巅峰版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v6_ultimate.py` 文件存在
                 - 建议重启应用后重试
                 """)
                 st.stop()
             
-            # 🎯 选择扫描模式
-            st.markdown("### 🎯 选择扫描模式")
+            #  选择扫描模式
+            st.markdown("###  选择扫描模式")
             
             scan_mode_v6 = st.radio(
                 "选择模式（v6.0巅峰版）",
-                ["👑 顶级龙头（≥90分）- 极品标的3-10只", 
-                 "🔥 精选龙头（≥85分）- 精选标的10-50只",
-                 "⚡ 候选池（≥80分）- 候选标的50-100只"],
+                [" 顶级龙头（≥90分）- 极品标的3-10只", 
+                 " 精选龙头（≥85分）- 精选标的10-50只",
+                 " 候选池（≥80分）- 候选标的50-100只"],
                 horizontal=True,
-                help="👑 90分：极品，胜率85-90% | 🔥 85分：精选，胜率80-85% | ⚡ 80分：候选，胜率75-80%",
+                help=" 90分：极品，胜率85-90% |  85分：精选，胜率80-85% |  80分：候选，胜率75-80%",
                 key="scan_mode_v6_tab1"
             )
             
@@ -7961,18 +7974,18 @@ def main():
                 st.metric("评分阈值", f"{score_threshold_v6_tab1}分", help="自动根据模式设置")
             evo_hold_v6 = evolve_v6_core.get("params", {}).get("holding_days")
             if isinstance(evo_hold_v6, (int, float)):
-                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v6)} 天（来源：自动进化）")
+                st.caption(f"自动进化建议持仓周期：{int(evo_hold_v6)} 天（来源：自动进化）")
             
             with col_v6_b:
                 scan_all_stocks = st.checkbox(
-                    "🌍 全市场扫描（推荐）",
+                    " 全市场扫描（推荐）",
                     value=True,
                     help="扫描所有A股，不限制市值范围",
                     key="scan_all_v6_tab1"
                 )
             
             # 高级选项（折叠）
-            with st.expander("⚙️ 高级筛选选项（可选）"):
+            with st.expander("高级筛选选项（可选）"):
                 col1, col2 = st.columns(2)
                 with col1:
                     cap_min_v6_tab1 = st.number_input(
@@ -7988,8 +8001,8 @@ def main():
                     )
             
             # 扫描按钮
-            if st.button("🔥 开始扫描（v6.0巅峰版）", type="primary", use_container_width=True, key="scan_v6_tab1"):
-                with st.spinner("⚡ v6.0巅峰版全市场扫描中...（三级过滤+严格评分）"):
+            if st.button("开始扫描（v6.0巅峰版）", type="primary", use_container_width=True, key="scan_v6_tab1"):
+                with st.spinner("v6.0巅峰版全市场扫描中...（三级过滤+严格评分）"):
                     try:
                         # 获取股票列表
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
@@ -8003,7 +8016,7 @@ def main():
                                 ORDER BY sb.circ_mv DESC
                             """
                             stocks_df = pd.read_sql_query(query, conn)
-                            st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
+                            st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
                         else:
                             # 按市值筛选
                             cap_min_wan = cap_min_v6_tab1 * 10000 if cap_min_v6_tab1 > 0 else 0
@@ -8019,10 +8032,10 @@ def main():
                             stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
                         
                         if len(stocks_df) == 0:
-                            st.error(f"❌ 未找到符合市值条件（{cap_min_v6_tab1}-{cap_max_v6_tab1}亿）的股票")
+                            st.error(f"未找到符合市值条件（{cap_min_v6_tab1}-{cap_max_v6_tab1}亿）的股票")
                             conn.close()
                         else:
-                            st.info(f"✅ 找到 {len(stocks_df)} 只符合市值条件的股票，开始三级过滤...")
+                            st.info(f"找到 {len(stocks_df)} 只符合市值条件的股票，开始三级过滤...")
                             bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
                             
                             # 进度条
@@ -8114,7 +8127,7 @@ def main():
                             
                             # 显示结果
                             st.markdown("---")
-                            st.markdown(f"### 📊 三级过滤结果")
+                            st.markdown(f"###  三级过滤结果")
                             
                             col1, col2, col3, col4 = st.columns(4)
                             with col1:
@@ -8131,10 +8144,11 @@ def main():
                                          delta=f"{len(results)/len(stocks_df)*100:.2f}%")
                             
                             if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v6_tab1}分）")
+                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v6_tab1}分）")
                                 
                                 # 转换为DataFrame
                                 results_df = pd.DataFrame(results)
+                                _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
                                 
                                 # 保存到session_state
                                 st.session_state['v6_scan_results_tab1'] = results_df
@@ -8156,21 +8170,22 @@ def main():
                                     st.metric("S+A级", f"{grade_s+grade_a}只")
                                 
                                 st.markdown("---")
-                                st.subheader("🏆 推荐股票列表（v6.0巅峰版·七维评分）")
+                                st.subheader("推荐股票列表（v6.0巅峰版·七维评分）")
                                 
                                 # 选择显示模式
+                                _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
                                 view_mode = st.radio(
                                     "显示模式",
-                                    ["📊 完整评分", "🎯 核心指标", "📝 简洁模式"],
+                                    [m.strip() for m in _view_modes],
                                     horizontal=True,
                                     key="view_mode_v6_tab1"
                                 )
                                 
-                                if view_mode == "📊 完整评分":
+                                if view_mode == "完整评分":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '资金流向', '板块热度', '短期动量', '龙头属性', '相对强度', '技术突破', '安全边际',
                                                    '最新价格', '止损价', '止盈价', '推荐理由', '协同组合']
-                                elif view_mode == "🎯 核心指标":
+                                elif view_mode == "核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '资金流向', '板块热度', '龙头属性', '最新价格', '止损价', '止盈价', '推荐理由']
                                 else:  # 简洁模式
@@ -8178,6 +8193,7 @@ def main():
                                                    '资金加分', '评级', '最新价格', '推荐理由', '协同组合']
                                 
                                 display_df = results_df[display_cols]
+                                display_df = _standardize_result_df(display_df, score_col="综合评分")
                                 
                                 # 显示表格
                                 st.dataframe(
@@ -8208,40 +8224,40 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = export_df.to_csv(index=False, encoding='utf-8-sig')
                                 st.download_button(
-                                    label="📥 导出完整结果（CSV）",
+                                    label=" 导出完整结果（CSV）",
                                     data=csv,
                                     file_name=f"v6.0_巅峰版_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv"
                                 )
                                 
                             else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v6_tab1}分的股票\n\n**说明：**\nv6.0巅峰版使用极度严格的三级过滤标准，只选市场最强的1-3%。\n\n**建议：**\n1. 降低评分阈值到80分\n2. 扩大市值范围到50-2000亿\n3. 这是正常现象，说明当前市场没有符合顶级标准的股票")
+                                st.warning(f"未找到≥{score_threshold_v6_tab1}分的股票\n\n**说明：**\nv6.0巅峰版使用极度严格的三级过滤标准，只选市场最强的1-3%。\n\n**建议：**\n1. 降低评分阈值到80分\n2. 扩大市值范围到50-2000亿\n3. 这是正常现象，说明当前市场没有符合顶级标准的股票")
                     
                     except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
+                        st.error(f"扫描失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
             
             # 显示之前的扫描结果
             if 'v6_scan_results_tab1' in st.session_state:
                 st.markdown("---")
-                st.markdown("### 📋 上次扫描结果")
+                st.markdown("###  上次扫描结果")
                 results_df = st.session_state['v6_scan_results_tab1']
                 display_df = results_df.drop('原始数据', axis=1)
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
         
         elif "v7.0" in strategy_mode:
             evolve_v7_core = _load_evolve_params("v7_best.json")
-            # --- 🌟 v7.0 终极智能选股系统 核心逻辑 ---
+            # ---  v7.0 终极智能选股系统 核心逻辑 ---
             
-            # 🎨 v7.0版本说明
-            exp_v7 = st.expander("📘 v7.0 策略说明", expanded=False)
+            #  v7.0版本说明
+            exp_v7 = st.expander("v7.0 策略说明", expanded=False)
             exp_v7.markdown("""
             <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%, #f093fb 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                    🌟 v7.0 终极智能选股系统 - 全球顶级标准
+                     v7.0 终极智能选股系统 - 全球顶级标准
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
                     市场环境识别·行业轮动·动态权重·三层过滤·预期胜率62-70%
@@ -8267,63 +8283,63 @@ def main():
             </div>
             """, unsafe_allow_html=True)
             
-            # 🔥 v7.0版本特别提示
+            #  v7.0版本特别提示
             if V7_EVALUATOR_AVAILABLE:
                 exp_v7.success("""
-                ✅ **当前使用v7.0终极智能选股系统（全球顶级标准）**
+                 **当前使用v7.0终极智能选股系统（全球顶级标准）**
                 
-                **🎯 核心创新：五大智能系统协同工作！**
+                ** 核心创新：五大智能系统协同工作！**
                 
-                **【系统1】市场环境识别器 🌡️**
-                - 🐮 稳健牛市：追涨有效，趋势为王
-                - 🐮⚡ 波动牛市：波段操作，注意回调
-                - 🐻 熊市：安全第一，超跌反弹
-                - 🐻💥 急跌恐慌：空仓观望
-                - 📊 震荡市：潜伏为王，等待突破
+                **【系统1】市场环境识别器 **
+                -  稳健牛市：追涨有效，趋势为王
+                -  波动牛市：波段操作，注意回调
+                -  熊市：安全第一，超跌反弹
+                -  急跌恐慌：空仓观望
+                -  震荡市：潜伏为王，等待突破
                 
-                **【系统2】市场情绪计算器 😊**
+                **【系统2】市场情绪计算器 **
                 - 涨跌比分析（权重50%）
                 - 涨停跌停比（权重30%）
                 - 平均涨跌幅（权重20%）
                 → 情绪指标：-1（极度恐慌）到 +1（极度贪婪）
                 
-                **【系统3】行业轮动分析器 🔄**
+                **【系统3】行业轮动分析器 **
                 - 自动识别热门行业Top8
                 - 行业热度：5日平均涨幅+上涨比例+涨停数量
                 - 热门行业加分：Top1(+10分), Top3(+7分), Top5(+5分)
                 
-                **【系统4】动态权重系统 ⚖️**
+                **【系统4】动态权重系统 **
                 - 根据市场环境自动调整v4.0八维权重
                 - 牛市：提高趋势和多头权重
                 - 熊市：提高底部和安全权重
                 - 震荡市：使用平衡权重
                 
-                **【系统5】三层智能过滤器 🎯**
+                **【系统5】三层智能过滤器 **
                 - 过滤器1：市场情绪过滤（恐慌/贪婪提高门槛）
                 - 过滤器2：行业景气度过滤（冷门行业提高门槛）
                 - 过滤器3：个股资金流向过滤（成交量萎缩提高门槛）
                 
-                **💡 适用场景：**
-                - ✅ 追求稳定高胜率
-                - ✅ 希望系统自动适应市场
-                - ✅ 看重行业轮动机会
-                - ✅ 需要智能风险控制
+                ** 适用场景：**
+                -  追求稳定高胜率
+                -  希望系统自动适应市场
+                -  看重行业轮动机会
+                -  需要智能风险控制
                 
-                **📈 预期效果：**
+                ** 预期效果：**
                 - 短期（1-3个月）：胜率55-62%
                 - 中期（6-12个月）：胜率60-68%
                 - 长期（2-3年）：胜率62-70%，达到优秀私募水平
                 """)
             else:
                 exp_v7.error("""
-                ❌ **v7.0终极智能选股系统评分器未找到**
+                 **v7.0终极智能选股系统评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v7_ultimate.py` 文件存在
                 - 建议重启应用后重试
                 """)
                 st.stop()
             
-            # 🎯 参数设置
-            st.markdown("### 🎯 扫描参数设置")
+            #  参数设置
+            st.markdown("###  扫描参数设置")
             
             col1, col2, col3 = st.columns(3)
             
@@ -8334,18 +8350,18 @@ def main():
                     "评分阈值",
                     min_value=50,
                     max_value=90,
-                    value=v7_default,  # ✅ 默认使用自动进化结果
+                    value=v7_default,  #  默认使用自动进化结果
                     step=5,
                     help="推荐70分起步，适应性强",
                     key="score_threshold_v7_tab1"
                 )
             evo_hold_v7 = evolve_v7_core.get("params", {}).get("holding_days")
             if isinstance(evo_hold_v7, (int, float)):
-                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v7)} 天（来源：自动进化）")
+                st.caption(f"自动进化建议持仓周期：{int(evo_hold_v7)} 天（来源：自动进化）")
             
             with col2:
                 scan_all_v7 = st.checkbox(
-                    "🌍 全市场扫描",
+                    " 全市场扫描",
                     value=True,
                     help="扫描所有A股（推荐）",
                     key="scan_all_v7_tab1"
@@ -8353,14 +8369,14 @@ def main():
             
             with col3:
                 show_details = st.checkbox(
-                    "📊 显示详细信息",
+                    " 显示详细信息",
                     value=True,
                     help="显示市场环境、行业轮动等信息",
                     key="show_details_v7_tab1"
                 )
             
             # 高级选项（折叠）
-            with st.expander("⚙️ 高级筛选选项（可选）"):
+            with st.expander("高级筛选选项（可选）"):
                 col1, col2 = st.columns(2)
                 with col1:
                     cap_min_v7 = st.number_input(
@@ -8384,8 +8400,8 @@ def main():
                     )
             
             # 扫描按钮
-            if st.button("🚀 开始智能扫描（v7.0）", type="primary", use_container_width=True, key="scan_v7_tab1"):
-                with st.spinner("🌟 v7.0终极智能系统扫描中...（识别环境→计算情绪→分析行业→动态评分→三层过滤）"):
+            if st.button("开始智能扫描（v7.0）", type="primary", use_container_width=True, key="scan_v7_tab1"):
+                with st.spinner("v7.0终极智能系统扫描中...（识别环境→计算情绪→分析行业→动态评分→三层过滤）"):
                     try:
                         # 重置v7.0缓存
                         if hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
@@ -8403,7 +8419,7 @@ def main():
                                 ORDER BY sb.circ_mv DESC
                             """
                             stocks_df = pd.read_sql_query(query, conn)
-                            st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
+                            st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
                         else:
                             # 按市值筛选
                             cap_min_wan = cap_min_v7 * 10000 if cap_min_v7 > 0 else 0
@@ -8420,10 +8436,10 @@ def main():
                             stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
                         
                         if len(stocks_df) == 0:
-                            st.error(f"❌ 未找到符合条件的股票")
+                            st.error(f"未找到符合条件的股票")
                             conn.close()
                         else:
-                            st.info(f"✅ 找到 {len(stocks_df)} 只候选股票，开始智能评分...")
+                            st.info(f"找到 {len(stocks_df)} 只候选股票，开始智能评分...")
                             
                             # 显示市场环境信息
                             if show_details and hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
@@ -8433,14 +8449,14 @@ def main():
                                 
                                 col1, col2, col3 = st.columns(3)
                                 with col1:
-                                    st.metric("🌡️ 市场环境", market_regime)
+                                    st.metric("市场环境", market_regime)
                                 with col2:
-                                    sentiment_emoji = "😊" if market_sentiment > 0.3 else "😐" if market_sentiment > -0.3 else "😟"
+                                    sentiment_emoji = "" if market_sentiment > 0.3 else "" if market_sentiment > -0.3 else ""
                                     st.metric(f"{sentiment_emoji} 市场情绪", f"{market_sentiment:.2f}")
                                 with col3:
-                                    st.metric("🔥 热门行业", f"Top{len(hot_industries)}")
+                                    st.metric("热门行业", f"Top{len(hot_industries)}")
                                 
-                                with st.expander("📊 查看热门行业详情"):
+                                with st.expander("查看热门行业详情"):
                                     for i, ind in enumerate(hot_industries, 1):
                                         heat = vp_analyzer.evaluator_v7.industry_analyzer.sector_performance.get(ind, {}).get('heat', 0)
                                         st.text(f"{i}. {ind} (热度: {heat:.2f})")
@@ -8529,7 +8545,7 @@ def main():
                             
                             # 显示结果
                             st.markdown("---")
-                            st.markdown(f"### 📊 智能扫描结果")
+                            st.markdown(f"###  智能扫描结果")
                             
                             col1, col2, col3 = st.columns(3)
                             with col1:
@@ -8541,11 +8557,12 @@ def main():
                                 st.metric("最终推荐", f"{len(results)}只",
                                          delta=f"{len(results)/len(stocks_df)*100:.2f}%")
                             
-                            if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v7}分）")
-                                
-                                # 转换为DataFrame
-                                results_df = pd.DataFrame(results)
+                                if results:
+                                    st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v7}分）")
+                                    
+                                    # 转换为DataFrame
+                                    results_df = pd.DataFrame(results)
+                                    _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
                                 
                                 # 保存到session_state
                                 st.session_state['v7_scan_results_tab1'] = results_df
@@ -8570,21 +8587,22 @@ def main():
                                     st.metric("热门行业", f"{hot_count}只")
                                 
                                 st.markdown("---")
-                                st.subheader("🏆 智能推荐股票列表（v7.0·动态权重）")
+                                st.subheader("智能推荐股票列表（v7.0·动态权重）")
                                 
                                 # 选择显示模式
+                                _view_modes = [" 完整信息", " 核心指标", " 简洁模式"]
                                 view_mode = st.radio(
                                     "显示模式",
-                                    ["📊 完整信息", "🎯 核心指标", "📝 简洁模式"],
+                                    [m.strip() for m in _view_modes],
                                     horizontal=True,
                                     key="view_mode_v7_tab1"
                                 )
                                 
-                                if view_mode == "📊 完整信息":
+                                if view_mode == "完整信息":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '市场环境', '行业热度', '行业排名', '行业加分',
                                                    '最新价格', '智能止损', '智能止盈', '推荐理由']
-                                elif view_mode == "🎯 核心指标":
+                                elif view_mode == "核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '行业热度', '行业排名', '最新价格', '智能止损', '智能止盈']
                                 else:  # 简洁模式
@@ -8592,6 +8610,7 @@ def main():
                                                    '资金加分', '评级', '最新价格', '推荐理由']
                                 
                                 display_df = results_df[display_cols]
+                                display_df = _standardize_result_df(display_df, score_col="综合评分")
                                 
                                 # 显示表格
                                 st.dataframe(
@@ -8606,7 +8625,7 @@ def main():
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="⭐⭐⭐⭐⭐:极力推荐 ⭐⭐⭐⭐:强烈推荐",
+                                            help="评级：S/A/B/C",
                                             width="medium"
                                         ),
                                         "推荐理由": st.column_config.TextColumn(
@@ -8622,40 +8641,40 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
-                                    label="📥 导出完整结果（CSV）",
+                                    label=" 导出完整结果（CSV）",
                                     data=csv,
                                     file_name=f"核心策略_V7_智能选股_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
                                 )
                                 
                             else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v7}分的股票\n\n**说明：**\nv7.0使用动态权重+三层过滤，门槛会根据市场环境自动调整。\n\n**建议：**\n1. 降低评分阈值到60分\n2. 查看市场环境信息，了解当前市场状态\n3. 当前可能不是最佳入场时机")
+                                st.warning(f"未找到≥{score_threshold_v7}分的股票\n\n**说明：**\nv7.0使用动态权重+三层过滤，门槛会根据市场环境自动调整。\n\n**建议：**\n1. 降低评分阈值到60分\n2. 查看市场环境信息，了解当前市场状态\n3. 当前可能不是最佳入场时机")
                     
                     except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
+                        st.error(f"扫描失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
             
             # 显示之前的扫描结果
             if 'v7_scan_results_tab1' in st.session_state:
                 st.markdown("---")
-                st.markdown("### 📋 上次扫描结果")
+                st.markdown("###  上次扫描结果")
                 results_df = st.session_state['v7_scan_results_tab1']
                 display_df = results_df.drop('原始数据', axis=1)
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
         elif "v8.0" in strategy_mode:
             evolve_v8_core = _load_evolve_params("v8_best.json")
-            # --- 🚀🚀🚀 v8.0 终极进化版 核心逻辑 ---
+            # ---  v8.0 终极进化版 核心逻辑 ---
             
-            # 🎨 v8.0版本说明
-            exp_v8 = st.expander("📘 v8.0 策略说明", expanded=False)
+            #  v8.0版本说明
+            exp_v8 = st.expander("v8.0 策略说明", expanded=False)
             exp_v8.markdown("""
             <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #ffd700 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                    🚀🚀🚀 v8.0 终极进化版 - 全球最强量化系统
+                     v8.0 终极进化版 - 全球最强量化系统
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
                     ATR动态风控·凯利公式·18维度评分·五星评级·预期胜率70-78%
@@ -8681,31 +8700,31 @@ def main():
             </div>
             """, unsafe_allow_html=True)
             
-            # 🔥 v8.0版本特别提示
+            #  v8.0版本特别提示
             if V8_EVALUATOR_AVAILABLE:
                 exp_v8.success("""
-                ✅ **当前使用v8.0终极进化版（全球最强量化系统）**
+                 **当前使用v8.0终极进化版（全球最强量化系统）**
                 
-                **🎯 六大革命性创新！**
+                ** 六大革命性创新！**
                 
-                **【创新1】ATR动态风控系统 🛡️**
+                **【创新1】ATR动态风控系统 **
                 - 根据股票波动率自动调整止损止盈位
                 - 波动大 → 止损宽松，波动小 → 止损严格
                 - 告别"一刀切"，每只股票都有定制化风控
                 
-                **【创新2】三级市场过滤器（择时系统）🌡️**
+                **【创新2】三级市场过滤器（择时系统）**
                 - Level 1: 市场趋势（20日均线）
                 - Level 2: 市场情绪（涨跌比例）
                 - Level 3: 市场热度（成交量）
                 → 只在好市场中选股，熊市自动退出
                 
-                **【创新3】凯利公式仓位管理 💰**
+                **【创新3】凯利公式仓位管理 **
                 - 根据胜率和盈亏比自动计算最优仓位
                 - 高胜率+高盈亏比 → 重仓
                 - 低胜率 → 轻仓甚至不操作
                 - 资金利用效率提升30-50%
                 
-                **【创新4】18维度高级评分（v7的8维→v8的18维）📊**
+                **【创新4】18维度高级评分（v7的8维→v8的18维）**
                 - v7的8个基础维度
                 - +10个高级因子：
                   1. 换手率质量（识别健康放量）
@@ -8726,32 +8745,32 @@ def main():
                 - 60-69 ⭐⭐ 可考虑（预期胜率55-62%）
                 - <60 ⭐ 不推荐（预期胜率<55%）
                 
-                **【创新6】动态再平衡系统 🔄**
+                **【创新6】动态再平衡系统 **
                 - 自动锁定50%利润
                 - 持续评分，低于阈值自动换股
                 - 识别更好机会，优化持仓组合
                 
-                **💡 适用场景：**
-                - ✅ 追求极致胜率和收益
-                - ✅ 希望系统全自动风控
-                - ✅ 需要精准择时能力
-                - ✅ 追求专业私募基金水平
+                ** 适用场景：**
+                -  追求极致胜率和收益
+                -  希望系统全自动风控
+                -  需要精准择时能力
+                -  追求专业私募基金水平
                 
-                **📈 预期效果：**
+                ** 预期效果：**
                 - 短期（1-3个月）：胜率62-68%
                 - 中期（6-12个月）：胜率68-74%
                 - 长期（2-3年）：胜率70-78%，达到顶级私募水平
                 """)
             else:
                 exp_v8.error("""
-                ❌ **v8.0终极进化版评分器未找到**
+                 **v8.0终极进化版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v8_ultimate.py` 文件存在
                 - 建议重启应用后重试
                 """)
                 st.stop()
             
-            # 🎯 参数设置
-            st.markdown("### 🎯 扫描参数设置")
+            #  参数设置
+            st.markdown("###  扫描参数设置")
             
             col1, col2, col3 = st.columns(3)
             
@@ -8772,11 +8791,11 @@ def main():
                 )
             evo_hold_v8 = evolve_v8_core.get("params", {}).get("holding_days")
             if isinstance(evo_hold_v8, (int, float)):
-                st.caption(f"🧬 自动进化建议持仓周期：{int(evo_hold_v8)} 天（来源：自动进化）")
+                st.caption(f"自动进化建议持仓周期：{int(evo_hold_v8)} 天（来源：自动进化）")
             
             with col2:
                 scan_all_v8 = st.checkbox(
-                    "🌍 全市场扫描",
+                    " 全市场扫描",
                     value=True,
                     help="扫描所有A股（推荐）",
                     key="scan_all_v8_tab1"
@@ -8784,14 +8803,14 @@ def main():
             
             with col3:
                 enable_kelly = st.checkbox(
-                    "💰 显示凯利仓位",
+                    " 显示凯利仓位",
                     value=True,
                     help="显示凯利公式计算的最优仓位",
                     key="enable_kelly_v8_tab1"
                 )
             
             # 高级选项（折叠）
-            with st.expander("⚙️ 高级筛选选项（可选）"):
+            with st.expander("高级筛选选项（可选）"):
                 col1, col2 = st.columns(2)
                 with col1:
                     cap_min_v8 = st.number_input(
@@ -8815,8 +8834,8 @@ def main():
                     )
             
             # 扫描按钮
-            if st.button("🚀 开始终极扫描（v8.0）", type="primary", use_container_width=True, key="scan_v8_tab1"):
-                with st.spinner("🚀🚀🚀 v8.0终极进化版扫描中...（三级市场过滤→18维度评分→ATR风控→凯利仓位）"):
+            if st.button("开始终极扫描（v8.0）", type="primary", use_container_width=True, key="scan_v8_tab1"):
+                with st.spinner("v8.0终极进化版扫描中...（三级市场过滤→18维度评分→ATR风控→凯利仓位）"):
                     try:
                         # 重置v8.0缓存
                         if hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
@@ -8824,8 +8843,8 @@ def main():
                         
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
                         
-                        # 🔥 先进行三级市场过滤
-                        st.info("🌡️ 正在进行三级市场过滤（择时系统）...")
+                        #  先进行三级市场过滤
+                        st.info("正在进行三级市场过滤（择时系统）...")
                         
                         # 获取大盘指数数据（上证指数）
                         # 优先使用 daily_trading_history，如不存在则回退 daily_trading_data
@@ -8865,28 +8884,28 @@ def main():
                             col1, col2, col3 = st.columns(3)
                             with col1:
                                 trend_status = market_status.get('trend', {})
-                                st.metric("📊 市场趋势", 
+                                st.metric("市场趋势", 
                                          f"{trend_status.get('trend', '未知')}")
                             with col2:
                                 sentiment_status = market_status.get('sentiment', {})
                                 sentiment_val = sentiment_status.get('sentiment_score', 0)
-                                st.metric("😊 市场情绪", 
+                                st.metric("市场情绪", 
                                          f"{sentiment_val:.2f}",
                                          delta="健康" if sentiment_val > -0.2 else "警告")
                             with col3:
                                 volume_status = market_status.get('volume', {})
-                                st.metric("🔥 市场热度", 
+                                st.metric("市场热度", 
                                          f"{volume_status.get('volume_status', '未知')}")
                         else:
                             if last_err:
-                                st.warning(f"⚠️ 大盘数据不足或表不存在，跳过市场过滤（{last_err}）")
+                                st.warning(f"大盘数据不足或表不存在，跳过市场过滤（{last_err}）")
                             else:
-                                st.warning("⚠️ 大盘数据不足，跳过市场过滤")
+                                st.warning("大盘数据不足，跳过市场过滤")
                             market_status = {'can_trade': True, 'position_multiplier': 1.0, 'reason': '数据不足，默认可交易'}
                         
                         if not market_status['can_trade']:
                             st.warning(f"""
-                            ⚠️ **市场环境不佳，建议观望！**
+                             **市场环境不佳，建议观望！**
                             
                             **未通过原因：**
                             {market_status.get('reason', '综合评估不通过')}
@@ -8897,13 +8916,13 @@ def main():
                             2. 关注市场转势信号
                             3. 可以小仓位试探（不超过20%）
                             
-                            💡 强行扫描请继续，但风险自负！
+                             强行扫描请继续，但风险自负！
                             """)
                             
-                            if not st.checkbox("⚠️ 我理解风险，继续扫描", key="force_scan_v8"):
+                            if not st.checkbox("我理解风险，继续扫描", key="force_scan_v8"):
                                 st.stop()
                         else:
-                            st.success("✅ 市场环境通过三级过滤，可以安全选股！")
+                            st.success("市场环境通过三级过滤，可以安全选股！")
                         
                         # 构建查询条件
                         if scan_all_v8 and cap_min_v8 == 0 and cap_max_v8 == 0:
@@ -8915,7 +8934,7 @@ def main():
                                 ORDER BY sb.circ_mv DESC
                             """
                             stocks_df = pd.read_sql_query(query, conn)
-                            st.info(f"🌍 全市场扫描模式：共{len(stocks_df)}只A股")
+                            st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
                         else:
                             # 按市值筛选
                             cap_min_wan = cap_min_v8 * 10000 if cap_min_v8 > 0 else 0
@@ -8932,10 +8951,10 @@ def main():
                             stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
                         
                         if len(stocks_df) == 0:
-                            st.error(f"❌ 未找到符合条件的股票")
+                            st.error(f"未找到符合条件的股票")
                             conn.close()
                         else:
-                            st.info(f"✅ 找到 {len(stocks_df)} 只候选股票，开始18维度智能评分...")
+                            st.info(f"找到 {len(stocks_df)} 只候选股票，开始18维度智能评分...")
                             
                             # 进度条
                             progress_bar = st.progress(0)
@@ -9080,7 +9099,7 @@ def main():
                             
                             # 显示结果
                             st.markdown("---")
-                            st.markdown(f"### 📊 终极扫描结果（v8.0）")
+                            st.markdown(f"###  终极扫描结果（v8.0）")
                             
                             col1, col2, col3 = st.columns(3)
                             with col1:
@@ -9113,10 +9132,11 @@ def main():
                                     pass
                             
                             if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v8}分）")
+                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v8}分）")
                                 
                                 # 转换为DataFrame
                                 results_df = pd.DataFrame(results)
+                                _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
                                 
                                 # 保存到session_state
                                 st.session_state['v8_scan_results_tab1'] = results_df
@@ -9131,10 +9151,9 @@ def main():
                                     max_score = results_df['综合评分'].astype(float).max()
                                     st.metric("最高评分", f"{max_score:.1f}分")
                                 with col3:
-                                    # 统计5星和4星
-                                    grade_5 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐⭐' in str(g))
-                                    grade_4 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐' in str(g) and '⭐⭐⭐⭐⭐' not in str(g))
-                                    st.metric("5+4星", f"{grade_5+grade_4}只")
+                                # 统计高评级
+                                grade_high = sum(1 for g in results_df['评级'] if str(g) in ("S", "A", "A+"))
+                                st.metric("高评级", f"{grade_high}只")
                                 with col4:
                                     # 平均凯利仓位
                                     if enable_kelly:
@@ -9152,22 +9171,23 @@ def main():
                                         st.metric("平均凯利仓位", "-")
                                 
                                 st.markdown("---")
-                                st.subheader("🏆 终极推荐股票列表（v8.0·18维度）")
+                                st.subheader("终极推荐股票列表（v8.0·18维度）")
                                 
                                 # 选择显示模式
+                                _view_modes = [" 完整信息", " 核心指标", " 简洁模式"]
                                 view_mode = st.radio(
                                     "显示模式",
-                                    ["📊 完整信息", "🎯 核心指标", "📝 简洁模式"],
+                                    [m.strip() for m in _view_modes],
                                     horizontal=True,
                                     key="view_mode_v8_tab1"
                                 )
                                 
-                                if view_mode == "📊 完整信息":
+                                if view_mode == "完整信息":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '星级', '建议仓位', '预期胜率', '盈亏比', '凯利仓位',
                                                    '最新价格', 'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损', '止损幅度%', '止盈幅度%',
                                                    '推荐理由']
-                                elif view_mode == "🎯 核心指标":
+                                elif view_mode == "核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '综合评分', '评级', '资金加分', '星级',
                                                    '建议仓位', '预期胜率', '凯利仓位', '最新价格',
                                                    'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损']
@@ -9176,6 +9196,7 @@ def main():
                                                    '资金加分', '评级', '星级', '建议仓位', '最新价格', '推荐理由']
                                 
                                 display_df = results_df[display_cols]
+                                display_df = _standardize_result_df(display_df, score_col="综合评分")
                                 
                                 # 显示表格
                                 st.dataframe(
@@ -9190,12 +9211,12 @@ def main():
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="⭐⭐⭐⭐⭐:75+ ⭐⭐⭐⭐:65+ ⭐⭐⭐:55+ ⭐⭐:45+",
+                                            help="评级：S/A/B/C",
                                             width="medium"
                                         ),
                                         "星级": st.column_config.TextColumn(
                                             "星级",
-                                            help="星级×建议仓位：5⭐=25%, 4⭐=20%, 3⭐=15%, 2⭐=10%",
+                                            help="星级用于仓位建议",
                                             width="small"
                                         ),
                                         "建议仓位": st.column_config.TextColumn(
@@ -9221,35 +9242,35 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
-                                    label="📥 导出完整结果（CSV）",
+                                    label=" 导出完整结果（CSV）",
                                     data=csv,
                                     file_name=f"核心策略_V8_终极选股_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
                                 )
                                 
                             else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v8}分的股票\n\n**说明：**\nv8.0使用18维度评分+三级市场过滤，标准极其严格。\n\n**建议：**\n1. 降低评分阈值到70分\n2. 检查三级市场过滤状态\n3. 当前可能不是最佳入场时机")
+                                st.warning(f"未找到≥{score_threshold_v8}分的股票\n\n**说明：**\nv8.0使用18维度评分+三级市场过滤，标准极其严格。\n\n**建议：**\n1. 降低评分阈值到70分\n2. 检查三级市场过滤状态\n3. 当前可能不是最佳入场时机")
                     
                     except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
+                        st.error(f"扫描失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
             
             # 显示之前的扫描结果
             if 'v8_scan_results_tab1' in st.session_state:
                 st.markdown("---")
-                st.markdown("### 📋 上次扫描结果")
+                st.markdown("###  上次扫描结果")
                 results_df = st.session_state['v8_scan_results_tab1']
                 display_df = results_df.drop('原始数据', axis=1)
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
         elif "v9.0" in strategy_mode:
-            exp_v9 = st.expander("📘 v9.0 策略说明", expanded=False)
+            exp_v9 = st.expander("v9.0 策略说明", expanded=False)
             exp_v9.markdown("""
             <div style='background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%); 
                         padding: 35px 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
                 <h1 style='margin:0; color: white; font-size: 2.2em; font-weight: 700; text-align: center;'>
-                    🧭 v9.0 中线均衡版 - 资金流·动量·趋势·波动·板块强度
+                     v9.0 中线均衡版 - 资金流·动量·趋势·波动·板块强度
                 </h1>
                 <p style='margin: 12px 0 0 0; font-size: 1.1em; text-align: center; opacity: 0.9;'>
                     中线周期 2-6 周 · 平衡风格 · 适合稳健进取型
@@ -9260,7 +9281,7 @@ def main():
             evolve_v9 = _load_evolve_params("v9_best.json")
             evo_params_v9 = evolve_v9.get("params", {}) if isinstance(evolve_v9, dict) else {}
             if evo_params_v9:
-                exp_v9.success(f"🧬 已应用自动进化参数（v9.0，{evolve_v9.get('run_at', 'unknown')}）")
+                exp_v9.success(f"已应用自动进化参数（v9.0，{evolve_v9.get('run_at', 'unknown')}）")
                 exp_v9.caption(f"推荐阈值: {evo_params_v9.get('score_threshold')} | 持仓: {evo_params_v9.get('holding_days')} | 窗口: {evo_params_v9.get('lookback_days')} | 最低成交额(亿): {evo_params_v9.get('min_turnover')}")
 
             def _load_history_full_fallback(ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -9298,9 +9319,9 @@ def main():
             except Exception:
                 market_env = "oscillation"
 
-            env_map = {"bull": "🟢 牛市", "bear": "🔴 熊市", "oscillation": "🟡 震荡"}
-            env_label = env_map.get(market_env, "🟡 震荡")
-            st.caption(f"📊 当前市场环境：{env_label}")
+            env_map = {"bull": " 牛市", "bear": " 熊市", "oscillation": " 震荡"}
+            env_label = env_map.get(market_env, " 震荡")
+            st.caption(f"当前市场环境：{env_label}")
 
             evo_thr_v9 = int(evo_params_v9.get("score_threshold", 65))
             evo_hold_v9 = int(evo_params_v9.get("holding_days", 20))
@@ -9326,7 +9347,7 @@ def main():
             with col5:
                 candidate_count_v9 = st.slider("候选数量（按市值）", 200, 3000, 800, 100, key="candidate_count_v9")
             with col6:
-                scan_all_v9 = st.checkbox("🌍 全市场扫描", value=True, key="scan_all_v9")
+                scan_all_v9 = st.checkbox("全市场扫描", value=True, key="scan_all_v9")
 
             col_mode1, col_mode2, col_mode3 = st.columns(3)
             with col_mode1:
@@ -9342,13 +9363,13 @@ def main():
             with col8:
                 cap_max_v9 = st.number_input("最大市值（亿元）", min_value=0, max_value=50000, value=0, step=50, key="cap_max_v9")
 
-            if st.button("🚀 开始扫描（v9.0中线均衡版）", type="primary", use_container_width=True, key="scan_v9"):
-                with st.spinner("🧭 v9.0 中线均衡版扫描中..."):
+            if st.button("开始扫描（v9.0中线均衡版）", type="primary", use_container_width=True, key="scan_v9"):
+                with st.spinner("v9.0 中线均衡版扫描中..."):
                     try:
                         # 弱市空仓保护
                         if weak_market_filter_v9 and market_env == "bear":
-                            st.warning(f"⚠️ 当前市场环境：{env_label}，建议空仓观望。")
-                            if not st.checkbox("⚠️ 我理解风险，仍要继续扫描", key="force_scan_v9"):
+                            st.warning(f"当前市场环境：{env_label}，建议空仓观望。")
+                            if not st.checkbox("我理解风险，仍要继续扫描", key="force_scan_v9"):
                                 st.stop()
 
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
@@ -9374,7 +9395,7 @@ def main():
                             stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
 
                         if stocks_df.empty:
-                            st.error("❌ 未找到符合条件的股票")
+                            st.error("未找到符合条件的股票")
                             conn.close()
                             st.stop()
 
@@ -9487,36 +9508,38 @@ def main():
 
                             st.session_state["v9_scan_results_tab1"] = results_df
                             if select_mode_v9 == "阈值筛选":
-                                st.success(f"✅ 找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v9}分）")
+                                st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v9}分）")
                             else:
-                                st.success(f"✅ 选出 Top {top_percent_v9}%（{len(results_df)} 只）")
+                                st.success(f"选出 Top {top_percent_v9}%（{len(results_df)} 只）")
+                            _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
+                            results_df = _standardize_result_df(results_df, score_col="综合评分")
                             st.dataframe(results_df, use_container_width=True, hide_index=True)
                             st.download_button(
-                                "📥 导出完整结果（CSV）",
+                                " 导出完整结果（CSV）",
                                 data=_df_to_csv_bytes(results_df),
                                 file_name=f"核心策略_V9_中线均衡_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                 mime="text/csv; charset=utf-8"
                             )
                         else:
-                            st.warning("⚠️ 未找到符合条件的股票，请适当降低阈值或放宽筛选条件")
+                            st.warning("未找到符合条件的股票，请适当降低阈值或放宽筛选条件")
                     except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
+                        st.error(f"扫描失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
 
             if 'v9_scan_results_tab1' in st.session_state:
                 st.markdown("---")
-                st.markdown("### 📋 上次扫描结果")
+                st.markdown("###  上次扫描结果")
                 results_df = st.session_state['v9_scan_results_tab1']
                 st.dataframe(results_df, use_container_width=True, hide_index=True)
 
         elif "组合策略" in strategy_mode:
-            exp_combo = st.expander("📘 组合策略说明", expanded=False)
+            exp_combo = st.expander("组合策略说明", expanded=False)
             exp_combo.markdown("""
             <div style='background: linear-gradient(135deg, #1f4037 0%, #99f2c8 100%); 
                         padding: 35px 30px; border-radius: 15px; color: #0b1f17; margin-bottom: 25px;'>
                 <h1 style='margin:0; color: #0b1f17; font-size: 2.1em; font-weight: 700; text-align: center;'>
-                    🧩 组合策略共识评分（v4/v5/v7/v8/v9）
+                     组合策略共识评分（v4/v5/v7/v8/v9）
                 </h1>
                 <p style='margin: 12px 0 0 0; font-size: 1.05em; text-align: center; opacity: 0.9;'>
                     多策略协同共识 · 过滤噪音 · 提升稳定性 · 强调胜率与一致性
@@ -9558,7 +9581,7 @@ def main():
                 lookback_days_combo = st.slider("评分窗口（天）", 80, 200, 120, 10, key="combo_lookback_days")
 
             st.markdown("---")
-            st.subheader("⚖️ 权重设置（总和自动归一化）")
+            st.subheader("权重设置（总和自动归一化）")
             # 市场环境判断用于动态权重
             market_env_combo = "oscillation"
             try:
@@ -9591,10 +9614,10 @@ def main():
 
             if auto_weights:
                 w_v4, w_v5, w_v7, w_v8, w_v9 = preset["v4"], preset["v5"], preset["v7"], preset["v8"], preset["v9"]
-                st.info(f"✅ 已应用动态权重（{env_label_combo}）：v4={w_v4} v5={w_v5} v7={w_v7} v8={w_v8} v9={w_v9}")
+                st.info(f"已应用动态权重（{env_label_combo}）：v4={w_v4} v5={w_v5} v7={w_v7} v8={w_v8} v9={w_v9}")
 
             st.markdown("---")
-            st.subheader("✅ 各策略阈值（用于一致性判断）")
+            st.subheader("各策略阈值（用于一致性判断）")
             t1, t2, t3, t4, t5 = st.columns(5)
             with t1:
                 thr_v4 = st.slider("v4阈值", 50, 90, 60, 5, key="thr_v4")
@@ -9622,8 +9645,8 @@ def main():
                 finally:
                     conn.close()
 
-            if st.button("🚀 开始扫描（组合共识）", type="primary", use_container_width=True, key="scan_combo"):
-                with st.spinner("🧩 组合共识评分计算中..."):
+            if st.button("开始扫描（组合共识）", type="primary", use_container_width=True, key="scan_combo"):
+                with st.spinner("组合共识评分计算中..."):
                     try:
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
 
@@ -9649,7 +9672,7 @@ def main():
                             stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
 
                         if stocks_df.empty:
-                            st.error("❌ 未找到符合条件的股票")
+                            st.error("未找到符合条件的股票")
                             conn.close()
                             st.stop()
 
@@ -9854,13 +9877,14 @@ def main():
 
                             st.session_state["combo_scan_results"] = results_df
                             if select_mode_combo == "阈值筛选":
-                                st.success(f"✅ 找到 {len(results_df)} 只符合条件的股票（≥{combo_threshold}分）")
+                                st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{combo_threshold}分）")
                             else:
-                                st.success(f"✅ 选出 Top {top_percent_combo}%（{len(results_df)} 只）")
+                                st.success(f"选出 Top {top_percent_combo}%（{len(results_df)} 只）")
 
                             _render_result_overview(results_df, score_col="共识评分", title="组合策略结果概览")
+                            results_df = _standardize_result_df(results_df, score_col="共识评分")
                             st.dataframe(results_df, use_container_width=True, hide_index=True)
-                            with st.expander("🔍 共识贡献拆解", expanded=False):
+                            with st.expander("共识贡献拆解", expanded=False):
                                 cols = [
                                     "股票代码", "股票名称", "共识评分", "共识基础分", "资金加分", "一致数",
                                     "v4贡献", "v5贡献", "v7贡献", "v8贡献", "v9贡献",
@@ -9869,35 +9893,35 @@ def main():
                                 show_cols = [c for c in cols if c in results_df.columns]
                                 st.dataframe(results_df[show_cols], use_container_width=True, hide_index=True)
                             st.download_button(
-                                "📥 导出完整结果（CSV）",
+                                " 导出完整结果（CSV）",
                                 data=_df_to_csv_bytes(results_df),
                                 file_name=f"组合策略_共识评分_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                 mime="text/csv; charset=utf-8"
                             )
                         else:
-                            st.warning("⚠️ 未找到符合条件的股票，请降低阈值或减少一致数量")
+                            st.warning("未找到符合条件的股票，请降低阈值或减少一致数量")
 
                     except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
+                        st.error(f"扫描失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
 
             if 'combo_scan_results' in st.session_state:
                 st.markdown("---")
-                st.markdown("### 📋 上次扫描结果")
+                st.markdown("###  上次扫描结果")
                 results_df = st.session_state['combo_scan_results']
                 st.dataframe(results_df, use_container_width=True, hide_index=True)
 
         else:  # v6.0
-            st.header("⚡ v6.0超短线狙击·巅峰版 - 只选市场最强1-3%")
-            st.caption("🔥三级过滤+七维严格评分：必要条件淘汰→极度严格评分→精英筛选，胜率80-90%，单次8-15%")
+            st.header("v6.0超短线狙击·巅峰版 - 只选市场最强1-3%")
+            st.caption("三级过滤+七维严格评分：必要条件淘汰→极度严格评分→精英筛选，胜率80-90%，单次8-15%")
             
             if not V6_EVALUATOR_AVAILABLE or not hasattr(vp_analyzer, "evaluator_v6") or vp_analyzer.evaluator_v6 is None:
-                st.error("❌ v6.0超短线评分器未找到，请确保 `comprehensive_stock_evaluator_v6.py` 存在并可导入后重试")
+                st.error("v6.0超短线评分器未找到，请确保 `comprehensive_stock_evaluator_v6.py` 存在并可导入后重试")
                 st.stop()
             
             st.success("""
-            ✅ 已集成v6.0八维100分评分体系（超短线狙击版）
+             已集成v6.0八维100分评分体系（超短线狙击版）
             - 板块热度25分 + 资金流向20分 + 技术突破20分 + 短期动量15分 + 相对强度10分 + 量能配合5分 + 筹码结构3分 + 安全边际2分
             - 预期：胜率60-80%，单次3-8%，持仓2-5天
             """)
@@ -9907,7 +9931,7 @@ def main():
             with col_v6_a:
                 score_threshold_v6 = st.slider(
                     "评分阈值（v6.0巅峰版）", 50, 100, 85, 5,
-                    help="🔥巅峰版：85分（精选10-50只），90分（极品3-10只），95分（顶级1-3只）",
+                    help="巅峰版：85分（精选10-50只），90分（极品3-10只），95分（顶级1-3只）",
                     key="score_threshold_v6"
                 )
             with col_v6_b:
@@ -9925,21 +9949,21 @@ def main():
             
             # v6.0数据依赖说明
             st.warning("""
-            ⚠️ **v6.0超短线策略数据依赖说明**：
+             **v6.0超短线策略数据依赖说明**：
             - **板块热度**（25分）：需要查询行业数据
             - **资金流向**（20分）：需要Tushare Pro高级接口（2000+积分）
             - **技术指标**（55分）：使用本地历史数据
             
-            💡 **建议**：
+             **建议**：
             - 如果Tushare积分不足，板块和资金流维度可能为0分
             - 建议从60分开始扫描（而不是75分）
             - 或使用v4.0/v5.0策略（不依赖高级接口）
             """)
             
-            st.info("ℹ️ v6.0策略将扫描所有符合市值条件的股票（无数量限制）")
+            st.info("v6.0策略将扫描所有符合市值条件的股票（无数量限制）")
             
             st.markdown("---")
-            if st.button("⚡ 开始扫描（v6.0超短线）", type="primary", use_container_width=True, key="scan_btn_v6"):
+            if st.button("开始扫描（v6.0超短线）", type="primary", use_container_width=True, key="scan_btn_v6"):
                 with st.spinner("正在扫描..."):
                     try:
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
@@ -9959,17 +9983,17 @@ def main():
                         stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
                         
                         if stocks_df.empty:
-                            st.error(f"❌ 未找到符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，请检查是否已更新市值数据")
-                            st.info("💡 提示：请先到Tab5（数据中心）点击「更新市值数据」")
+                            st.error(f"未找到符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，请检查是否已更新市值数据")
+                            st.info("提示：请先到Tab5（数据中心）点击「更新市值数据」")
                             conn.close()
                         else:
-                            st.success(f"✅ 找到 {len(stocks_df)} 只符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，开始评分...")
+                            st.success(f"找到 {len(stocks_df)} 只符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，开始评分...")
                             
                             # 显示市值范围确认
                             if len(stocks_df) > 0:
                                 actual_min_mv = stocks_df['circ_mv'].min() / 10000
                                 actual_max_mv = stocks_df['circ_mv'].max() / 10000
-                                st.info(f"📊 实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元")
+                                st.info(f"实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元")
                             
                             # 评分结果列表
                             results = []
@@ -10055,7 +10079,7 @@ def main():
                             
                             # 显示结果
                             if results:
-                                st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v6}分）")
+                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v6}分）")
                                 
                                 # 转换为DataFrame
                                 results_df = pd.DataFrame(results)
@@ -10079,23 +10103,23 @@ def main():
                                     st.metric("S+A级", f"{grade_s+grade_a}只")
                                 
                                 st.markdown("---")
-                                st.subheader("🏆 推荐股票列表（v6.0超短线·8维评分）")
+                                st.subheader("推荐股票列表（v6.0超短线·8维评分）")
                                 
                                 # 选择显示模式
                                 view_mode = st.radio(
                                     "显示模式",
-                                    ["📊 完整评分", "🎯 核心指标", "💡 简洁模式"],
+                                    [" 完整评分", " 核心指标", " 简洁模式"],
                                     horizontal=True,
                                     key="v6_view_mode"
                                 )
                                 
                                 # 根据模式选择列
-                                if view_mode == "📊 完整评分":
+                                if view_mode == " 完整评分":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '板块热度', '资金流向', '技术突破', '短期动量', 
                                                    '相对强度', '量能配合', '筹码结构', '安全边际',
                                                    '最新价格', '止损价', '止盈价', '推荐理由']
-                                elif view_mode == "🎯 核心指标":
+                                elif view_mode == " 核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '板块热度', '资金流向', '最新价格', '止损价', '止盈价', '推荐理由']
                                 else:  # 简洁模式
@@ -10133,32 +10157,32 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
-                                    label="📥 导出完整结果（CSV）",
+                                    label=" 导出完整结果（CSV）",
                                     data=csv,
                                     file_name=f"核心策略_V6_超短线_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
                                 )
                                 
                             else:
-                                st.warning(f"⚠️ 未找到≥{score_threshold_v6}分的股票\n\n**建议：**\n1. 降低评分阈值\n2. 扩大市值范围")
+                                st.warning(f"未找到≥{score_threshold_v6}分的股票\n\n**建议：**\n1. 降低评分阈值\n2. 扩大市值范围")
                     
                     except Exception as e:
-                        st.error(f"❌ 扫描失败: {e}")
+                        st.error(f"扫描失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
             
             # 显示之前的扫描结果
             if 'v6_scan_results' in st.session_state:
                 st.markdown("---")
-                st.markdown("### 📋 上次扫描结果")
+                st.markdown("###  上次扫描结果")
                 results_df = st.session_state['v6_scan_results']
                 display_df = results_df.drop('原始数据', axis=1)
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    # ==================== Tab 2: 🚀 板块热点分析 ====================
+    # ==================== Tab 2:  板块热点分析 ====================
     with tab_sector:
         _render_page_header(
-            "🚀 板块热点分析",
+            " 板块热点分析",
             "快速识别热门板块 · 生命周期分析 · 萌芽期重点关注",
             tag="Sector Flow",
         )
@@ -10166,13 +10190,13 @@ def main():
         col1, col2 = st.columns([3, 1])
         
         with col1:
-            scan_days = st.slider("📅 扫描周期（天）", 30, 120, 60, 5, 
+            scan_days = st.slider("扫描周期（天）", 30, 120, 60, 5, 
                                 key='sector_scan_days',
                                 help="扫描最近N天的板块数据，建议60天")
         
         with col2:
             st.markdown("<br>", unsafe_allow_html=True)
-            start_scan = st.button("🔍 开始扫描", type="primary", use_container_width=True, key="start_sector_scan")
+            start_scan = st.button("开始扫描", type="primary", use_container_width=True, key="start_sector_scan")
         
         if start_scan:
             with st.spinner("正在扫描全市场板块..."):
@@ -10183,10 +10207,10 @@ def main():
                     
                     scan_results = st.session_state.scanner.scan_all_sectors(days=scan_days)
                     st.session_state['scan_results'] = scan_results
-                    st.success("✅ 扫描完成！")
+                    st.success("扫描完成！")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ 扫描失败: {e}")
+                    st.error(f"扫描失败: {e}")
                     import traceback
                     st.code(traceback.format_exc())
         
@@ -10194,34 +10218,34 @@ def main():
             results = st.session_state['scan_results']
             
             st.markdown("---")
-            st.subheader("📊 板块生命周期分布")
+            st.subheader("板块生命周期分布")
             
             col1, col2, col3, col4, col5 = st.columns(5)
             
             with col1:
-                st.metric("🟢 萌芽期", f"{len(results['emerging'])}个", 
+                st.metric("萌芽期", f"{len(results['emerging'])}个", 
                          help="成交量低迷但价格稳定，主力可能在布局")
             with col2:
-                st.metric("🟡 启动期", f"{len(results['launching'])}个",
+                st.metric("启动期", f"{len(results['launching'])}个",
                          help="量价齐升，板块开始启动")
             with col3:
-                st.metric("🔴 爆发期", f"{len(results['exploding'])}个",
+                st.metric("爆发期", f"{len(results['exploding'])}个",
                          help="成交量爆发，价格大涨")
             with col4:
-                st.metric("⚫ 衰退期", f"{len(results['declining'])}个",
+                st.metric("衰退期", f"{len(results['declining'])}个",
                          help="量价齐跌，板块进入衰退")
             with col5:
-                st.metric("⚪ 过渡期", f"{len(results['transitioning'])}个",
+                st.metric("过渡期", f"{len(results['transitioning'])}个",
                          help="处于过渡阶段，观察为主")
             
             # 萌芽期板块（重点关注）
             if results['emerging']:
                 st.markdown("---")
-                st.markdown("### 🟢 萌芽期板块（重点关注 - 最佳布局时机）")
-                st.info("💡 萌芽期特征：成交量低迷，价格稳定，主力可能在悄悄布局，是最佳介入时机！")
+                st.markdown("###  萌芽期板块（重点关注 - 最佳布局时机）")
+                st.info("萌芽期特征：成交量低迷，价格稳定，主力可能在悄悄布局，是最佳介入时机！")
                 
                 for i, sector in enumerate(results['emerging'][:10], 1):
-                    with st.expander(f"🎯 {i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
+                    with st.expander(f"{i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
                         col1, col2 = st.columns(2)
                         with col1:
                             st.markdown(f"**所处阶段**: {sector['stage']}")
@@ -10229,15 +10253,15 @@ def main():
                         with col2:
                             st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
                         
-                        st.success("💡 建议：密切关注该板块龙头股，等待启动信号")
+                        st.success("建议：密切关注该板块龙头股，等待启动信号")
             
             # 启动期板块
             if results['launching']:
                 st.markdown("---")
-                st.markdown("### 🟡 启动期板块（关注 - 确认突破）")
+                st.markdown("###  启动期板块（关注 - 确认突破）")
                 
                 for i, sector in enumerate(results['launching'][:5], 1):
-                    with st.expander(f"🔥 {i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
+                    with st.expander(f"{i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
                         col1, col2 = st.columns(2)
                         with col1:
                             st.markdown(f"**所处阶段**: {sector['stage']}")
@@ -10245,15 +10269,15 @@ def main():
                         with col2:
                             st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
                         
-                        st.warning("💡 建议：关注龙头股突破，可考虑介入")
+                        st.warning("建议：关注龙头股突破，可考虑介入")
             
             # 爆发期板块
             if results['exploding']:
                 st.markdown("---")
-                st.markdown("### 🔴 爆发期板块（谨慎 - 短线为主）")
+                st.markdown("###  爆发期板块（谨慎 - 短线为主）")
                 
                 for i, sector in enumerate(results['exploding'][:5], 1):
-                    with st.expander(f"⚡ {i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
+                    with st.expander(f"{i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
                         col1, col2 = st.columns(2)
                         with col1:
                             st.markdown(f"**所处阶段**: {sector['stage']}")
@@ -10261,39 +10285,39 @@ def main():
                         with col2:
                             st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
                         
-                        st.error("⚠️ 建议：高位追涨风险大，仅供短线高手参与")
+                        st.error("建议：高位追涨风险大，仅供短线高手参与")
             
             # 使用指南
             st.markdown("---")
-            with st.expander("📚 板块分析使用指南"):
+            with st.expander("板块分析使用指南"):
                 st.markdown("""
-                ### 🎯 如何使用板块热点分析
+                ###  如何使用板块热点分析
                 
                 **1. 萌芽期板块（最佳布局期）**
-                - ✅ 特征：成交量低迷、价格稳定、涨跌幅小
-                - ✅ 策略：提前布局龙头股，等待启动
-                - ✅ 风险：较低，主力可能正在吸筹
-                - ✅ 建议：重点关注，建立股票池
+                -  特征：成交量低迷、价格稳定、涨跌幅小
+                -  策略：提前布局龙头股，等待启动
+                -  风险：较低，主力可能正在吸筹
+                -  建议：重点关注，建立股票池
                 
                 **2. 启动期板块（确认期）**
-                - 🔥 特征：量价齐升、开始突破
-                - 🔥 策略：追涨龙头股，顺势而为
-                - 🔥 风险：中等，需要及时止盈止损
-                - 🔥 建议：择机介入，设置止损
+                -  特征：量价齐升、开始突破
+                -  策略：追涨龙头股，顺势而为
+                -  风险：中等，需要及时止盈止损
+                -  建议：择机介入，设置止损
                 
                 **3. 爆发期板块（高风险期）**
-                - ⚠️ 特征：成交量暴增、价格大涨
-                - ⚠️ 策略：短线操作，快进快出
-                - ⚠️ 风险：高，随时可能回调
-                - ⚠️ 建议：谨慎参与，不追高
+                -  特征：成交量暴增、价格大涨
+                -  策略：短线操作，快进快出
+                -  风险：高，随时可能回调
+                -  建议：谨慎参与，不追高
                 
                 **4. 衰退期板块（规避期）**
-                - ❌ 特征：量价齐跌、趋势向下
-                - ❌ 策略：观望为主，不要抄底
-                - ❌ 风险：很高，容易套牢
-                - ❌ 建议：避开，等待下一个周期
+                -  特征：量价齐跌、趋势向下
+                -  策略：观望为主，不要抄底
+                -  风险：很高，容易套牢
+                -  建议：避开，等待下一个周期
                 
-                ### 💡 实战技巧
+                ###  实战技巧
                 1. **重点关注萌芽期板块** - 风险最低，收益潜力大
                 2. **分散布局** - 不要把所有资金押在一个板块
                 3. **跟踪龙头股** - 板块行情看龙头
@@ -10301,62 +10325,63 @@ def main():
                 5. **结合市场环境** - 牛市积极，熊市谨慎
                 """)
         else:
-            st.info("💡 点击「开始扫描」按钮，系统将自动分析全市场板块，识别最佳投资机会！")
+            st.info("点击「开始扫描」按钮，系统将自动分析全市场板块，识别最佳投资机会！")
 
-    # ==================== Tab 3: 📊 超级回测系统 ====================
+    # ==================== Tab 3:  超级回测系统 ====================
     with tab_backtest:
         _render_page_header(
-            "📊 超级回测与策略对比",
+            " 超级回测与策略对比",
             "历史数据验证 · 策略表现评估 · 胜率收益分析 · 最优策略推荐",
             tag="Backtest Lab",
         )
         
         # 选择回测模式
+        _backtest_modes = [" v4/v5/v6/v7/v8/v9 策略对比", " 单策略深度回测", " 参数优化"]
         backtest_mode = st.radio(
             "选择回测模式",
-            ["📊 v4/v5/v6/v7/v8/v9🚀🚀🚀 策略对比", "🎯 单策略深度回测", "⚙️ 参数优化"],
+            [m.strip() for m in _backtest_modes],
             horizontal=True,
-            help="策略对比：对比六大策略表现(新增v9.0!) | 单策略回测：深度测试某个策略 | 参数优化：寻找最佳参数"
+            help="策略对比：对比六大策略表现(新增v9.0) | 单策略回测：深度测试某个策略 | 参数优化：寻找最佳参数",
         )
         
         st.markdown("---")
         
-        if backtest_mode == "📊 v4/v5/v6/v7/v8/v9🚀🚀🚀 策略对比":
-            st.subheader("📊 六大策略全面对比（新增v9.0中线均衡版！）")
+        if backtest_mode == "v4/v5/v6/v7/v8/v9 策略对比":
+            st.subheader("六大策略全面对比（新增v9.0中线均衡版！）")
             
-            exp_backtest = st.expander("📘 策略特点说明", expanded=False)
+            exp_backtest = st.expander("策略特点说明", expanded=False)
             exp_backtest.info("""
-            ### 🎯 策略特点对比
+            ###  策略特点对比
             
             **v4.0 长期稳健版（潜伏为王）**
-            - 💎 特点：提前布局，长期持有，注重价值底部
-            - 📊 适用：稳健投资者，中长线操作
-            - 🎯 目标：56.6%胜率，平均收益10-15%
+            -  特点：提前布局，长期持有，注重价值底部
+            -  适用：稳健投资者，中长线操作
+            -  目标：56.6%胜率，平均收益10-15%
             
             **v5.0 趋势爆发版（启动确认）**
-            - 🚀 特点：趋势确认后介入，追求爆发力
-            - 📊 适用：进取投资者，波段操作
-            - 🎯 目标：高爆发力，短期快速获利
+            -  特点：趋势确认后介入，追求爆发力
+            -  适用：进取投资者，波段操作
+            -  目标：高爆发力，短期快速获利
             
             **v6.0 顶级超短线（快进快出）**
-            - ⚡ 特点：超短线操作，2-5天快速获利
-            - 📊 适用：短线高手，日内或短线
-            - 🎯 目标：极速进出，捕捉热点
+            -  特点：超短线操作，2-5天快速获利
+            -  适用：短线高手，日内或短线
+            -  目标：极速进出，捕捉热点
             
-            **v7.0 终极智能版（动态自适应）🚀**
-            - 🌟 特点：市场环境识别+行业轮动+动态权重+三层过滤
-            - 📊 适用：追求稳定高胜率的投资者
-            - 🎯 目标：62-70%胜率，年化28-38%，夏普比率1.5-2.2
+            **v7.0 终极智能版（动态自适应）**
+            -  特点：市场环境识别+行业轮动+动态权重+三层过滤
+            -  适用：追求稳定高胜率的投资者
+            -  目标：62-70%胜率，年化28-38%，夏普比率1.5-2.2
             
-            **v8.0 终极进化版（全球最强）🚀🚀🚀 NEW!**
-            - 💫 特点：ATR动态风控+凯利公式+18维度+五星评级+三级择时
-            - 📊 适用：追求极致性能的专业投资者
-            - 🎯 目标：70-78%胜率，年化35-52%，夏普比率2.5-3.2
+            **v8.0 终极进化版（全球最强） NEW!**
+            -  特点：ATR动态风控+凯利公式+18维度+五星评级+三级择时
+            -  适用：追求极致性能的专业投资者
+            -  目标：70-78%胜率，年化35-52%，夏普比率2.5-3.2
 
-            **v9.0 中线均衡版（算法优化）🧭 NEW!**
-            - 🧭 特点：资金流+动量+趋势+波动+板块强度
-            - 📊 适用：中线平衡风格（2-6周）
-            - 🎯 目标：稳健收益与可控回撤
+            **v9.0 中线均衡版（算法优化） NEW!**
+            -  特点：资金流+动量+趋势+波动+板块强度
+            -  适用：中线平衡风格（2-6周）
+            -  目标：稳健收益与可控回撤
             """)
             
             col1, col2 = st.columns([3, 1])
@@ -10371,7 +10396,7 @@ def main():
             with col2:
                 st.markdown("<br>", unsafe_allow_html=True)
                 start_comparison = st.button(
-                    "🚀 开始对比", 
+                    " 开始对比", 
                     type="primary", 
                     use_container_width=True,
                     key="start_strategy_comparison"
@@ -10398,9 +10423,9 @@ def main():
                         conn.close()
                         
                         if df.empty:
-                            st.error("❌ 无法获取历史数据，请先到「数据管理」更新数据")
+                            st.error("无法获取历史数据，请先到「数据管理」更新数据")
                         else:
-                            # 🔧 v49修复：保留原始列名以兼容v6/v7/v8评分器
+                            #  v49修复：保留原始列名以兼容v6/v7/v8评分器
                             # v4/v5评分器已支持多种列名格式
                             # v6/v7/v8评分器需要close_price格式（不能重命名为close）
                             # df = df.rename(columns={...})  # 已注释，保持数据库原始列名
@@ -10409,7 +10434,7 @@ def main():
                             results = {}
                             
                             # v4.0 回测
-                            st.info("🔄 正在回测 v4.0 长期稳健版...")
+                            st.info("正在回测 v4.0 长期稳健版...")
                             v4_result = vp_analyzer.backtest_explosive_hunter(
                                 df, 
                                 sample_size=backtest_sample_size,
@@ -10419,7 +10444,7 @@ def main():
                                 results['v4.0 长期稳健版'] = v4_result['stats']
                             
                             # v5.0 回测（使用底部突破策略作为代表）
-                            st.info("🔄 正在回测 v5.0 趋势爆发版...")
+                            st.info("正在回测 v5.0 趋势爆发版...")
                             v5_result = vp_analyzer.backtest_bottom_breakthrough(
                                 df,
                                 sample_size=backtest_sample_size,
@@ -10429,24 +10454,24 @@ def main():
                                 results['v5.0 趋势爆发版'] = v5_result['stats']
                             
                             # v6.0 回测
-                            st.info("🔄 正在回测 v6.0 顶级超短线...")
+                            st.info("正在回测 v6.0 顶级超短线...")
                             v6_result = vp_analyzer.backtest_v6_ultra_short(
                                 df,
                                 sample_size=backtest_sample_size,
                                 holding_days=3,
-                                score_threshold=60.0  # 🔧 降低阈值从70到60
+                                score_threshold=60.0  #  降低阈值从70到60
                             )
                             if v6_result['success']:
                                 results['v6.0 顶级超短线'] = v6_result['stats']
                             else:
-                                # 🔍 显示v6失败原因
-                                st.warning(f"⚠️ v6.0回测未产生有效结果: {v6_result.get('error', '未知原因')}")
+                                #  显示v6失败原因
+                                st.warning(f"v6.0回测未产生有效结果: {v6_result.get('error', '未知原因')}")
                                 if 'stats' in v6_result:
                                     st.info(f"v6.0分析了 {v6_result['stats'].get('analyzed_stocks', 0)} 只股票，找到 {v6_result['stats'].get('total_signals', 0)} 个信号")
                             
-                            # 🚀 v7.0 回测（终极智能版）
+                            #  v7.0 回测（终极智能版）
                             if V7_EVALUATOR_AVAILABLE and hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
-                                st.info("🔄 正在回测 v7.0 终极智能版...")
+                                st.info("正在回测 v7.0 终极智能版...")
                                 v7_result = vp_analyzer.backtest_v7_intelligent(
                                     df,
                                     sample_size=backtest_sample_size,
@@ -10454,32 +10479,32 @@ def main():
                                     score_threshold=60.0
                                 )
                                 if v7_result['success']:
-                                    results['v7.0 终极智能版🚀'] = v7_result['stats']
+                                    results['v7.0 终极智能版'] = v7_result['stats']
                                 else:
-                                    st.warning(f"⚠️ v7.0回测未产生有效结果: {v7_result.get('error', '未知原因')}")
+                                    st.warning(f"v7.0回测未产生有效结果: {v7_result.get('error', '未知原因')}")
                             else:
-                                st.warning("⚠️ v7.0评分器未加载，跳过v7.0回测")
+                                st.warning("v7.0评分器未加载，跳过v7.0回测")
                             
-                            # 🚀🚀🚀 v8.0 回测（终极进化版）NEW!
+                            #  v8.0 回测（终极进化版）NEW!
                             if V8_EVALUATOR_AVAILABLE and hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
-                                st.info("🔄 正在回测 v8.0 终极进化版...（ATR动态风控+凯利公式+软过滤）")
+                                st.info("正在回测 v8.0 终极进化版...（ATR动态风控+凯利公式+软过滤）")
                                 v8_result = vp_analyzer.backtest_v8_ultimate(
                                     df,
                                     sample_size=backtest_sample_size,
                                     holding_days=5,
-                                    score_threshold=50.0  # 🔧 v8.1优化：采用软过滤，降低阈值到50
+                                    score_threshold=50.0  #  v8.1优化：采用软过滤，降低阈值到50
                                 )
                                 if v8_result['success']:
-                                    results['v8.0 终极进化版🚀🚀🚀'] = v8_result['stats']
+                                    results['v8.0 终极进化版'] = v8_result['stats']
                                 else:
-                                    st.warning(f"⚠️ v8.0回测未产生有效结果: {v8_result.get('error', '未知原因')}")
+                                    st.warning(f"v8.0回测未产生有效结果: {v8_result.get('error', '未知原因')}")
                                     if 'stats' in v8_result:
                                         st.info(f"v8.0分析了 {v8_result['stats'].get('analyzed_stocks', 0)} 只股票，找到 {v8_result['stats'].get('total_signals', 0)} 个信号")
                             else:
-                                st.warning("⚠️ v8.0评分器未加载，跳过v8.0回测")
+                                st.warning("v8.0评分器未加载，跳过v8.0回测")
 
-                            # 🧭 v9.0 回测（中线均衡版）
-                            st.info("🔄 正在回测 v9.0 中线均衡版...")
+                            #  v9.0 回测（中线均衡版）
+                            st.info("正在回测 v9.0 中线均衡版...")
                             v9_result = vp_analyzer.backtest_v9_midterm(
                                 df,
                                 sample_size=backtest_sample_size,
@@ -10487,19 +10512,19 @@ def main():
                                 score_threshold=60.0
                             )
                             if v9_result.get('success'):
-                                results['v9.0 中线均衡版🧭'] = v9_result['stats']
+                                results['v9.0 中线均衡版'] = v9_result['stats']
                             else:
-                                st.warning(f"⚠️ v9.0回测未产生有效结果: {v9_result.get('error', '未知原因')}")
+                                st.warning(f"v9.0回测未产生有效结果: {v9_result.get('error', '未知原因')}")
                             
                             if results:
                                 st.session_state['comparison_results'] = results
-                                st.success("✅ 策略对比完成！")
+                                st.success("策略对比完成！")
                                 st.rerun()
                             else:
-                                st.error("❌ 所有策略回测都失败了")
+                                st.error("所有策略回测都失败了")
                     
                     except Exception as e:
-                        st.error(f"❌ 回测失败: {e}")
+                        st.error(f"回测失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
             
@@ -10508,7 +10533,7 @@ def main():
                 results = st.session_state['comparison_results']
                 
                 st.markdown("---")
-                st.subheader("📈 策略对比结果")
+                st.subheader("策略对比结果")
                 
                 # 创建对比表格
                 comparison_data = []
@@ -10525,9 +10550,9 @@ def main():
                 comparison_df = pd.DataFrame(comparison_data)
                 st.dataframe(comparison_df, use_container_width=True, hide_index=True)
                 
-                # 🆕 高级可视化对比（v49增强版）
+                #  高级可视化对比（v49增强版）
                 st.markdown("---")
-                st.subheader("📊 全方位可视化对比")
+                st.subheader("全方位可视化对比")
                 
                 # 第一行：胜率和收益对比
                 col1, col2 = st.columns(2)
@@ -10554,7 +10579,7 @@ def main():
                     ))
                     
                     fig_winrate.update_layout(
-                        title={'text': '📊 胜率对比', 'x': 0.5, 'xanchor': 'center'},
+                        title={'text': ' 胜率对比', 'x': 0.5, 'xanchor': 'center'},
                         yaxis_title='胜率 (%)',
                         height=350,
                         plot_bgcolor='rgba(240, 242, 246, 0.5)',
@@ -10582,7 +10607,7 @@ def main():
                     ))
                     
                     fig_return.update_layout(
-                        title={'text': '💰 平均收益对比', 'x': 0.5, 'xanchor': 'center'},
+                        title={'text': ' 平均收益对比', 'x': 0.5, 'xanchor': 'center'},
                         yaxis_title='收益 (%)',
                         height=350,
                         plot_bgcolor='rgba(240, 242, 246, 0.5)',
@@ -10620,7 +10645,7 @@ def main():
                     ))
                     
                     fig_risk.update_layout(
-                        title={'text': '📐 风险调整收益对比', 'x': 0.5, 'xanchor': 'center'},
+                        title={'text': ' 风险调整收益对比', 'x': 0.5, 'xanchor': 'center'},
                         yaxis_title='比率',
                         barmode='group',
                         height=350,
@@ -10659,7 +10684,7 @@ def main():
                     ))
                     
                     fig_drawdown.update_layout(
-                        title={'text': '⚠️ 风险与盈亏比', 'x': 0.5, 'xanchor': 'center'},
+                        title={'text': ' 风险与盈亏比', 'x': 0.5, 'xanchor': 'center'},
                         yaxis=dict(title='最大回撤 (%)', side='left'),
                         yaxis2=dict(title='盈亏比', side='right', overlaying='y'),
                         height=350,
@@ -10668,9 +10693,9 @@ def main():
                     )
                     st.plotly_chart(fig_drawdown, use_container_width=True)
                 
-                # 🆕 策略对比雷达图
+                #  策略对比雷达图
                 st.markdown("---")
-                st.subheader("🎯 策略综合评分雷达图")
+                st.subheader("策略综合评分雷达图")
                 
                 # 计算每个策略的标准化评分
                 radar_fig = go.Figure()
@@ -10722,7 +10747,7 @@ def main():
                                   key=lambda x: x[1].get('avg_return', 0) * x[1].get('win_rate', 0) / 100)
                 
                 st.success(f"""
-                ### 🏆 推荐策略：{best_strategy[0]}
+                ###  推荐策略：{best_strategy[0]}
                 
                 **综合表现**：
                 - 胜率：{best_strategy[1].get('win_rate', 0):.1f}%
@@ -10730,106 +10755,105 @@ def main():
                 - 夏普比率：{best_strategy[1].get('sharpe_ratio', 0):.2f}
                 - 信号数量：{best_strategy[1].get('total_signals', 0)}
                 
-                💡 根据历史回测数据，该策略综合表现最佳，建议优先使用！
+                 根据历史回测数据，该策略综合表现最佳，建议优先使用！
                 """)
                 
                 # ==================== 回测+ 增强功能 ====================
                 st.markdown("---")
-                st.markdown("### 🚀 回测+ 增强分析")
+                st.markdown("###  回测+ 增强分析")
                 
                 # 创建标签页
-                analysis_tab1, analysis_tab2, analysis_tab3, analysis_tab4 = st.tabs([
-                    "📊 高级指标", "📈 收益分析", "🎯 信号质量", "📥 导出报告"
-                ])
+                _analysis_tabs = [" 高级指标", " 收益分析", " 信号质量", " 导出报告"]
+                analysis_tab1, analysis_tab2, analysis_tab3, analysis_tab4 = st.tabs([t.strip() for t in _analysis_tabs])
                 
                 with analysis_tab1:
-                    st.subheader("📊 高级性能指标（v49增强版）")
+                    st.subheader("高级性能指标（v49增强版）")
                     
                     # 为每个策略计算高级指标
                     for strategy_name, stats in results.items():
-                        with st.expander(f"📈 {strategy_name} - 详细指标", expanded=True):
+                        with st.expander(f"{strategy_name} - 详细指标", expanded=True):
                             # 基础指标
-                            st.markdown("#### 💎 核心指标")
+                            st.markdown("####  核心指标")
                             col1, col2, col3, col4 = st.columns(4)
                             
                             with col1:
-                                st.metric("📊 总信号数", stats.get('total_signals', 0))
-                                st.metric("✅ 胜率", f"{stats.get('win_rate', 0):.1f}%")
+                                st.metric("总信号数", stats.get('total_signals', 0))
+                                st.metric("胜率", f"{stats.get('win_rate', 0):.1f}%")
                             
                             with col2:
-                                st.metric("💰 平均收益", f"{stats.get('avg_return', 0):.2f}%")
-                                st.metric("📈 中位数收益", f"{stats.get('median_return', 0):.2f}%")
+                                st.metric("平均收益", f"{stats.get('avg_return', 0):.2f}%")
+                                st.metric("中位数收益", f"{stats.get('median_return', 0):.2f}%")
                             
                             with col3:
-                                st.metric("🎯 最大收益", f"{stats.get('max_return', 0):.2f}%")
-                                st.metric("⚠️ 最大亏损", f"{stats.get('min_return', 0):.2f}%")
+                                st.metric("最大收益", f"{stats.get('max_return', 0):.2f}%")
+                                st.metric("最大亏损", f"{stats.get('min_return', 0):.2f}%")
                             
                             with col4:
-                                st.metric("📐 夏普比率", f"{stats.get('sharpe_ratio', 0):.2f}")
+                                st.metric("夏普比率", f"{stats.get('sharpe_ratio', 0):.2f}")
                                 profit_loss = stats.get('profit_loss_ratio', 0)
                                 if profit_loss == float('inf'):
-                                    st.metric("💪 盈亏比", "∞")
+                                    st.metric("盈亏比", "∞")
                                 else:
-                                    st.metric("💪 盈亏比", f"{profit_loss:.2f}")
+                                    st.metric("盈亏比", f"{profit_loss:.2f}")
                             
-                            # 🆕 高级风险指标
+                            #  高级风险指标
                             st.markdown("---")
-                            st.markdown("#### 🛡️ 风险控制指标")
+                            st.markdown("####  风险控制指标")
                             col1, col2, col3, col4 = st.columns(4)
                             
                             with col1:
                                 max_dd = stats.get('max_drawdown', 0)
                                 st.metric(
-                                    "📉 最大回撤", 
+                                    " 最大回撤", 
                                     f"{max_dd:.2f}%",
                                     delta=None,
                                     help="资金曲线从高点到最低点的最大跌幅"
                                 )
                                 st.metric(
-                                    "📊 波动率",
+                                    " 波动率",
                                     f"{stats.get('volatility', 0):.2f}%",
                                     help="收益率的标准差，越小越稳定"
                                 )
                             
                             with col2:
                                 st.metric(
-                                    "🎯 Sortino比率",
+                                    " Sortino比率",
                                     f"{stats.get('sortino_ratio', 0):.2f}",
                                     help="只考虑下行风险的风险调整收益率"
                                 )
                                 st.metric(
-                                    "📈 Calmar比率",
+                                    " Calmar比率",
                                     f"{stats.get('calmar_ratio', 0):.2f}",
                                     help="年化收益率与最大回撤的比值"
                                 )
                             
                             with col3:
                                 st.metric(
-                                    "🔥 最长连胜",
+                                    " 最长连胜",
                                     f"{stats.get('max_consecutive_wins', 0)} 次",
                                     help="连续盈利交易的最长记录"
                                 )
                                 st.metric(
-                                    "❄️ 最长连亏",
+                                    " 最长连亏",
                                     f"{stats.get('max_consecutive_losses', 0)} 次",
                                     help="连续亏损交易的最长记录"
                                 )
                             
                             with col4:
                                 st.metric(
-                                    "📊 年化收益",
+                                    " 年化收益",
                                     f"{stats.get('annualized_return', 0):.2f}%",
                                     help="按252个交易日计算的年化收益率"
                                 )
                                 st.metric(
-                                    "💡 期望值",
+                                    " 期望值",
                                     f"{stats.get('expected_value', 0):.2f}%",
                                     help="每笔交易的期望收益"
                                 )
                             
                             # 收益分位数
                             st.markdown("---")
-                            st.markdown("#### 📊 收益分布")
+                            st.markdown("####  收益分布")
                             col1, col2, col3 = st.columns(3)
                             
                             with col1:
@@ -10842,7 +10866,7 @@ def main():
                             # 分强度统计
                             if 'strength_performance' in stats:
                                 st.markdown("---")
-                                st.markdown("#### 📊 分强度表现统计")
+                                st.markdown("####  分强度表现统计")
                                 strength_data = []
                                 for strength_range, perf in stats['strength_performance'].items():
                                     strength_data.append({
@@ -10891,7 +10915,7 @@ def main():
                                     st.plotly_chart(fig_strength, use_container_width=True)
                 
                 with analysis_tab2:
-                    st.subheader("📈 收益分布与资金曲线（v49增强版）")
+                    st.subheader("收益分布与资金曲线（v49增强版）")
                     
                     # 选择要分析的策略
                     selected_for_analysis = st.selectbox(
@@ -10906,7 +10930,7 @@ def main():
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        st.markdown("#### 📊 收益统计")
+                        st.markdown("####  收益统计")
                         st.info(f"""
                         **平均收益**: {stats_for_analysis.get('avg_return', 0):.2f}%
                         
@@ -10920,26 +10944,26 @@ def main():
                         """)
                     
                     with col2:
-                        st.markdown("#### 🎯 风险指标")
+                        st.markdown("####  风险指标")
                         win_rate = stats_for_analysis.get('win_rate', 0)
                         avg_return = stats_for_analysis.get('avg_return', 0)
                         
                         # 计算风险等级
                         if win_rate >= 60 and avg_return >= 5:
-                            risk_level = "🟢 低风险"
+                            risk_level = " 低风险"
                         elif win_rate >= 50 and avg_return >= 3:
-                            risk_level = "🟡 中风险"
+                            risk_level = " 中风险"
                         else:
-                            risk_level = "🔴 高风险"
+                            risk_level = " 高风险"
                         
                         st.metric("风险等级", risk_level)
                         st.metric("胜率", f"{win_rate:.1f}%")
                         st.metric("夏普比率", f"{stats_for_analysis.get('sharpe_ratio', 0):.2f}")
                         st.metric("盈亏比", f"{stats_for_analysis.get('profit_loss_ratio', 0):.2f}")
                     
-                    # 🆕 资金曲线图
+                    #  资金曲线图
                     st.markdown("---")
-                    st.markdown("#### 💰 资金曲线")
+                    st.markdown("####  资金曲线")
                     
                     if 'cumulative_returns' in stats_for_analysis and stats_for_analysis['cumulative_returns']:
                         cumulative_returns = stats_for_analysis['cumulative_returns']
@@ -10977,18 +11001,18 @@ def main():
                         
                         st.plotly_chart(fig_equity, use_container_width=True)
                     else:
-                        st.info("📊 资金曲线数据不可用")
+                        st.info("资金曲线数据不可用")
                     
-                    # 🆕 Monte Carlo模拟
+                    #  Monte Carlo模拟
                     st.markdown("---")
-                    st.markdown("#### 🎲 Monte Carlo模拟（未来收益预测）")
+                    st.markdown("####  Monte Carlo模拟（未来收益预测）")
                     
                     col1, col2 = st.columns([2, 1])
                     
                     with col2:
                         mc_simulations = st.slider("模拟次数", 100, 1000, 500, 100, key="mc_sims")
                         mc_periods = st.slider("预测周期", 10, 100, 50, 10, key="mc_periods")
-                        run_mc = st.button("🎲 运行Monte Carlo模拟", type="primary", use_container_width=True)
+                        run_mc = st.button("运行Monte Carlo模拟", type="primary", use_container_width=True)
                     
                     with col1:
                         if run_mc:
@@ -11068,7 +11092,7 @@ def main():
                                 # 显示统计结果
                                 final_values = simulations[:, -1]
                                 st.success(f"""
-                                ### 📊 Monte Carlo模拟结果
+                                ###  Monte Carlo模拟结果
                                 
                                 **{mc_periods}个周期后的预期收益：**
                                 - 中位数：{(median_path[-1] - 1) * 100:.2f}%
@@ -11081,7 +11105,7 @@ def main():
                     
                     # 收益区间分布
                     st.markdown("---")
-                    st.markdown("#### 📊 收益区间分布")
+                    st.markdown("####  收益区间分布")
                     if 'strength_performance' in stats_for_analysis:
                         strength_perf = stats_for_analysis['strength_performance']
                         
@@ -11121,10 +11145,10 @@ def main():
                         st.plotly_chart(fig, use_container_width=True)
                 
                 with analysis_tab3:
-                    st.subheader("🎯 信号质量分析（v49增强版）")
+                    st.subheader("信号质量分析（v49增强版）")
                     
                     # 整体信号质量评估
-                    st.markdown("#### 📊 策略信号质量对比")
+                    st.markdown("####  策略信号质量对比")
                     
                     quality_data = []
                     quality_scores_list = []
@@ -11157,7 +11181,7 @@ def main():
                         # 评级
                         if quality_score >= 80:
                             grade = "S 级（优秀）"
-                            grade_icon = "🌟"
+                            grade_icon = ""
                             grade_color = "#FFD700"
                         elif quality_score >= 70:
                             grade = "A 级（良好）"
@@ -11165,11 +11189,11 @@ def main():
                             grade_color = "#C0C0C0"
                         elif quality_score >= 60:
                             grade = "B 级（合格）"
-                            grade_icon = "✅"
+                            grade_icon = ""
                             grade_color = "#CD7F32"
                         else:
                             grade = "C 级（待改进）"
-                            grade_icon = "📝"
+                            grade_icon = ""
                             grade_color = "#808080"
                         
                         quality_data.append({
@@ -11188,9 +11212,9 @@ def main():
                     quality_df = pd.DataFrame(quality_data)
                     st.dataframe(quality_df, use_container_width=True, hide_index=True)
                     
-                    # 🆕 质量分数可视化对比
+                    #  质量分数可视化对比
                     st.markdown("---")
-                    st.markdown("#### 📊 质量分数可视化")
+                    st.markdown("####  质量分数可视化")
                     
                     fig_quality = go.Figure()
                     
@@ -11226,9 +11250,9 @@ def main():
                     
                     st.plotly_chart(fig_quality, use_container_width=True)
                     
-                    # 🆕 策略对比热力图
+                    #  策略对比热力图
                     st.markdown("---")
-                    st.markdown("#### 🔥 策略指标热力图")
+                    st.markdown("####  策略指标热力图")
                     
                     # 准备热力图数据
                     heatmap_metrics = ['胜率', '平均收益', '夏普比率', 'Sortino比率', '盈亏比']
@@ -11266,7 +11290,7 @@ def main():
                     
                     # 质量评估说明
                     st.info("""
-                    ### 📋 质量评级标准（v49增强版）
+                    ###  质量评级标准（v49增强版）
                     
                     **评分公式**：
                     - 胜率 × 25%
@@ -11278,29 +11302,29 @@ def main():
                     - 盈亏比 × 5%
                     
                     **评级标准**：
-                    - 🌟 **S 级（优秀）**：质量分数 ≥ 80分 - 胜率高、收益好、风险可控、信号充足，建议重点使用
+                    -  **S 级（优秀）**：质量分数 ≥ 80分 - 胜率高、收益好、风险可控、信号充足，建议重点使用
                     - ⭐ **A 级（良好）**：质量分数 70-80分 - 综合表现良好，建议正常使用
-                    - ✅ **B 级（合格）**：质量分数 60-70分 - 表现尚可，有改进空间，谨慎使用
-                    - 📝 **C 级（待改进）**：质量分数 < 60分 - 需要优化参数或策略，不建议使用
+                    -  **B 级（合格）**：质量分数 60-70分 - 表现尚可，有改进空间，谨慎使用
+                    -  **C 级（待改进）**：质量分数 < 60分 - 需要优化参数或策略，不建议使用
                     """)
                 
                 with analysis_tab4:
-                    st.subheader("📥 导出回测报告（v49增强版）")
+                    st.subheader("导出回测报告（v49增强版）")
                     
-                    st.markdown("#### 📊 可导出内容")
+                    st.markdown("####  可导出内容")
                     
                     col1, col2, col3 = st.columns(3)
                     
                     with col1:
-                        if st.button("📄 生成Markdown报告", use_container_width=True):
+                        if st.button("生成Markdown报告", use_container_width=True):
                             # 生成Markdown格式的详细报告
-                            report_md = f"""# 📊 超级回测对比报告 v49.0
+                            report_md = f"""#  超级回测对比报告 v49.0
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     终极量价暴涨系统 · 策略回测分析报告
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                             
-## 🎯 回测概况
+##  回测概况
 
 - **回测时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 - **回测策略**: {', '.join(results.keys())}
@@ -11309,12 +11333,12 @@ def main():
 
 ---
 
-## 📈 策略表现汇总
+##  策略表现汇总
 
 """
                             for strategy_name, stats in results.items():
                                 report_md += f"""
-### 🎯 {strategy_name}
+###  {strategy_name}
 
 #### 核心指标
 | 指标 | 数值 | 说明 |
@@ -11363,24 +11387,24 @@ def main():
                             report_md += f"""
 ---
 
-## 🏆 最佳策略推荐
+##  最佳策略推荐
 
 ### 推荐策略：{best_strategy[0]}
 
 **综合评分最高！**
 
 #### 推荐理由
-- ✅ **胜率**: {best_strategy[1].get('win_rate', 0):.1f}% - {"超过50%，表现优秀" if best_strategy[1].get('win_rate', 0) > 50 else "有提升空间"}
-- 💰 **平均收益**: {best_strategy[1].get('avg_return', 0):.2f}% - {"收益可观" if best_strategy[1].get('avg_return', 0) > 3 else "稳健增长"}
-- 📐 **夏普比率**: {best_strategy[1].get('sharpe_ratio', 0):.2f} - {"风险收益比优秀" if best_strategy[1].get('sharpe_ratio', 0) > 1 else "风险适中"}
-- ⚠️ **最大回撤**: {best_strategy[1].get('max_drawdown', 0):.2f}% - {"回撤控制良好" if abs(best_strategy[1].get('max_drawdown', 0)) < 10 else "注意风险控制"}
-- 📊 **信号数量**: {best_strategy[1].get('total_signals', 0)} - {"样本充足" if best_strategy[1].get('total_signals', 0) > 100 else "样本适中"}
+-  **胜率**: {best_strategy[1].get('win_rate', 0):.1f}% - {"超过50%，表现优秀" if best_strategy[1].get('win_rate', 0) > 50 else "有提升空间"}
+-  **平均收益**: {best_strategy[1].get('avg_return', 0):.2f}% - {"收益可观" if best_strategy[1].get('avg_return', 0) > 3 else "稳健增长"}
+-  **夏普比率**: {best_strategy[1].get('sharpe_ratio', 0):.2f} - {"风险收益比优秀" if best_strategy[1].get('sharpe_ratio', 0) > 1 else "风险适中"}
+-  **最大回撤**: {best_strategy[1].get('max_drawdown', 0):.2f}% - {"回撤控制良好" if abs(best_strategy[1].get('max_drawdown', 0)) < 10 else "注意风险控制"}
+-  **信号数量**: {best_strategy[1].get('total_signals', 0)} - {"样本充足" if best_strategy[1].get('total_signals', 0) > 100 else "样本适中"}
 
 根据历史回测数据，该策略在风险收益平衡方面表现最佳，建议优先使用！
 
 ---
 
-## 📊 策略对比分析
+##  策略对比分析
 
 ### 核心指标对比表
 
@@ -11394,27 +11418,27 @@ def main():
 
 ---
 
-## 📝 实战操作建议
+##  实战操作建议
 
-### 🎯 仓位管理
+###  仓位管理
 1. **初始仓位**: 建议每次投入不超过总资金的 **15-20%**
 2. **最大持仓**: 同时持有不超过 **5只股票**（避免过度分散）
 3. **加仓策略**: 盈利达到+5%后可适当加仓10%
 4. **减仓原则**: 单只股票浮亏超过-3%立即减半仓位
 
-### ⚠️ 风险控制
+###  风险控制
 1. **止损设置**: **严格设置-5%止损位**，触及立即清仓
 2. **移动止损**: 盈利超过+10%后，将止损位移至成本价
 3. **时间止损**: 持仓超过10个交易日未盈利，考虑减仓
 4. **大盘止损**: 大盘跌破重要支撑位，减仓50%观望
 
-### 💰 止盈策略
+###  止盈策略
 1. **首次止盈**: 盈利达到 **+10%** 时止盈50%仓位
 2. **二次止盈**: 盈利达到 **+15%** 时再止盈30%仓位
 3. **持有利润**: 保留20%仓位博取更大收益，移动止损保护
 4. **分批止盈**: 避免一次性清仓，保持市场敏感度
 
-### 📊 信号筛选
+###  信号筛选
 1. **高分优先**: 优先选择评分 **≥75分** 的信号
 2. **行业分散**: 避免所有持仓集中在同一行业
 3. **市值均衡**: 大中小市值合理配置（建议3:5:2）
@@ -11428,23 +11452,23 @@ def main():
 
 ---
 
-## 🔬 数据质量说明
+##  数据质量说明
 
 ### 数据来源
 - **真实数据源**: Tushare Pro专业金融数据接口
-- **数据完整性**: ✅ 100%真实市场数据，无模拟无演示
+- **数据完整性**:  100%真实市场数据，无模拟无演示
 - **更新频率**: 每日收盘后自动更新
 - **数据范围**: 最近1年历史数据，覆盖完整牛熊周期
 
 ### 回测可靠性
 - **样本数量**: 充足（{sum(stats.get('total_signals', 0) for stats in results.values())}个信号）
 - **时间跨度**: 覆盖不同市场环境
-- **无未来函数**: ✅ 严格按照时间顺序回测
+- **无未来函数**:  严格按照时间顺序回测
 - **滑点处理**: 已考虑1%交易滑点和手续费
 
 ---
 
-## ⚡ 快速开始
+##  快速开始
 
 ### 第一步：选择策略
 根据上述分析，建议使用 **{best_strategy[0]}**
@@ -11466,7 +11490,7 @@ def main():
 
 ---
 
-## 📞 技术支持
+##  技术支持
 
 - 系统版本：v49.0 长期稳健版
 - 更新日期：{datetime.now().strftime('%Y-%m-%d')}
@@ -11475,7 +11499,7 @@ def main():
 
 ---
 
-## ⚠️ 免责声明
+##  免责声明
 
 本报告基于历史数据回测分析，仅供参考。历史表现不代表未来收益，股市有风险，投资需谨慎。
 建议投资者：
@@ -11496,17 +11520,17 @@ def main():
                             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                             
                             st.download_button(
-                                label="💾 下载 Markdown 报告",
+                                label=" 下载 Markdown 报告",
                                 data=report_md,
                                 file_name=f"超级回测报告_v49_{timestamp}.md",
                                 mime="text/markdown",
                                 help="下载完整的Markdown格式回测报告，包含所有分析细节"
                             )
                             
-                            st.success("✅ 报告已生成！点击上方按钮下载")
+                            st.success("报告已生成！点击上方按钮下载")
                     
                     with col2:
-                        if st.button("📊 导出 CSV 数据", use_container_width=True):
+                        if st.button("导出 CSV 数据", use_container_width=True):
                             # 准备CSV数据（v49增强版 - 包含更多字段）
                             csv_data = []
                             for strategy_name, stats in results.items():
@@ -11538,19 +11562,19 @@ def main():
                             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                             
                             st.download_button(
-                                label="💾 下载 CSV 文件",
+                                label=" 下载 CSV 文件",
                                 data=csv_string,
                                 file_name=f"回测对比数据_v49_{timestamp}.csv",
                                 mime="text/csv",
                                 help="下载CSV格式数据，包含所有关键指标"
                             )
                             
-                            st.success("✅ CSV数据已准备好！点击上方按钮下载")
+                            st.success("CSV数据已准备好！点击上方按钮下载")
                     
                     with col3:
-                        if st.button("📈 导出Excel完整版", use_container_width=True):
+                        if st.button("导出Excel完整版", use_container_width=True):
                             st.info("""
-                            ### 📊 Excel完整版报告功能
+                            ###  Excel完整版报告功能
                             
                             包含以下工作表：
                             1. **策略对比** - 所有策略的核心指标
@@ -11558,45 +11582,45 @@ def main():
                             3. **信号记录** - 所有交易信号的明细
                             4. **强度分析** - 信号强度分布统计
                             
-                            💡 该功能需要安装 `openpyxl` 库
+                             该功能需要安装 `openpyxl` 库
                             
                             如需使用，请联系技术支持或手动导出CSV后用Excel打开
                             """)
                     
                     st.markdown("---")
                     st.info("""
-                    ### 💡 导出功能说明（v49增强版）
+                    ###  导出功能说明（v49增强版）
                     
-                    #### 📄 Markdown报告
-                    - ✅ 包含完整的策略分析和操作建议
-                    - ✅ 可直接在Markdown阅读器或记事本中查看
-                    - ✅ 格式清晰，适合打印或分享
+                    ####  Markdown报告
+                    -  包含完整的策略分析和操作建议
+                    -  可直接在Markdown阅读器或记事本中查看
+                    -  格式清晰，适合打印或分享
                     
-                    #### 📊 CSV数据
-                    - ✅ 包含18项核心指标
-                    - ✅ 适合导入Excel进行进一步分析
-                    - ✅ 支持数据透视表和图表制作
+                    ####  CSV数据
+                    -  包含18项核心指标
+                    -  适合导入Excel进行进一步分析
+                    -  支持数据透视表和图表制作
                     
-                    #### 📈 Excel完整版（即将上线）
+                    ####  Excel完整版（即将上线）
                     - ⏳ 多工作表结构化报告
                     - ⏳ 自动生成图表和分析
                     - ⏳ 交互式数据筛选
                     
-                    #### 💾 建议
+                    ####  建议
                     - 定期保存回测结果，建立策略表现档案
                     - 对比不同时期的回测数据，观察策略稳定性
                     - 根据回测结果优化参数和选股标准
                     """)
         
-        elif backtest_mode == "🎯 单策略深度回测":
-            st.subheader("🎯 单策略深度回测")
+        elif backtest_mode == "单策略深度回测":
+            st.subheader("单策略深度回测")
             
             col1, col2 = st.columns(2)
             
             with col1:
                 selected_strategy = st.selectbox(
                     "选择策略",
-                    ["v4.0 长期稳健版", "v5.0 趋势爆发版", "v6.0 顶级超短线", "v7.0 终极智能版🚀", "v8.0 终极进化版🚀🚀🚀 NEW!", "v9.0 中线均衡版🧭 NEW!"],
+                    ["v4.0 长期稳健版", "v5.0 趋势爆发版", "v6.0 顶级超短线", "v7.0 终极智能版", "v8.0 终极进化版 NEW!", "v9.0 中线均衡版 NEW!"],
                     help="选择要深度回测的策略。v8.0升级：ATR动态风控+市场过滤+凯利仓位；v9.0为中线均衡策略。"
                 )
             
@@ -11607,12 +11631,12 @@ def main():
             with col3:
                 sample_size = st.slider("回测样本数量", 100, 2000, 800, 100, key="single_backtest_sample_size")
             with col4:
-                # ✅ 添加评分阈值参数（特别针对v6/v7/v8）
+                #  添加评分阈值参数（特别针对v6/v7/v8）
                 score_threshold = st.slider("评分阈值", 50, 90, 65, 5, 
                                            key="single_backtest_threshold",
                                            help="v4/v5建议60分，v6建议80分，v7建议60分，v8建议60-65分（激进55）")
             
-            if st.button("🚀 开始回测", type="primary", use_container_width=True, key="single_backtest"):
+            if st.button("开始回测", type="primary", use_container_width=True, key="single_backtest"):
                 with st.spinner(f"正在回测 {selected_strategy}..."):
                     try:
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
@@ -11632,7 +11656,7 @@ def main():
                         conn.close()
                         
                         if df.empty:
-                            st.error("❌ 无法获取历史数据")
+                            st.error("无法获取历史数据")
                         else:
                             df = df.rename(columns={
                                 'close_price': 'close',
@@ -11651,7 +11675,7 @@ def main():
                                     df, sample_size=sample_size, holding_days=holding_days
                                 )
                             elif "v8.0" in selected_strategy:
-                                # 🚀🚀🚀 v8.0 终极进化版回测
+                                #  v8.0 终极进化版回测
                                 result = vp_analyzer.backtest_v8_ultimate(
                                     df, sample_size=sample_size, holding_days=holding_days,
                                     score_threshold=score_threshold
@@ -11665,23 +11689,23 @@ def main():
                                 # v7.0 终极智能版回测
                                 result = vp_analyzer.backtest_v7_intelligent(
                                     df, sample_size=sample_size, holding_days=holding_days,
-                                    score_threshold=score_threshold  # ✅ 传入评分阈值
+                                    score_threshold=score_threshold  #  传入评分阈值
                                 )
                             else:  # v6.0
                                 result = vp_analyzer.backtest_v6_ultra_short(
                                     df, sample_size=sample_size, holding_days=holding_days,
-                                    score_threshold=score_threshold  # ✅ 传入评分阈值
+                                    score_threshold=score_threshold  #  传入评分阈值
                                 )
                             
                             if result['success']:
                                 st.session_state['single_backtest_result'] = result
-                                st.success("✅ 回测完成！")
+                                st.success("回测完成！")
                                 st.rerun()
                             else:
-                                st.error(f"❌ 回测失败：{result.get('error', '未知错误')}")
+                                st.error(f"回测失败：{result.get('error', '未知错误')}")
                     
                     except Exception as e:
-                        st.error(f"❌ 回测失败: {e}")
+                        st.error(f"回测失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
             
@@ -11691,7 +11715,7 @@ def main():
                 stats = result.get('stats', {})
                 
                 st.markdown("---")
-                st.subheader("📊 回测结果详情")
+                st.subheader("回测结果详情")
                 
                 col1, col2, col3, col4 = st.columns(4)
                 
@@ -11716,15 +11740,14 @@ def main():
                 
                 # ==================== 单策略回测+ 增强功能 ====================
                 st.markdown("---")
-                st.subheader("🚀 深度分析")
+                st.subheader("深度分析")
                 
-                single_analysis_tab1, single_analysis_tab2, single_analysis_tab3 = st.tabs([
-                    "📊 分强度统计", "📋 交易记录", "📥 导出数据"
-                ])
+                _single_tabs = [" 分强度统计", " 交易记录", " 导出数据"]
+                single_analysis_tab1, single_analysis_tab2, single_analysis_tab3 = st.tabs([t.strip() for t in _single_tabs])
                 
                 with single_analysis_tab1:
                     if 'strength_performance' in stats:
-                        st.markdown("### 📊 信号强度表现分析")
+                        st.markdown("###  信号强度表现分析")
                         
                         strength_perf = stats['strength_performance']
                         
@@ -11742,7 +11765,7 @@ def main():
                         st.dataframe(strength_table_df, use_container_width=True, hide_index=True)
                         
                         # 可视化
-                        st.markdown("### 📈 信号强度可视化")
+                        st.markdown("###  信号强度可视化")
                         
                         import plotly.graph_objects as go
                         from plotly.subplots import make_subplots
@@ -11788,7 +11811,7 @@ def main():
                         st.plotly_chart(fig, use_container_width=True)
                         
                         # 结论分析
-                        st.markdown("### 💡 策略分析结论")
+                        st.markdown("###  策略分析结论")
                         
                         # 找出表现最好的强度区间
                         best_strength = max(strength_perf.items(), 
@@ -11800,20 +11823,20 @@ def main():
                         - 胜率: {best_strength[1]['win_rate']:.1f}%
                         - 信号数量: {best_strength[1]['count']}
                         
-                        💡 建议：重点关注 {best_strength[0]}分 区间的信号，该区间风险收益比最佳。
+                         建议：重点关注 {best_strength[0]}分 区间的信号，该区间风险收益比最佳。
                         """)
                     else:
                         st.info("暂无分强度统计数据")
                 
                 with single_analysis_tab2:
                     if 'details' in result and len(result.get('details', [])) > 0:
-                        st.markdown("### 📋 详细交易记录（前50条）")
+                        st.markdown("###  详细交易记录（前50条）")
                         
                         details_df = result['details'][:50] if isinstance(result['details'], pd.DataFrame) else pd.DataFrame(result['details'][:50])
                         st.dataframe(details_df, use_container_width=True, hide_index=True)
                         
                         # 交易记录统计
-                        st.markdown("### 📊 交易统计")
+                        st.markdown("###  交易统计")
                         col1, col2, col3, col4 = st.columns(4)
                         
                         with col1:
@@ -11834,17 +11857,17 @@ def main():
                         st.info("暂无详细交易记录")
                 
                 with single_analysis_tab3:
-                    st.markdown("### 📥 导出回测数据")
+                    st.markdown("###  导出回测数据")
                     
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        if st.button("📄 生成回测报告", use_container_width=True, key="single_report"):
+                        if st.button("生成回测报告", use_container_width=True, key="single_report"):
                             strategy_name = result.get('strategy', '未知策略')
                             
-                            report_md = f"""# 📊 {strategy_name} 深度回测报告
+                            report_md = f"""#  {strategy_name} 深度回测报告
                             
-## 🎯 回测概况
+##  回测概况
 
 **回测时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 **回测策略**: {strategy_name}
@@ -11853,7 +11876,7 @@ def main():
 
 ---
 
-## 📈 核心指标
+##  核心指标
 
 | 指标 | 数值 |
 |------|------|
@@ -11868,7 +11891,7 @@ def main():
 
 ---
 
-## 📊 分强度表现
+##  分强度表现
 """
                             if 'strength_performance' in stats:
                                 for strength_range, perf in stats['strength_performance'].items():
@@ -11883,7 +11906,7 @@ def main():
                             report_md += f"""
 ---
 
-## 💡 使用建议
+##  使用建议
 
 1. **最佳信号强度**: 关注70分以上的信号
 2. **止损建议**: 建议设置-5%止损位
@@ -11899,17 +11922,17 @@ def main():
                             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                             
                             st.download_button(
-                                label="💾 下载报告",
+                                label=" 下载报告",
                                 data=report_md,
                                 file_name=f"single_backtest_report_{timestamp}.md",
                                 mime="text/markdown",
                                 key="download_single_report"
                             )
                             
-                            st.success("✅ 报告已生成！")
+                            st.success("报告已生成！")
                     
                     with col2:
-                        if st.button("📊 导出交易记录", use_container_width=True, key="single_export"):
+                        if st.button("导出交易记录", use_container_width=True, key="single_export"):
                             if 'details' in result and len(result.get('details', [])) > 0:
                                 details_df = result['details'] if isinstance(result['details'], pd.DataFrame) else pd.DataFrame(result['details'])
                                 csv_string = details_df.to_csv(index=False, encoding='utf-8-sig')
@@ -11918,22 +11941,22 @@ def main():
                                 timestamp2 = datetime.now().strftime('%Y%m%d_%H%M%S')
                                 
                                 st.download_button(
-                                    label="💾 下载CSV",
+                                    label=" 下载CSV",
                                     data=csv_string,
                                     file_name=f"trade_records_{timestamp2}.csv",
                                     mime="text/csv",
                                     key="download_single_csv"
                                 )
                                 
-                                st.success("✅ 交易记录已准备好！")
+                                st.success("交易记录已准备好！")
                             else:
-                                st.warning("⚠️ 暂无交易记录可导出")
+                                st.warning("暂无交易记录可导出")
         
         else:  # 参数优化
-            st.subheader("⚙️ 参数优化")
+            st.subheader("参数优化")
             
             st.info("""
-            ### 💡 参数优化说明
+            ###  参数优化说明
             
             系统将自动测试不同的参数组合，找出历史表现最佳的参数设置。
             
@@ -11950,7 +11973,7 @@ def main():
             
             sample_size = st.slider("优化样本数量", 100, 1000, 300, 50, help="样本越大越准确但耗时越长")
             
-            if st.button("🔍 开始优化", type="primary", use_container_width=True, key="start_optimization"):
+            if st.button("开始优化", type="primary", use_container_width=True, key="start_optimization"):
                 with st.spinner("正在优化参数...这可能需要几分钟..."):
                     try:
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
@@ -11970,7 +11993,7 @@ def main():
                         conn.close()
                         
                         if df.empty:
-                            st.error("❌ 无法获取历史数据")
+                            st.error("无法获取历史数据")
                         else:
                             df = df.rename(columns={
                                 'close_price': 'close',
@@ -11987,13 +12010,13 @@ def main():
                             
                             if result['success']:
                                 st.session_state['optimization_result'] = result
-                                st.success("✅ 参数优化完成！")
+                                st.success("参数优化完成！")
                                 st.rerun()
                             else:
-                                st.error(f"❌ 优化失败：{result.get('error', '未知错误')}")
+                                st.error(f"优化失败：{result.get('error', '未知错误')}")
                     
                     except Exception as e:
-                        st.error(f"❌ 优化失败: {e}")
+                        st.error(f"优化失败: {e}")
                         import traceback
                         st.code(traceback.format_exc())
             
@@ -12004,7 +12027,7 @@ def main():
                 
                 st.markdown("---")
                 st.success(f"""
-                ### 🏆 最佳参数组合
+                ###  最佳参数组合
                 
                 **信号强度阈值**: {best_params.get('params', {}).get('signal_strength', 'N/A')}
                 
@@ -12016,7 +12039,7 @@ def main():
                 """)
                 
                 st.markdown("---")
-                st.subheader("📊 所有参数对比")
+                st.subheader("所有参数对比")
                 
                 all_results = result.get('all_results', [])
                 if all_results:
@@ -12033,10 +12056,10 @@ def main():
                     params_df = pd.DataFrame(params_data)
                     st.dataframe(params_df, use_container_width=True, hide_index=True)
 
-    # ==================== Tab 4: 🤖 AI智能选股 ====================
+    # ==================== Tab 4:  AI智能选股 ====================
     with tab_ai:
         _render_page_header(
-            "🤖 AI 智能选股",
+            " AI 智能选股",
             "共识与量化结合 · 高收益捕获 · 稳健风控",
             tag="AI Signal",
         )
@@ -12055,41 +12078,41 @@ def main():
         use_v3 = "V5.0" in strategy_version
 
         if use_v3 and evolve_v5.get("params"):
-            st.success(f"🧬 已应用自动进化参数（V5.0，{evolve_v5.get('run_at', 'unknown')}）")
+            st.success(f"已应用自动进化参数（V5.0，{evolve_v5.get('run_at', 'unknown')}）")
         elif (not use_v3) and evolve_v2.get("params"):
-            st.success(f"🧬 已应用自动进化参数（V2.0，{evolve_v2.get('run_at', 'unknown')}）")
+            st.success(f"已应用自动进化参数（V2.0，{evolve_v2.get('run_at', 'unknown')}）")
         
         if use_v3:
-            st.markdown("**✅ V5.0 稳健月度目标版：强调安全边际与回撤控制**")
-            exp_ai = st.expander("📘 策略说明", expanded=False)
+            st.markdown("** V5.0 稳健月度目标版：强调安全边际与回撤控制**")
+            exp_ai = st.expander("策略说明", expanded=False)
             exp_ai.info("""
-            ### ✨ V5.0 核心特点（稳健月度目标版）
+            ###  V5.0 核心特点（稳健月度目标版）
             
             **稳健评分体系**：
-            - 🛡️ **回撤控制**：20日回撤过大直接剔除
-            - ✅ **回踩确认**：回踩均线后企稳反弹优先
-            - 🔥 **板块强度**：板块共振强势的更可靠
-            - 📈 **适度动量**：不过度追高，强调安全边际
+            -  **回撤控制**：20日回撤过大直接剔除
+            -  **回踩确认**：回踩均线后企稳反弹优先
+            -  **板块强度**：板块共振强势的更可靠
+            -  **适度动量**：不过度追高，强调安全边际
             
             **稳健门槛**：
-            - ✅ 成交活跃度与波动率双重过滤
-            - ✅ 回撤过大与极端波动直接剔除
-            - ✅ 优先“趋势健康 + 回踩确认 + 板块共振”
+            -  成交活跃度与波动率双重过滤
+            -  回撤过大与极端波动直接剔除
+            -  优先“趋势健康 + 回踩确认 + 板块共振”
             
             **中国市场特性适配**：
-            - 🇨🇳 回避涨停追高与连板博弈
-            - 🇨🇳 过滤新股高波动阶段
-            - 🇨🇳 结合换手率筛选更稳健标的
-            - 🇨🇳 行业强度加权 + 龙头/次龙识别
-            - 🇨🇳 波动分位自适应 + 市值分层优化
+            -  回避涨停追高与连板博弈
+            -  过滤新股高波动阶段
+            -  结合换手率筛选更稳健标的
+            -  行业强度加权 + 龙头/次龙识别
+            -  波动分位自适应 + 市值分层优化
             
-            **推荐等级**：🌟🌟🌟强烈推荐(70+) | 🌟🌟推荐(50+) | 🌟关注(35+)
+            **推荐等级**：强烈推荐(70+) | 推荐(50+) | 关注(35+)
             """)
         else:
-            st.markdown("**🛡️ V2.0 追涨版：筛选已涨20%+的高动量标的**")
-            exp_ai = st.expander("📘 策略说明", expanded=False)
+            st.markdown("** V2.0 追涨版：筛选已涨20%+的高动量标的**")
+            exp_ai = st.expander("策略说明", expanded=False)
             exp_ai.info("""
-            ### ⚠️ V2.0 策略特点
+            ###  V2.0 策略特点
             - **大盘风控**：自动检测上证指数，空头市场自动预警并下调评分
             - **板块共振**：挖掘"板块集体爆发"个股，提升板块领头羊权重
             - **乖离率过滤**：自动过滤远离均线 35%+ 的标的，拒绝高位接盘
@@ -12100,7 +12123,7 @@ def main():
         
         st.divider()
         
-        st.markdown("### 🎯 策略参数设置")
+        st.markdown("###  策略参数设置")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -12140,7 +12163,7 @@ def main():
             top_n_default = 25 if use_v3 else 30
             top_n = st.slider("优选推荐数量", 5, 100, top_n_default, 5, key="ai_top_n_v3")
 
-        with st.expander("📌 市值筛选（可选）", expanded=False):
+        with st.expander("市值筛选（可选）", expanded=False):
             if use_v3:
                 evo_min_mc = evolve_v5.get("params", {}).get("min_market_cap")
                 evo_max_mc = evolve_v5.get("params", {}).get("max_market_cap")
@@ -12160,9 +12183,9 @@ def main():
             )
             min_market_cap, max_market_cap = market_cap_range
         
-        button_text = "🚀 开启 AI 稳健月度目标 (V5.0)" if use_v3 else "🚀 开启 AI 高收益捕获 (V2.0)"
+        button_text = " 开启 AI 稳健月度目标 (V5.0)" if use_v3 else " 开启 AI 高收益捕获 (V2.0)"
         if st.button(button_text, type="primary", use_container_width=True):
-            with st.spinner(f"🤖 AI 正在全市场扫描 {'V5.0 稳健月度目标' if use_v3 else 'V2.0 高收益标的'}..."):
+            with st.spinner(f"AI 正在全市场扫描 {'V5.0 稳健月度目标' if use_v3 else 'V2.0 高收益标的'}..."):
                 try:
                     conn = sqlite3.connect(PERMANENT_DB_PATH)
                     start_date = (datetime.now() - timedelta(days=150)).strftime('%Y%m%d')
@@ -12204,7 +12227,7 @@ def main():
                         if not stocks.empty:
                             st.session_state[session_key] = stocks
                             st.session_state['ai_strategy_version'] = version_name
-                            st.success(f"✅ {version_name} 扫描完成：找到 {len(stocks)} 只{'综合潜力' if use_v3 else '高收益潜力'}标的")
+                            st.success(f"{version_name} 扫描完成：找到 {len(stocks)} 只{'综合潜力' if use_v3 else '高收益潜力'}标的")
                             sim_account = _get_sim_account()
                             buy_count, buy_status = _auto_buy_ai_stocks(
                                 stocks,
@@ -12219,8 +12242,8 @@ def main():
                             st.rerun()
                         else:
                             if use_v3:
-                                st.error("⚠️ V5.0 未找到股票，可能的原因：\n1. 数据库数据不足（请先到「数据中心」更新数据）\n2. 数据查询出错（请查看系统日志）\n3. 当前市场偏弱或稳健过滤过严")
-                                st.info("💡 提示：V5.0已自动从“严格稳健”→“稳健放宽”→“救援筛选”仍未命中。\n可尝试：降低目标收益阈值、提高最大波动容忍度、或暂时放宽回撤/新股过滤。")
+                                st.error("V5.0 未找到股票，可能的原因：\n1. 数据库数据不足（请先到「数据中心」更新数据）\n2. 数据查询出错（请查看系统日志）\n3. 当前市场偏弱或稳健过滤过严")
+                                st.info("提示：V5.0已自动从“严格稳健”→“稳健放宽”→“救援筛选”仍未命中。\n可尝试：降低目标收益阈值、提高最大波动容忍度、或暂时放宽回撤/新股过滤。")
                                 debug_runs = getattr(vp_analyzer, 'last_v5_debug', None)
                                 if debug_runs:
                                     lines = []
@@ -12234,10 +12257,10 @@ def main():
                                         )
                                     st.code("\n".join(lines))
                             else:
-                                st.warning("⚠️ 当前市场环境下未发现符合 V2.0 标准的标的，建议：\n1. 切换到V5.0稳健月度目标版（推荐）\n2. 降低门槛或等待大盘企稳")
+                                st.warning("当前市场环境下未发现符合 V2.0 标准的标的，建议：\n1. 切换到V5.0稳健月度目标版（推荐）\n2. 降低门槛或等待大盘企稳")
                 
                 except Exception as e:
-                    st.error(f"❌ 运行失败: {e}")
+                    st.error(f"运行失败: {e}")
                     import traceback
                     st.code(traceback.format_exc())
         
@@ -12247,18 +12270,18 @@ def main():
             stocks = st.session_state[result_key].head(top_n)
             version_name = st.session_state.get('ai_strategy_version', 'V5.0' if use_v3 else 'V2.0')
             st.divider()
-            st.subheader(f"📊 AI 优选名单 ({version_name} {'稳健月度目标版' if use_v3 else '追涨版'})")
+            st.subheader(f"AI 优选名单 ({version_name} {'稳健月度目标版' if use_v3 else '追涨版'})")
             _render_result_overview(stocks, score_col="评分", title="AI 结果概览")
             auto_buy_info = st.session_state.get('last_ai_auto_buy')
             if auto_buy_info:
                 if auto_buy_info.get('status') == 'duplicate':
-                    st.info("ℹ️ 本次 AI 优选名单已自动买入过，无需重复买入。")
+                    st.info("本次 AI 优选名单已自动买入过，无需重复买入。")
                 elif auto_buy_info.get('status') == 'disabled':
-                    st.warning("⚠️ 自动买入已关闭，本次未执行买入。")
+                    st.warning("自动买入已关闭，本次未执行买入。")
                 elif auto_buy_info.get('status') in ("empty", "skipped"):
-                    st.info("ℹ️ 本次无可买标的，未执行买入。")
+                    st.info("本次无可买标的，未执行买入。")
                 else:
-                    st.info(f"✅ 已自动买入 {auto_buy_info.get('count', 0)} 只标的（{auto_buy_info.get('time', '')}）")
+                    st.info(f"已自动买入 {auto_buy_info.get('count', 0)} 只标的（{auto_buy_info.get('time', '')}）")
             
             # 统计汇总
             col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -12282,12 +12305,13 @@ def main():
                     st.metric("平均活跃度", "—")
             
             # 数据表格展示
+            display_ai = _standardize_result_df(stocks, score_col="评分")
             st.dataframe(
-                stocks, 
+                display_ai, 
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
-                    "评分": st.column_config.NumberColumn(format="%.1f 🔥"),
+                    "评分": st.column_config.NumberColumn(format="%.1f "),
                     "推荐理由": st.column_config.TextColumn(width="large")
                 }
             )
@@ -12295,23 +12319,23 @@ def main():
             st.markdown("---")
             csv = _df_to_csv_bytes(stocks)
             st.download_button(
-                label=f"📥 导出 {version_name} 结果 (Excel 兼容)",
+                label=f" 导出 {version_name} 结果 (Excel 兼容)",
                 data=csv,
                 file_name=f"AI_稳健月度目标{version_name}_结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv; charset=utf-8"
             )
 
-    # ==================== Tab 5: 🔄 数据与参数管理 ====================
+    # ==================== Tab 5:  数据与参数管理 ====================
     with tab_data:
         _render_page_header(
-            "🔄 数据与参数管理",
+            " 数据与参数管理",
             "一键更新市场数据 · 自动进化 · 健康检测",
             tag="Data Ops",
         )
         st.caption("一键更新市场数据 · 保持数据新鲜")
         
         # 数据库状态
-        with st.expander("📊 数据库状态", expanded=True):
+        with st.expander("数据库状态", expanded=True):
             try:
                 conn = sqlite3.connect(PERMANENT_DB_PATH)
                 cursor = conn.cursor()
@@ -12347,7 +12371,7 @@ def main():
                 st.error(f"无法读取数据库状态: {e}")
 
         # 自动进化状态
-        with st.expander("🧬 自动进化状态", expanded=False):
+        with st.expander("自动进化状态", expanded=False):
             try:
                 evolve_path = os.path.join(os.path.dirname(__file__), "evolution", "last_run.json")
                 if os.path.exists(evolve_path):
@@ -12382,7 +12406,7 @@ def main():
                 st.error(f"读取自动进化结果失败: {e}")
 
         # 资金类数据开关
-        with st.expander("💰 资金类数据开关", expanded=False):
+        with st.expander("资金类数据开关", expanded=False):
             st.caption("当资金接口延迟严重时，可关闭资金加分与相关健康告警。")
             enable_funds = st.checkbox("启用资金类加分", value=_fund_bonus_enabled(), key="enable_fund_bonus")
             if enable_funds:
@@ -12391,7 +12415,7 @@ def main():
                 st.warning("资金类加分已关闭（健康检测将忽略资金表）")
 
         # 自动健康检测
-        with st.expander("🧪 自动健康检测", expanded=False):
+        with st.expander("自动健康检测", expanded=False):
             report_path = os.path.join(os.path.dirname(__file__), "evolution", "health_report.json")
 
             col_h1, col_h2, col_h3 = st.columns([1, 2, 2])
@@ -12409,17 +12433,17 @@ def main():
                     os.makedirs(os.path.dirname(report_path), exist_ok=True)
                     with open(report_path, "w", encoding="utf-8") as f:
                         json.dump(report, f, ensure_ascii=False, indent=2)
-                    st.success("✅ 健康报告已刷新")
+                    st.success("健康报告已刷新")
                 except Exception as e:
                     st.error(f"写入健康报告失败: {e}")
             elif repair_now:
                 with st.spinner("正在修复资金表数据（可能需要1-3分钟）..."):
                     repair = _run_funding_repair(PERMANENT_DB_PATH)
                     if "error" in repair:
-                        st.error(f"❌ 修复失败: {repair['error'].get('error')}")
+                        st.error(f"修复失败: {repair['error'].get('error')}")
                     else:
                         ok_count = sum(1 for r in repair.values() if r and r.get("success"))
-                        st.success(f"✅ 修复完成：成功 {ok_count}/{len(repair)}")
+                        st.success(f"修复完成：成功 {ok_count}/{len(repair)}")
                         st.json(repair)
                 # 修复后立即刷新健康报告
                 report = _compute_health_report(PERMANENT_DB_PATH)
@@ -12439,9 +12463,9 @@ def main():
             if report:
                 st.markdown(f"**最近检测时间**：{report.get('run_at', 'N/A')}")
                 if report.get("ok"):
-                    st.success("✅ 系统健康：未发现明显异常")
+                    st.success("系统健康：未发现明显异常")
                 else:
-                    st.warning("⚠️ 发现异常，请根据提示处理")
+                    st.warning("发现异常，请根据提示处理")
 
                 warnings = report.get("warnings", [])
                 if warnings:
@@ -12488,16 +12512,16 @@ def main():
         else:
             days = 90
         
-        st.info(f"💡 将更新最近{days}天的数据")
+        st.info(f"将更新最近{days}天的数据")
         
-        if st.button("🔄 开始更新数据", type="primary", use_container_width=True):
+        if st.button("开始更新数据", type="primary", use_container_width=True):
             with st.spinner(f"正在更新{days}天数据..."):
                 try:
                     result = db_manager.update_stock_data_from_tushare(days=days)
                     
                     if result['success']:
                         st.success(f"""
-                        ✅ 更新成功！
+                         更新成功！
                         - 更新天数：{result['updated_days']}天
                         - 失败天数：{result.get('failed_days', 0)}天
                         - 总记录数：{result['total_records']:,}条
@@ -12505,28 +12529,28 @@ def main():
                         time.sleep(1)
                         st.rerun()
                     else:
-                        st.error(f"❌ 更新失败：{result.get('error')}")
+                        st.error(f"更新失败：{result.get('error')}")
                 
                 except Exception as e:
-                    st.error(f"❌ 更新失败：{e}")
+                    st.error(f"更新失败：{e}")
                     import traceback
                     st.code(traceback.format_exc())
         
         st.markdown("---")
         
         # 市值数据更新
-        st.subheader("💰 流通市值数据更新")
-        st.info("💡 首次使用或市值筛选功能报错时，请先更新市值数据")
+        st.subheader("流通市值数据更新")
+        st.info("首次使用或市值筛选功能报错时，请先更新市值数据")
         
-        if st.button("💰 更新流通市值数据", use_container_width=True, type="primary"):
+        if st.button("更新流通市值数据", use_container_width=True, type="primary"):
             with st.spinner("正在从Tushare获取最新市值数据..."):
                 result = db_manager.update_market_cap()
                 if result.get('success'):
                     stats = result.get('stats', {})
                     st.success(f"""
-                    ✅ 市值数据更新成功！
+                     市值数据更新成功！
                     - 更新股票数：{result.get('updated_count', 0):,}只
-                    - 100-500亿：{stats.get('count_100_500', 0)}只 🎯黄金区间
+                    - 100-500亿：{stats.get('count_100_500', 0)}只 黄金区间
                     - 50-100亿：{stats.get('count_50_100', 0)}只
                     - <50亿：{stats.get('count_below_50', 0)}只
                     - >500亿：{stats.get('count_above_500', 0)}只
@@ -12534,24 +12558,24 @@ def main():
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error(f"❌ 更新失败：{result.get('error')}")
+                    st.error(f"更新失败：{result.get('error')}")
         
         st.markdown("---")
         
         # 数据库优化和维护
-        st.subheader("🔧 数据库优化与维护")
+        st.subheader("数据库优化与维护")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🔍 数据库健康检查", use_container_width=True):
+            if st.button("数据库健康检查", use_container_width=True):
                 with st.spinner("正在检查数据库健康状态..."):
                     health = db_manager.check_database_health()
                     if 'error' in health:
                         st.error(f"检查失败: {health['error']}")
                     else:
                         if health.get('has_stock_basic') and health.get('has_daily_data'):
-                            st.success("✅ 数据库结构正常")
+                            st.success("数据库结构正常")
                             
                             col_a, col_b, col_c = st.columns(3)
                             with col_a:
@@ -12566,41 +12590,41 @@ def main():
                                          delta="新鲜" if is_fresh else "需更新",
                                          delta_color="normal" if is_fresh else "inverse")
                         else:
-                            st.warning("⚠️ 数据库结构不完整，建议重新初始化")
+                            st.warning("数据库结构不完整，建议重新初始化")
         
         with col2:
-            if st.button("🚀 优化数据库", use_container_width=True, type="secondary"):
+            if st.button("优化数据库", use_container_width=True, type="secondary"):
                 with st.spinner("正在优化数据库（清理重复数据、重建索引）..."):
                     result = db_manager.optimize_database()
                     if result.get('success'):
-                        st.success(f"✅ {result.get('message')}")
+                        st.success(f"{result.get('message')}")
                         time.sleep(1)
                         st.rerun()
                     else:
-                        st.error(f"❌ 优化失败: {result.get('error')}")
+                        st.error(f"优化失败: {result.get('error')}")
         
-        with st.expander("💡 数据库维护说明"):
+        with st.expander("数据库维护说明"):
             st.markdown("""
-            ### 🔍 健康检查
+            ###  健康检查
             - 检查数据库表结构是否完整
             - 检查数据量和最新日期
             - 评估数据新鲜度
             
-            ### 🚀 数据库优化
+            ###  数据库优化
             - 清理重复数据
             - 重建索引（加速查询）
             - VACUUM压缩（减小文件大小）
             
-            ### 💡 建议
+            ###  建议
             - 数据超过7天建议更新
             - 每月优化一次数据库
             - 定期备份重要数据
             """)
 
-    # ==================== Tab 5: 🎯 智能交易助手 ====================
+    # ==================== Tab 5:  智能交易助手 ====================
     with tab_assistant:
         _render_page_header(
-            "🎯 智能交易助手",
+            " 智能交易助手",
             "半自动化交易 · 每日选股 · 持仓管理 · 止盈止损提醒",
             tag="Execution",
         )
@@ -12616,21 +12640,15 @@ def main():
             assistant = st.session_state.trading_assistant
             
             # 创建子标签页
-            sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5, sub_tab6 = st.tabs([
-                "📊 每日选股",
-                "📈 持仓管理",
-                "💰 交易记录",
-                "📝 每日报告",
-                "⚙️ 配置设置",
-                "🧪 模拟交易"
-            ])
+            _assistant_tabs = [" 每日选股", " 持仓管理", " 交易记录", " 每日报告", " 配置设置", " 模拟交易"]
+            sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5, sub_tab6 = st.tabs([t.strip() for t in _assistant_tabs])
             
             # ========== 子Tab 1: 每日选股 ==========
             with sub_tab1:
-                st.subheader("📊 每日智能选股")
+                st.subheader("每日智能选股")
                 
                 st.info("""
-                💡 **选股说明**
+                 **选股说明**
                 - 基于**共识策略**（v4/v5/v7/v8/v9）
                 - 自动扫描全市场股票
                 - 推荐Top高分标的（一致性筛选）
@@ -12644,20 +12662,20 @@ def main():
                 
                 with col2:
                     st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("🚀 开始选股", type="primary", use_container_width=True):
-                        with st.spinner("🔍 正在扫描全市场...（可能需要2-3分钟）"):
+                    if st.button("开始选股", type="primary", use_container_width=True):
+                        with st.spinner("正在扫描全市场...（可能需要2-3分钟）"):
                             recommendations = assistant.daily_stock_scan(top_n=top_n)
                             st.session_state['daily_recommendations'] = recommendations
                             if recommendations:
-                                st.success(f"✅ 选股完成！找到{len(recommendations)}只推荐股票")
+                                st.success(f"选股完成！找到{len(recommendations)}只推荐股票")
                             else:
-                                st.warning("⚠️ 本次未选出股票，已记录诊断信息")
+                                st.warning("本次未选出股票，已记录诊断信息")
                             st.rerun()
                 
                 # 显示推荐结果
                 if 'daily_recommendations' in st.session_state and st.session_state['daily_recommendations']:
                     st.markdown("---")
-                    st.subheader("🎯 今日推荐")
+                    st.subheader("今日推荐")
                     
                     recs = st.session_state['daily_recommendations']
                     recs_df = pd.DataFrame(recs)
@@ -12675,8 +12693,8 @@ def main():
                             with col3:
                                 st.metric("市值", f"{rec['market_cap']/100000000:.1f}亿")
                             
-                            st.markdown(f"**🏭 行业**: {rec['industry']}")
-                            st.markdown(f"**📝 推荐理由**: {rec['reason'][:150]}...")
+                            st.markdown(f"** 行业**: {rec['industry']}")
+                            st.markdown(f"** 推荐理由**: {rec['reason'][:150]}...")
                             
                             # 快速添加到持仓
                             st.markdown("---")
@@ -12699,32 +12717,32 @@ def main():
                             
                             with col3:
                                 st.markdown("<br>", unsafe_allow_html=True)
-                                if st.button("➕ 记录买入", key=f"buy_{rec['ts_code']}"):
+                                if st.button("记录买入", key=f"buy_{rec['ts_code']}"):
                                     assistant.add_holding(
                                         ts_code=rec['ts_code'],
                                         buy_price=buy_price,
                                         quantity=quantity,
                                         score=rec['score']
                                     )
-                                    st.success(f"✅ 已记录买入 {rec['stock_name']}")
+                                    st.success(f"已记录买入 {rec['stock_name']}")
                                     st.rerun()
                 elif 'daily_recommendations' in st.session_state:
-                    st.warning("⚠️ 本次未选出股票，请查看诊断信息")
+                    st.warning("本次未选出股票，请查看诊断信息")
                     debug_info = getattr(assistant, "last_scan_debug", None)
                     if debug_info:
                         st.code(json.dumps(debug_info, ensure_ascii=False, indent=2))
             
             # ========== 子Tab 2: 持仓管理 ==========
             with sub_tab2:
-                st.subheader("📈 当前持仓管理")
+                st.subheader("当前持仓管理")
                 
                 col1, col2 = st.columns([4, 1])
                 
                 with col2:
-                    if st.button("🔄 更新持仓", use_container_width=True):
+                    if st.button("更新持仓", use_container_width=True):
                         with st.spinner("更新中..."):
                             assistant.update_holdings()
-                            st.success("✅ 更新完成")
+                            st.success("更新完成")
                             st.rerun()
                 
                 # 获取持仓
@@ -12736,7 +12754,7 @@ def main():
                 conn.close()
                 
                 if holdings.empty:
-                    st.info("📊 当前无持仓")
+                    st.info("当前无持仓")
                 else:
                     # 持仓汇总
                     total_cost = holdings['cost_total'].sum()
@@ -12760,7 +12778,7 @@ def main():
                     # 检查止盈止损
                     alerts = assistant.check_stop_conditions()
                     if alerts:
-                        st.warning("⚠️ **止盈止损提醒**")
+                        st.warning("**止盈止损提醒**")
                         for alert in alerts:
                             if alert['type'] == 'take_profit':
                                 st.success(alert['message'])
@@ -12775,7 +12793,7 @@ def main():
                         buy_price = holding.get('buy_price', 0) or 0
                         current_price = holding.get('current_price', 0) or buy_price
                         
-                        profit_color = "🟢" if profit_loss > 0 else "🔴"
+                        profit_color = "" if profit_loss > 0 else ""
                         
                         with st.expander(f"{profit_color} {holding['stock_name']} ({holding['ts_code']}) - {profit_loss_pct*100:.2f}%"):
                             col1, col2, col3, col4 = st.columns(4)
@@ -12817,18 +12835,18 @@ def main():
                             
                             with col3:
                                 st.markdown("<br>", unsafe_allow_html=True)
-                                if st.button("💰 卖出", key=f"sell_{holding['id']}"):
+                                if st.button("卖出", key=f"sell_{holding['id']}"):
                                     assistant.sell_holding(
                                         ts_code=holding['ts_code'],
                                         sell_price=sell_price,
                                         reason=sell_reason
                                     )
-                                    st.success(f"✅ 已记录卖出 {holding['stock_name']}")
+                                    st.success(f"已记录卖出 {holding['stock_name']}")
                                     st.rerun()
             
             # ========== 子Tab 3: 交易记录 ==========
             with sub_tab3:
-                st.subheader("💰 交易历史记录")
+                st.subheader("交易历史记录")
                 
                 # 获取交易记录
                 conn = sqlite3.connect(assistant.assistant_db)
@@ -12839,7 +12857,7 @@ def main():
                 conn.close()
                 
                 if trades.empty:
-                    st.info("📊 暂无交易记录")
+                    st.info("暂无交易记录")
                 else:
                     # 已实现盈亏统计（日/周/月）
                     trades['trade_date'] = pd.to_datetime(trades['trade_date'], errors='coerce')
@@ -12873,7 +12891,7 @@ def main():
                         sell_trades[sell_trades['trade_date'] >= month_start] if not sell_trades.empty else sell_trades
                     )
                     
-                    st.markdown("### 📈 已实现盈亏统计（卖出记录）")
+                    st.markdown("###  已实现盈亏统计（卖出记录）")
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         st.metric("今日盈亏", f"¥{daily_profit:,.2f}", delta=f"{daily_pct*100:.2f}%")
@@ -12907,7 +12925,7 @@ def main():
                     
                     # 显示交易记录
                     for idx, trade in trades.iterrows():
-                        action_emoji = "🟢" if trade['action'] == 'buy' else "🔴"
+                        action_emoji = "" if trade['action'] == 'buy' else ""
                         action_text = "买入" if trade['action'] == 'buy' else "卖出"
                         
                         col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 2])
@@ -12922,20 +12940,20 @@ def main():
                             st.markdown(f"{trade['quantity']}股")
                         with col5:
                             if trade['action'] == 'sell' and trade['profit_loss']:
-                                profit_text = f"{'🟢' if trade['profit_loss'] > 0 else '🔴'} ¥{trade['profit_loss']:.2f} ({trade['profit_loss_pct']*100:.2f}%)"
+                                profit_text = f"{'' if trade['profit_loss'] > 0 else ''} ¥{trade['profit_loss']:.2f} ({trade['profit_loss_pct']*100:.2f}%)"
                                 st.markdown(profit_text)
                             else:
                                 st.markdown(f"¥{trade['amount']:.2f}")
             
             # ========== 子Tab 4: 每日报告 ==========
             with sub_tab4:
-                st.subheader("📝 每日交易报告")
+                st.subheader("每日交易报告")
                 
-                if st.button("📄 生成报告", type="primary"):
+                if st.button("生成报告", type="primary"):
                     with st.spinner("生成中..."):
                         report = assistant.generate_daily_report()
                         st.session_state['daily_report'] = report
-                        st.success("✅ 报告生成完成")
+                        st.success("报告生成完成")
                 
                 if 'daily_report' in st.session_state:
                     st.code(st.session_state['daily_report'], language='text')
@@ -12943,7 +12961,7 @@ def main():
                     # 下载按钮
                     filename = f"trading_report_{datetime.now().strftime('%Y%m%d')}.txt"
                     st.download_button(
-                        label="💾 下载报告",
+                        label=" 下载报告",
                         data=st.session_state['daily_report'],
                         file_name=filename,
                         mime="text/plain"
@@ -12951,7 +12969,7 @@ def main():
             
             # ========== 子Tab 5: 配置设置 ==========
             with sub_tab5:
-                st.subheader("⚙️ 策略参数配置")
+                st.subheader("策略参数配置")
                 
                 col1, col2 = st.columns(2)
                 
@@ -13016,21 +13034,21 @@ def main():
                     )
                 
                 st.markdown("---")
-                st.markdown("### 📧 通知设置")
+                st.markdown("###  通知设置")
                 
                 st.info("""
                 **通知功能说明**
-                - ✅ 支持邮件通知（推荐）
-                - ✅ 支持企业微信通知
-                - ✅ 支持钉钉通知
-                - 📧 每日推荐 + 止盈止损提醒
+                -  支持邮件通知（推荐）
+                -  支持企业微信通知
+                -  支持钉钉通知
+                -  每日推荐 + 止盈止损提醒
                 """)
                 
                 col1, col2 = st.columns(2)
                 
                 with col1:
                     enable_email = st.checkbox(
-                        "📧 启用邮件通知",
+                        " 启用邮件通知",
                         value=False,
                         key="enable_email_notif"
                     )
@@ -13064,7 +13082,7 @@ def main():
                 
                 with col2:
                     enable_wechat = st.checkbox(
-                        "💬 启用企业微信通知",
+                        " 启用企业微信通知",
                         value=False,
                         key="enable_wechat_notif",
                         help="需要企业微信群机器人Webhook"
@@ -13078,7 +13096,7 @@ def main():
                         )
                     
                     enable_dingtalk = st.checkbox(
-                        "📱 启用钉钉通知",
+                        " 启用钉钉通知",
                         value=False,
                         key="enable_dingtalk_notif",
                         help="需要钉钉群机器人Webhook"
@@ -13093,22 +13111,22 @@ def main():
                 
                 if enable_email or enable_wechat or enable_dingtalk:
                     st.markdown("---")
-                    st.markdown("#### 📋 通知内容设置")
+                    st.markdown("####  通知内容设置")
                     
                     col1, col2 = st.columns(2)
                     with col1:
-                        notify_daily = st.checkbox("📊 每日选股推荐", value=True, key="notify_daily")
-                        notify_stop_loss = st.checkbox("🛑 止损提醒", value=True, key="notify_stop")
+                        notify_daily = st.checkbox("每日选股推荐", value=True, key="notify_daily")
+                        notify_stop_loss = st.checkbox("止损提醒", value=True, key="notify_stop")
                     with col2:
-                        notify_take_profit = st.checkbox("💰 止盈提醒", value=True, key="notify_profit")
-                        notify_holdings = st.checkbox("📈 持仓汇总（每周）", value=True, key="notify_hold")
+                        notify_take_profit = st.checkbox("止盈提醒", value=True, key="notify_profit")
+                        notify_holdings = st.checkbox("持仓汇总（每周）", value=True, key="notify_hold")
                 
                 st.markdown("---")
                 
                 col1, col2, col3 = st.columns([2, 2, 1])
                 
                 with col1:
-                    if st.button("💾 保存配置", type="primary"):
+                    if st.button("保存配置", type="primary"):
                         # 保存策略参数
                         assistant.update_config('min_score', str(min_score))
                         assistant.update_config('market_cap_min', str(market_cap_min * 100000000))
@@ -13145,30 +13163,30 @@ def main():
                                 with open('notification_config.json', 'w', encoding='utf-8') as f:
                                     json.dump(notification_config, f, indent=2, ensure_ascii=False)
                                 
-                                st.success("✅ 配置已保存（包括通知设置）")
+                                st.success("配置已保存（包括通知设置）")
                             except Exception as e:
-                                st.error(f"❌ 保存通知配置失败: {e}")
+                                st.error(f"保存通知配置失败: {e}")
                         else:
-                            st.success("✅ 策略配置已保存")
+                            st.success("策略配置已保存")
                         
                         st.rerun()
                 
                 with col2:
-                    if (enable_email or enable_wechat or enable_dingtalk) and st.button("📧 发送测试通知", type="secondary"):
+                    if (enable_email or enable_wechat or enable_dingtalk) and st.button("发送测试通知", type="secondary"):
                         try:
                             from notification_service import NotificationService
                             notifier = NotificationService()
                             
                             test_message = """
-                            🎉 智能交易助手测试通知
+                             智能交易助手测试通知
                             
                             如果您收到此消息，说明通知功能已正常配置！
                             
                             系统将自动发送：
-                            - 📊 每日选股推荐
-                            - 💰 止盈提醒
-                            - 🛑 止损提醒
-                            - 📈 持仓汇总
+                            -  每日选股推荐
+                            -  止盈提醒
+                            -  止损提醒
+                            -  持仓汇总
                             """
                             
                             success = notifier.send_notification(
@@ -13177,14 +13195,14 @@ def main():
                             )
                             
                             if success:
-                                st.success("✅ 测试通知已发送，请查收！")
+                                st.success("测试通知已发送，请查收！")
                             else:
-                                st.error("❌ 发送失败，请检查配置")
+                                st.error("发送失败，请检查配置")
                         except Exception as e:
-                            st.error(f"❌ 发送测试失败: {e}")
+                            st.error(f"发送测试失败: {e}")
                 
                 with col3:
-                    if st.button("📖 帮助文档"):
+                    if st.button("帮助文档"):
                         st.info("""
                         **邮件配置帮助**
                         
@@ -13207,7 +13225,7 @@ def main():
 
             # ========== 子Tab 6: 模拟交易 ==========
             with sub_tab6:
-                st.subheader("🧪 模拟交易（AI 优选自动买入）")
+                st.subheader("模拟交易（AI 优选自动买入）")
                 st.info("""
                 - 自动买入 AI 优选结果
                 - 每只股票固定投入 10 万
@@ -13256,13 +13274,13 @@ def main():
 
                 col_reset = st.columns([1, 2, 1])[1]
                 with col_reset:
-                    if st.button("🔁 重置模拟账户", use_container_width=True):
+                    if st.button("重置模拟账户", use_container_width=True):
                         _reset_sim_account(
                             initial_cash=float(initial_cash_input),
                             per_buy_amount=float(per_buy_amount),
                             auto_buy_top_n=int(auto_buy_top_n)
                         )
-                        st.success("✅ 模拟账户已重置")
+                        st.success("模拟账户已重置")
                         st.rerun()
 
                 ai_key = None
@@ -13272,7 +13290,7 @@ def main():
                     ai_key = 'ai_monthly_stocks_v2'
 
                 if not ai_key:
-                    st.warning("⚠️ 暂无 AI 优选结果，请先在「AI智能选股」生成名单。")
+                    st.warning("暂无 AI 优选结果，请先在「AI智能选股」生成名单。")
                 else:
                     ai_stocks = st.session_state[ai_key].copy()
                     max_buy_n = max(1, min(50, len(ai_stocks)))
@@ -13281,7 +13299,7 @@ def main():
 
                     col_buy1, col_buy2 = st.columns([2, 1])
                     with col_buy1:
-                        if st.button("🛒 一键买入 AI 优选", type="primary", use_container_width=True):
+                        if st.button("一键买入 AI 优选", type="primary", use_container_width=True):
                             buy_list = ai_stocks.head(top_n_buy)
                             positions = _get_sim_positions()
                             cash = sim['cash']
@@ -13319,17 +13337,17 @@ def main():
                                 )
                                 cash -= cost
                             _update_sim_account(cash=cash)
-                            st.success("✅ 买入完成")
+                            st.success("买入完成")
                             st.rerun()
 
                     with col_buy2:
-                        if st.button("🔄 刷新最新价格", use_container_width=True):
+                        if st.button("刷新最新价格", use_container_width=True):
                             st.rerun()
 
-                st.subheader("🧾 自动买入日志")
+                st.subheader("自动买入日志")
                 auto_logs = _get_sim_auto_buy_logs(limit=20)
                 if auto_logs.empty:
-                    st.info("📊 暂无自动买入记录")
+                    st.info("暂无自动买入记录")
                 else:
                     show_cols = ["run_time", "status", "buy_count", "message", "top_n", "per_buy_amount", "signature"]
                     st.dataframe(auto_logs[show_cols], use_container_width=True, hide_index=True)
@@ -13376,7 +13394,7 @@ def main():
                 colm4.metric("累计盈亏", f"¥{total_pnl:,.0f}")
 
                 if positions_rows:
-                    st.subheader("📌 当前持仓")
+                    st.subheader("当前持仓")
                     positions_df = pd.DataFrame(positions_rows)
                     st.dataframe(positions_df, use_container_width=True, hide_index=True)
 
@@ -13384,11 +13402,11 @@ def main():
                     if not month_ready.empty:
                         month_ready['1个月收益率%'] = pd.to_numeric(month_ready['1个月收益率%'], errors='coerce')
                         avg_month_return = month_ready['1个月收益率%'].mean()
-                        st.info(f"📈 满 30 天标的：{len(month_ready)} 只，平均收益率 {avg_month_return:.2f}%")
+                        st.info(f"满 30 天标的：{len(month_ready)} 只，平均收益率 {avg_month_return:.2f}%")
 
-                    st.subheader("🧾 卖出操作")
+                    st.subheader("卖出操作")
                     sell_codes = st.multiselect("选择卖出股票", options=list(positions.keys()))
-                    if st.button("✅ 卖出选中股票", type="secondary"):
+                    if st.button("卖出选中股票", type="secondary"):
                         cash = sim['cash']
                         for ts_code in sell_codes:
                             pos = positions.get(ts_code)
@@ -13413,40 +13431,40 @@ def main():
                             )
                             _delete_sim_position(ts_code)
                         _update_sim_account(cash=cash)
-                        st.success("✅ 卖出完成")
+                        st.success("卖出完成")
                         st.rerun()
                 else:
-                    st.info("📊 当前无持仓")
+                    st.info("当前无持仓")
 
                 trades_df = _get_sim_trades()
                 if not trades_df.empty:
-                    st.subheader("📜 模拟交易记录")
+                    st.subheader("模拟交易记录")
                     st.dataframe(trades_df, use_container_width=True, hide_index=True)
                     csv = _df_to_csv_bytes(trades_df)
                     st.download_button(
-                        "📥 导出交易记录",
+                        " 导出交易记录",
                         data=csv,
                         file_name=f"sim_trades_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv; charset=utf-8"
                     )
                 else:
-                    st.info("📊 暂无交易记录")
+                    st.info("暂无交易记录")
         
         except ImportError as e:
-            st.error(f"❌ 交易助手模块加载失败: {e}")
+            st.error(f"交易助手模块加载失败: {e}")
             st.info("请确保 trading_assistant.py 文件存在")
 
-    # ==================== Tab 6: 📚 实战指南 ====================
+    # ==================== Tab 6:  实战指南 ====================
     with tab_guide:
         _render_page_header(
-            "📚 实战操作指南",
+            " 实战操作指南",
             "系统用法 · 风险提示 · 实战流程",
             tag="Guide",
         )
         # (内容由原 Tab9 填充)
 
     # ==========================================================
-    # ✅ 所有Tab内容已整理完毕，旧代码已清理
+    #  所有Tab内容已整理完毕，旧代码已清理
     # ==========================================================
 
 
