@@ -81,6 +81,48 @@ def _get_recent_trade_date(pro: ts.pro_api, lookback_days: int = 30) -> str | No
         return None
 
 
+def _get_recent_trade_dates_from_db(db_path: str, limit: int = 8) -> List[str]:
+    if not db_path or not os.path.exists(db_path):
+        return []
+    try:
+        conn = _connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT DISTINCT trade_date FROM daily_trading_data ORDER BY trade_date DESC LIMIT ?",
+            (limit,),
+        )
+        rows = [row[0] for row in cursor.fetchall() if row and row[0]]
+        conn.close()
+        return [str(r) for r in rows]
+    except Exception:
+        return []
+
+
+def _pick_best_trade_date(
+    pro: ts.pro_api,
+    db_path: str,
+    fetch_fn,
+    lookback_days: int = 60,
+) -> Tuple[str | None, pd.DataFrame]:
+    """Try DB recent dates first, then fallback to trade_cal last date."""
+    candidates = _get_recent_trade_dates_from_db(db_path, limit=8)
+    trade_cal_date = _get_recent_trade_date(pro, lookback_days=lookback_days)
+    if trade_cal_date:
+        candidates.append(trade_cal_date)
+    seen = set()
+    for d in candidates:
+        if not d or d in seen:
+            continue
+        seen.add(d)
+        try:
+            df = fetch_fn(d)
+            if df is not None and not df.empty:
+                return d, df
+        except Exception:
+            continue
+    return None, pd.DataFrame()
+
+
 def _is_data_fresh(db_path: str) -> Tuple[bool, str | None, str | None]:
     """Check if DB latest trade date matches exchange last trade date."""
     token = _load_tushare_token()
@@ -251,14 +293,13 @@ def _update_margin_detail(db_path: str) -> Dict:
     if not token:
         return {"success": False, "error": "Tushare token not found"}
     pro = ts.pro_api(token)
-    last_trade = _get_recent_trade_date(pro, lookback_days=60)
-    if not last_trade:
-        return {"success": False, "error": "no recent trade date"}
-    try:
-        df = pro.margin_detail(trade_date=last_trade)
-    except Exception as e:
-        return {"success": False, "error": f"margin_detail failed: {e}"}
-    if df is None or df.empty:
+    last_trade, df = _pick_best_trade_date(
+        pro,
+        db_path,
+        fetch_fn=lambda d: pro.margin_detail(trade_date=d),
+        lookback_days=60,
+    )
+    if not last_trade or df is None or df.empty:
         return {"success": False, "error": "margin_detail empty"}
     conn = _connect(db_path)
     updated = _append_df_safe(conn, "margin_detail", df, trade_date=last_trade)
@@ -272,14 +313,13 @@ def _update_moneyflow_daily(db_path: str) -> Dict:
     if not token:
         return {"success": False, "error": "Tushare token not found"}
     pro = ts.pro_api(token)
-    last_trade = _get_recent_trade_date(pro, lookback_days=60)
-    if not last_trade:
-        return {"success": False, "error": "no recent trade date"}
-    try:
-        df = pro.moneyflow(trade_date=last_trade)
-    except Exception as e:
-        return {"success": False, "error": f"moneyflow failed: {e}"}
-    if df is None or df.empty:
+    last_trade, df = _pick_best_trade_date(
+        pro,
+        db_path,
+        fetch_fn=lambda d: pro.moneyflow(trade_date=d),
+        lookback_days=60,
+    )
+    if not last_trade or df is None or df.empty:
         return {"success": False, "error": "moneyflow empty"}
     conn = _connect(db_path)
     updated = _append_df_safe(conn, "moneyflow_daily", df, trade_date=last_trade)
@@ -293,14 +333,13 @@ def _update_moneyflow_industry(db_path: str) -> Dict:
     if not token:
         return {"success": False, "error": "Tushare token not found"}
     pro = ts.pro_api(token)
-    last_trade = _get_recent_trade_date(pro, lookback_days=60)
-    if not last_trade:
-        return {"success": False, "error": "no recent trade date"}
-    try:
-        df = pro.moneyflow_ind_ths(trade_date=last_trade)
-    except Exception as e:
-        return {"success": False, "error": f"moneyflow_ind_ths failed: {e}"}
-    if df is None or df.empty:
+    last_trade, df = _pick_best_trade_date(
+        pro,
+        db_path,
+        fetch_fn=lambda d: pro.moneyflow_ind_ths(trade_date=d),
+        lookback_days=60,
+    )
+    if not last_trade or df is None or df.empty:
         return {"success": False, "error": "moneyflow_ind_ths empty"}
     conn = _connect(db_path)
     updated = _append_df_safe(conn, "moneyflow_ind_ths", df, trade_date=last_trade)
@@ -314,14 +353,13 @@ def _update_top_list(db_path: str) -> Dict:
     if not token:
         return {"success": False, "error": "Tushare token not found"}
     pro = ts.pro_api(token)
-    last_trade = _get_recent_trade_date(pro, lookback_days=60)
-    if not last_trade:
-        return {"success": False, "error": "no recent trade date"}
-    try:
-        df = pro.top_list(trade_date=last_trade)
-    except Exception as e:
-        return {"success": False, "error": f"top_list failed: {e}"}
-    if df is None or df.empty:
+    last_trade, df = _pick_best_trade_date(
+        pro,
+        db_path,
+        fetch_fn=lambda d: pro.top_list(trade_date=d),
+        lookback_days=60,
+    )
+    if not last_trade or df is None or df.empty:
         return {"success": False, "error": "top_list empty"}
     conn = _connect(db_path)
     updated = _append_df_safe(conn, "top_list", df, trade_date=last_trade)
@@ -335,14 +373,13 @@ def _update_top_inst(db_path: str) -> Dict:
     if not token:
         return {"success": False, "error": "Tushare token not found"}
     pro = ts.pro_api(token)
-    last_trade = _get_recent_trade_date(pro, lookback_days=60)
-    if not last_trade:
-        return {"success": False, "error": "no recent trade date"}
-    try:
-        df = pro.top_inst(trade_date=last_trade)
-    except Exception as e:
-        return {"success": False, "error": f"top_inst failed: {e}"}
-    if df is None or df.empty:
+    last_trade, df = _pick_best_trade_date(
+        pro,
+        db_path,
+        fetch_fn=lambda d: pro.top_inst(trade_date=d),
+        lookback_days=60,
+    )
+    if not last_trade or df is None or df.empty:
         return {"success": False, "error": "top_inst empty"}
     conn = _connect(db_path)
     updated = _append_df_safe(conn, "top_inst", df, trade_date=last_trade)
