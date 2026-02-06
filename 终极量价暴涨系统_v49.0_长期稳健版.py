@@ -6720,6 +6720,9 @@ def main():
             except Exception as e:
                 st.error(f"❌ 系统初始化失败: {e}")
                 return
+
+    if "enable_fund_bonus" not in st.session_state:
+        st.session_state["enable_fund_bonus"] = DEFAULT_ENABLE_FUND_BONUS
     
     vp_analyzer = st.session_state.vp_analyzer
     optimizer = st.session_state.optimizer
@@ -6806,15 +6809,16 @@ def main():
     
     # ==================== Tab 1: 💎 核心策略中心 ====================
     with tab_core:
-        st.markdown("""
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
-            <h1 style='margin:0; color: white;'>💎 核心策略中心 - 四维一体顶级系统</h1>
-            <p style='margin:10px 0 0 0; font-size:1.2em; opacity:0.9;'>
-                v4.0 潜伏型 | v5.0 爆发型 | v6.0 超短型 | 🚀v7.0 终极智能型 · 全球顶级标准
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        with st.expander("💎 核心策略中心说明", expanded=False):
+            st.markdown("""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
+                <h1 style='margin:0; color: white;'>💎 核心策略中心 - 四维一体顶级系统</h1>
+                <p style='margin:10px 0 0 0; font-size:1.2em; opacity:0.9;'>
+                    v4.0 潜伏型 | v5.0 爆发型 | v6.0 超短型 | 🚀v7.0 终极智能型 · 全球顶级标准
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
         # 统一使用下方导出按钮，避免表格右上角导出文件名不含策略版本
         st.caption("提示：请使用下方“导出完整结果（CSV）”按钮，文件名包含策略版本。")
@@ -6848,7 +6852,8 @@ def main():
             # --- 🏆 v4.0 潜伏为王 核心逻辑 ---
             
             # 🎨 v4.0版本说明
-            st.markdown("""
+            exp_v4 = st.expander("📘 v4.0 策略说明", expanded=False)
+            exp_v4.markdown("""
             <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
@@ -6881,7 +6886,7 @@ def main():
             
             # 🔥 v4.0版本特别提示
             if V4_EVALUATOR_AVAILABLE:
-                st.success("""
+                exp_v4.success("""
                 ✅ **当前使用v4.0潜伏为王版（已验证56.6%胜率）**
                 
                 **🎯 核心理念：在启动前潜伏，而不是启动后追高！**
@@ -6909,7 +6914,7 @@ def main():
                 - 夏普比率：0.59（稳健）
                 """)
             else:
-                st.error("""
+                exp_v4.error("""
                 ❌ **v4.0潜伏为王版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v4.py` 文件存在
                 - 建议重启应用后重试
@@ -7674,7 +7679,8 @@ def main():
             # --- ⚡ v6.0 超短线·巅峰版 核心逻辑 ---
             
             # 🎨 v6.0版本说明
-            st.markdown("""
+            exp_v6 = st.expander("📘 v6.0 策略说明", expanded=False)
+            exp_v6.markdown("""
             <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
@@ -7707,7 +7713,7 @@ def main():
             
             # 🔥 v6.0版本特别提示
             if V6_EVALUATOR_AVAILABLE:
-                st.success("""
+                exp_v6.success("""
                 ✅ **当前使用v6.0超短线狙击·巅峰版**
                 
                 **🎯 核心理念：三级过滤，只选市场最强的1-3%！**
@@ -7745,7 +7751,7 @@ def main():
                 - 95分门槛：1-3只顶级标的，胜率90%+
                 """)
             else:
-                st.error("""
+                exp_v6.error("""
                 ❌ **v6.0超短线狙击·巅峰版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v6_ultimate.py` 文件存在
                 - 建议重启应用后重试
@@ -8469,7 +8475,8 @@ def main():
             # --- 🚀🚀🚀 v8.0 终极进化版 核心逻辑 ---
             
             # 🎨 v8.0版本说明
-            st.markdown("""
+            exp_v8 = st.expander("📘 v8.0 策略说明", expanded=False)
+            exp_v8.markdown("""
             <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #ffd700 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
@@ -8502,7 +8509,7 @@ def main():
             
             # 🔥 v8.0版本特别提示
             if V8_EVALUATOR_AVAILABLE:
-                st.success("""
+                exp_v8.success("""
                 ✅ **当前使用v8.0终极进化版（全球最强量化系统）**
                 
                 **🎯 六大革命性创新！**
@@ -8562,7 +8569,7 @@ def main():
                 - 长期（2-3年）：胜率70-78%，达到顶级私募水平
                 """)
             else:
-                st.error("""
+                exp_v8.error("""
                 ❌ **v8.0终极进化版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v8_ultimate.py` 文件存在
                 - 建议重启应用后重试
@@ -9063,7 +9070,8 @@ def main():
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
         elif "v9.0" in strategy_mode:
-            st.markdown("""
+            exp_v9 = st.expander("📘 v9.0 策略说明", expanded=False)
+            exp_v9.markdown("""
             <div style='background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%); 
                         padding: 35px 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
                 <h1 style='margin:0; color: white; font-size: 2.2em; font-weight: 700; text-align: center;'>
@@ -9078,8 +9086,8 @@ def main():
             evolve_v9 = _load_evolve_params("v9_best.json")
             evo_params_v9 = evolve_v9.get("params", {}) if isinstance(evolve_v9, dict) else {}
             if evo_params_v9:
-                st.success(f"🧬 已应用自动进化参数（v9.0，{evolve_v9.get('run_at', 'unknown')}）")
-                st.caption(f"推荐阈值: {evo_params_v9.get('score_threshold')} | 持仓: {evo_params_v9.get('holding_days')} | 窗口: {evo_params_v9.get('lookback_days')} | 最低成交额(亿): {evo_params_v9.get('min_turnover')}")
+                exp_v9.success(f"🧬 已应用自动进化参数（v9.0，{evolve_v9.get('run_at', 'unknown')}）")
+                exp_v9.caption(f"推荐阈值: {evo_params_v9.get('score_threshold')} | 持仓: {evo_params_v9.get('holding_days')} | 窗口: {evo_params_v9.get('lookback_days')} | 最低成交额(亿): {evo_params_v9.get('min_turnover')}")
 
             def _load_history_full_fallback(ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
                 if not os.path.exists(PERMANENT_DB_PATH):
@@ -9100,7 +9108,7 @@ def main():
             if not callable(load_history_full):
                 load_history_full = _load_history_full_fallback
 
-            st.info("""
+            exp_v9.info("""
             **v9.0 核心逻辑：**
             - 资金流向：上涨成交额占比越高越好
             - 动量结构：20/60日动量双确认
