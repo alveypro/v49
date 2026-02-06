@@ -256,9 +256,15 @@ def _update_northbound(db_path: str) -> Dict:
         ak_df = _fetch_akshare_northbound()
         if ak_df is not None and not ak_df.empty:
             df = ak_df
+            try:
+                df_max = str(df["trade_date"].max()) if "trade_date" in df.columns else None
+            except Exception:
+                df_max = None
 
     if df is None or df.empty:
         return {"success": False, "error": "moneyflow_hsgt empty"}
+    if df_max:
+        last_trade = df_max
 
     conn = _connect(db_path)
     _ensure_table(conn, """
