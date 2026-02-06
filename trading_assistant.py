@@ -56,7 +56,7 @@ class TradingAssistant:
         Args:
             db_path: 主数据库路径
         """
-        self.db_path = db_path
+        self.db_path = self._resolve_db_path(db_path)
         self.assistant_db = "trading_assistant.db"
         self._init_database()
         self.last_scan_debug = {}
@@ -154,6 +154,27 @@ class TradingAssistant:
         self._init_default_config()
         
         logger.info("✅ 数据库初始化完成")
+
+    def _resolve_db_path(self, db_path: str) -> str:
+        """解析主数据库路径"""
+        cand = Path(db_path)
+        if cand.exists():
+            return str(cand)
+        # 尝试读取配置文件
+        cfg_path = Path(__file__).with_name("config.json")
+        if cfg_path.exists():
+            try:
+                cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+                cfg_db = cfg.get("PERMANENT_DB_PATH")
+                if cfg_db and Path(cfg_db).exists():
+                    return cfg_db
+            except Exception:
+                pass
+        # 服务器默认路径
+        fallback = Path("/opt/airivo/data/permanent_stock_database.db")
+        if fallback.exists():
+            return str(fallback)
+        return str(cand)
     
     def _init_default_config(self):
         """初始化默认配置"""

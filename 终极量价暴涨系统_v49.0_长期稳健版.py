@@ -12439,7 +12439,7 @@ def main():
             
             # 初始化助手
             if 'trading_assistant' not in st.session_state:
-                st.session_state.trading_assistant = TradingAssistant()
+                st.session_state.trading_assistant = TradingAssistant(db_path=PERMANENT_DB_PATH)
             
             assistant = st.session_state.trading_assistant
             
