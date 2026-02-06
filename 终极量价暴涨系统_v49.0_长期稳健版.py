@@ -9372,17 +9372,39 @@ def main():
 
             st.markdown("---")
             st.subheader("⚖️ 权重设置（总和自动归一化）")
+            # 市场环境判断用于动态权重
+            market_env_combo = "oscillation"
+            try:
+                market_env_combo = vp_analyzer.get_market_environment()
+            except Exception:
+                market_env_combo = "oscillation"
+            env_label_combo = "震荡市" if market_env_combo == "oscillation" else ("牛市" if market_env_combo == "bull" else "弱市")
+
+            auto_weights = st.checkbox("根据市场环境自动调整权重", value=True, key="combo_auto_weights")
+            st.caption(f"当前市场环境判断：{env_label_combo}")
+
+            weight_presets = {
+                "bull": {"v4": 0.10, "v5": 0.20, "v7": 0.30, "v8": 0.30, "v9": 0.10},
+                "oscillation": {"v4": 0.15, "v5": 0.15, "v7": 0.30, "v8": 0.25, "v9": 0.15},
+                "bear": {"v4": 0.25, "v5": 0.15, "v7": 0.20, "v8": 0.15, "v9": 0.25},
+            }
+            preset = weight_presets.get(market_env_combo, weight_presets["oscillation"])
+
             w1, w2, w3, w4, w5 = st.columns(5)
             with w1:
-                w_v4 = st.slider("v4权重", 0.0, 1.0, 0.15, 0.05, key="w_v4")
+                w_v4 = st.slider("v4权重", 0.0, 1.0, preset["v4"], 0.05, key="w_v4", disabled=auto_weights)
             with w2:
-                w_v5 = st.slider("v5权重", 0.0, 1.0, 0.15, 0.05, key="w_v5")
+                w_v5 = st.slider("v5权重", 0.0, 1.0, preset["v5"], 0.05, key="w_v5", disabled=auto_weights)
             with w3:
-                w_v7 = st.slider("v7权重", 0.0, 1.0, 0.30, 0.05, key="w_v7")
+                w_v7 = st.slider("v7权重", 0.0, 1.0, preset["v7"], 0.05, key="w_v7", disabled=auto_weights)
             with w4:
-                w_v8 = st.slider("v8权重", 0.0, 1.0, 0.25, 0.05, key="w_v8")
+                w_v8 = st.slider("v8权重", 0.0, 1.0, preset["v8"], 0.05, key="w_v8", disabled=auto_weights)
             with w5:
-                w_v9 = st.slider("v9权重", 0.0, 1.0, 0.15, 0.05, key="w_v9")
+                w_v9 = st.slider("v9权重", 0.0, 1.0, preset["v9"], 0.05, key="w_v9", disabled=auto_weights)
+
+            if auto_weights:
+                w_v4, w_v5, w_v7, w_v8, w_v9 = preset["v4"], preset["v5"], preset["v7"], preset["v8"], preset["v9"]
+                st.info(f"✅ 已应用动态权重（{env_label_combo}）：v4={w_v4} v5={w_v5} v7={w_v7} v8={w_v8} v9={w_v9}")
 
             st.markdown("---")
             st.subheader("✅ 各策略阈值（用于一致性判断）")
