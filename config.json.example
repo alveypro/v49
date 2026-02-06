@@ -3,5 +3,6 @@
   "TUSHARE_TOKEN": "your_tushare_token_here",
   "UPDATE_PASSWORD": "update_password_here",
   "BACKTEST_PASSWORD": "backtest_password_here",
-  "MAX_SCAN_CONCURRENCY": 1
+  "MAX_SCAN_CONCURRENCY": 1,
+  "ENABLE_FUND_BONUS": 0
 }

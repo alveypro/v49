@@ -297,7 +297,7 @@ _CONFIG = _load_config()
 PERMANENT_DB_PATH = os.getenv("PERMANENT_DB_PATH") or _CONFIG.get("PERMANENT_DB_PATH") or DEFAULT_PERMANENT_DB_PATH
 TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN") or _CONFIG.get("TUSHARE_TOKEN") or DEFAULT_TUSHARE_TOKEN
 SIM_TRADING_DB_PATH = os.path.join(BASE_DIR, "sim_trading.db")
-DEFAULT_ENABLE_FUND_BONUS = bool(int(os.getenv("ENABLE_FUND_BONUS", _CONFIG.get("ENABLE_FUND_BONUS", 1))))
+DEFAULT_ENABLE_FUND_BONUS = bool(int(os.getenv("ENABLE_FUND_BONUS", _CONFIG.get("ENABLE_FUND_BONUS", 0))))
 
 def _fund_bonus_enabled() -> bool:
     if "enable_fund_bonus" in st.session_state:
