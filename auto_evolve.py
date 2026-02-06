@@ -68,6 +68,19 @@ def _get_db_latest_trade_date(db_path: str) -> str | None:
         return None
 
 
+def _get_recent_trade_date(pro: ts.pro_api, lookback_days: int = 30) -> str | None:
+    """Get most recent open trade date within lookback window."""
+    end_date = datetime.now().strftime("%Y%m%d")
+    start_date = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y%m%d")
+    try:
+        trade_cal = pro.trade_cal(exchange="SSE", start_date=start_date, end_date=end_date, is_open="1")
+        if trade_cal is None or trade_cal.empty:
+            return None
+        return trade_cal["cal_date"].iloc[-1]
+    except Exception:
+        return None
+
+
 def _is_data_fresh(db_path: str) -> Tuple[bool, str | None, str | None]:
     """Check if DB latest trade date matches exchange last trade date."""
     token = _load_tushare_token()
@@ -77,6 +90,190 @@ def _is_data_fresh(db_path: str) -> Tuple[bool, str | None, str | None]:
     last_trade = _get_last_trade_date(pro)
     db_last = _get_db_latest_trade_date(db_path)
     return (last_trade is not None and db_last == last_trade), db_last, last_trade
+
+
+def _ensure_table(conn: sqlite3.Connection, ddl: str) -> None:
+    try:
+        conn.execute(ddl)
+        conn.commit()
+    except Exception:
+        pass
+
+
+def _update_northbound(db_path: str) -> Dict:
+    token = _load_tushare_token()
+    if not token:
+        return {"success": False, "error": "Tushare token not found"}
+    pro = ts.pro_api(token)
+
+    last_trade = _get_recent_trade_date(pro, lookback_days=60)
+    if not last_trade:
+        return {"success": False, "error": "no recent trade date"}
+
+    start_date = (datetime.now() - timedelta(days=60)).strftime("%Y%m%d")
+    try:
+        df = pro.moneyflow_hsgt(start_date=start_date, end_date=last_trade)
+    except Exception as e:
+        return {"success": False, "error": f"moneyflow_hsgt failed: {e}"}
+
+    if df is None or df.empty:
+        return {"success": False, "error": "moneyflow_hsgt empty"}
+
+    conn = _connect(db_path)
+    _ensure_table(conn, """
+        CREATE TABLE IF NOT EXISTS northbound_flow (
+            trade_date TEXT PRIMARY KEY,
+            north_money REAL,
+            south_money REAL,
+            gg_net REAL,
+            hg_net REAL,
+            sg_net REAL
+        )
+    """)
+
+    cur = conn.cursor()
+    updated = 0
+    for _, row in df.iterrows():
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO northbound_flow
+            (trade_date, north_money, south_money, gg_net, hg_net, sg_net)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row.get("trade_date"),
+                row.get("north_money", 0),
+                row.get("south_money", 0),
+                row.get("gg_net", 0),
+                row.get("hg_net", 0),
+                row.get("sg_net", 0),
+            ),
+        )
+        updated += 1
+        if updated % 500 == 0:
+            conn.commit()
+    conn.commit()
+    conn.close()
+    return {"success": True, "updated": updated, "last_trade": last_trade}
+
+
+def _update_margin(db_path: str) -> Dict:
+    token = _load_tushare_token()
+    if not token:
+        return {"success": False, "error": "Tushare token not found"}
+    pro = ts.pro_api(token)
+
+    last_trade = _get_recent_trade_date(pro, lookback_days=60)
+    if not last_trade:
+        return {"success": False, "error": "no recent trade date"}
+
+    start_date = (datetime.now() - timedelta(days=60)).strftime("%Y%m%d")
+    try:
+        df = pro.margin(start_date=start_date, end_date=last_trade)
+    except Exception as e:
+        return {"success": False, "error": f"margin failed: {e}"}
+
+    if df is None or df.empty:
+        return {"success": False, "error": "margin empty"}
+
+    conn = _connect(db_path)
+    _ensure_table(conn, """
+        CREATE TABLE IF NOT EXISTS margin_summary (
+            trade_date TEXT PRIMARY KEY,
+            rzye REAL,
+            rqye REAL,
+            rzrqye REAL
+        )
+    """)
+
+    cur = conn.cursor()
+    updated = 0
+    for _, row in df.iterrows():
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO margin_summary
+            (trade_date, rzye, rqye, rzrqye)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                row.get("trade_date"),
+                row.get("rzye", 0),
+                row.get("rqye", 0),
+                row.get("rzrqye", 0),
+            ),
+        )
+        updated += 1
+        if updated % 500 == 0:
+            conn.commit()
+    conn.commit()
+    conn.close()
+    return {"success": True, "updated": updated, "last_trade": last_trade}
+
+
+def _update_fund_portfolio(db_path: str) -> Dict:
+    """Optional fund holdings snapshot. Controlled via FUND_PORTFOLIO_FUNDS env (comma-separated)."""
+    funds_raw = os.getenv("FUND_PORTFOLIO_FUNDS", "").strip()
+    if not funds_raw:
+        return {"success": False, "error": "FUND_PORTFOLIO_FUNDS not set"}
+    funds = [f.strip() for f in funds_raw.split(",") if f.strip()]
+    if not funds:
+        return {"success": False, "error": "no funds provided"}
+
+    token = _load_tushare_token()
+    if not token:
+        return {"success": False, "error": "Tushare token not found"}
+    pro = ts.pro_api(token)
+
+    # Default to last year/quarter if not provided
+    year = os.getenv("FUND_PORTFOLIO_YEAR")
+    quarter = os.getenv("FUND_PORTFOLIO_QUARTER")
+    if not year or not quarter:
+        today = datetime.now()
+        year = str(today.year - (1 if today.month < 4 else 0))
+        quarter = "4"
+
+    conn = _connect(db_path)
+    _ensure_table(conn, """
+        CREATE TABLE IF NOT EXISTS fund_portfolio_cache (
+            ts_code TEXT,
+            end_date TEXT,
+            symbol TEXT,
+            mkt_value REAL,
+            stk_mkt_value REAL,
+            hold_ratio REAL,
+            PRIMARY KEY (ts_code, end_date, symbol)
+        )
+    """)
+
+    cur = conn.cursor()
+    updated = 0
+    for fund in funds:
+        try:
+            df = pro.fund_portfolio(ts_code=fund, year=year, quarter=quarter)
+        except Exception:
+            continue
+        if df is None or df.empty:
+            continue
+        for _, row in df.iterrows():
+            cur.execute(
+                """
+                INSERT OR REPLACE INTO fund_portfolio_cache
+                (ts_code, end_date, symbol, mkt_value, stk_mkt_value, hold_ratio)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row.get("ts_code"),
+                    row.get("end_date"),
+                    row.get("symbol"),
+                    row.get("mkt_value", 0),
+                    row.get("stk_mkt_value", 0),
+                    row.get("hold_ratio", 0),
+                ),
+            )
+            updated += 1
+        conn.commit()
+    conn.close()
+    return {"success": True, "updated": updated, "year": year, "quarter": quarter}
 
 
 def _setup_logger() -> logging.Logger:
@@ -1205,6 +1402,14 @@ def main() -> None:
         # 2) 更新市值
         mc_result = _update_market_cap(db_path)
         LOGGER.info("market cap update: %s", mc_result)
+
+        # 2.1) 扩展资金类数据（北向/融资/基金持仓）
+        nb_result = _update_northbound(db_path)
+        LOGGER.info("northbound update: %s", nb_result)
+        margin_result = _update_margin(db_path)
+        LOGGER.info("margin update: %s", margin_result)
+        fund_result = _update_fund_portfolio(db_path)
+        LOGGER.info("fund portfolio update: %s", fund_result)
 
         # 3) 加载回测数据
         df = _load_backtest_data(db_path, lookback_days=420)
