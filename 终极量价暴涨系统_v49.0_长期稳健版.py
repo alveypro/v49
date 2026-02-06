@@ -8712,6 +8712,11 @@ def main():
             if evo_params_v9:
                 st.success(f"🧬 已应用自动进化参数（v9.0，{evolve_v9.get('run_at', 'unknown')}）")
 
+            load_history_full = getattr(vp_analyzer, "_load_history_full", None)
+            if not callable(load_history_full):
+                load_history_full = vp_analyzer._load_history_from_sqlite
+                st.warning("⚠️ 当前版本缺少 v9 完整历史加载器，已降级为基础历史数据读取")
+
             st.info("""
             **v9.0 核心逻辑：**
             - 资金流向：上涨成交额占比越高越好
@@ -8793,7 +8798,7 @@ def main():
 
                         for _, row in stocks_df.iterrows():
                             ts_code = row["ts_code"]
-                            hist = vp_analyzer._load_history_full(ts_code, start_date, end_date)
+                            hist = load_history_full(ts_code, start_date, end_date)
                             if hist is None or len(hist) < 21:
                                 continue
                             close = pd.to_numeric(hist["close_price"], errors="coerce").ffill()
@@ -8814,7 +8819,7 @@ def main():
                             status_text.text(f"正在评分: {row['name']} ({idx+1}/{len(stocks_df)})")
                             progress_bar.progress((idx + 1) / len(stocks_df))
 
-                            hist = vp_analyzer._load_history_full(ts_code, start_date, end_date)
+                            hist = load_history_full(ts_code, start_date, end_date)
                             if hist is None or len(hist) < 80:
                                 continue
 
