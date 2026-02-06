@@ -895,6 +895,50 @@ def _render_page_header(title: str, subtitle: str = "", tag: str = ""):
         unsafe_allow_html=True,
     )
 
+def _render_result_overview(df: pd.DataFrame, score_col: str = "综合评分", title: str = "结果概览"):
+    if df is None or df.empty:
+        return
+    st.markdown(f"### {title}")
+    scores = None
+    if score_col in df.columns:
+        scores = pd.to_numeric(df[score_col], errors="coerce").dropna()
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("标的数量", f"{len(df)}")
+    if scores is not None and not scores.empty:
+        with col2:
+            st.metric("平均评分", f"{scores.mean():.1f}")
+        with col3:
+            st.metric("最高评分", f"{scores.max():.1f}")
+        with col4:
+            st.metric("最低评分", f"{scores.min():.1f}")
+    else:
+        with col2:
+            st.metric("平均评分", "—")
+        with col3:
+            st.metric("最高评分", "—")
+        with col4:
+            st.metric("最低评分", "—")
+
+    chart_cols = st.columns(2)
+    with chart_cols[0]:
+        if scores is not None and not scores.empty:
+            bins = pd.cut(scores, bins=8)
+            hist = bins.value_counts().sort_index()
+            st.bar_chart(hist, height=220)
+            st.caption("评分分布")
+        else:
+            st.caption("评分分布（暂无数据）")
+
+    with chart_cols[1]:
+        if "行业" in df.columns:
+            ind_counts = df["行业"].fillna("未知").value_counts().head(8)
+            st.bar_chart(ind_counts, height=220)
+            st.caption("行业分布 Top 8")
+        else:
+            st.caption("行业分布（暂无数据）")
+
 
 # ===================== 完整的量价分析器（集成v43+v44）=====================
 class CompleteVolumePriceAnalyzer:
@@ -9814,6 +9858,7 @@ def main():
                             else:
                                 st.success(f"✅ 选出 Top {top_percent_combo}%（{len(results_df)} 只）")
 
+                            _render_result_overview(results_df, score_col="共识评分", title="组合策略结果概览")
                             st.dataframe(results_df, use_container_width=True, hide_index=True)
                             with st.expander("🔍 共识贡献拆解", expanded=False):
                                 cols = [
@@ -12203,6 +12248,7 @@ def main():
             version_name = st.session_state.get('ai_strategy_version', 'V5.0' if use_v3 else 'V2.0')
             st.divider()
             st.subheader(f"📊 AI 优选名单 ({version_name} {'稳健月度目标版' if use_v3 else '追涨版'})")
+            _render_result_overview(stocks, score_col="评分", title="AI 结果概览")
             auto_buy_info = st.session_state.get('last_ai_auto_buy')
             if auto_buy_info:
                 if auto_buy_info.get('status') == 'duplicate':
@@ -12614,6 +12660,9 @@ def main():
                     st.subheader("🎯 今日推荐")
                     
                     recs = st.session_state['daily_recommendations']
+                    recs_df = pd.DataFrame(recs)
+                    if not recs_df.empty:
+                        _render_result_overview(recs_df, score_col="score", title="今日推荐概览")
                     
                     for i, rec in enumerate(recs, 1):
                         with st.expander(f"#{i} {rec['stock_name']} ({rec['ts_code']}) - ⭐ {rec['score']:.1f}分", expanded=(i==1)):
