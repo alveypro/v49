@@ -806,6 +806,7 @@ def _calc_v9_score_from_hist(hist: pd.DataFrame, industry_strength: float = 0.0)
     ma20 = close.rolling(20).mean()
     ma60 = close.rolling(60).mean()
     ma120 = close.rolling(120).mean()
+    trend_strong = bool(ma20.iloc[-1] > ma60.iloc[-1] > ma120.iloc[-1])
     trend_ok = bool((ma20.iloc[-1] > ma60.iloc[-1]) and (ma20.iloc[-1] > ma20.iloc[-5]) and (ma60.iloc[-1] >= ma60.iloc[-5]))
 
     momentum_20 = (close.iloc[-1] / close.iloc[-21] - 1.0) if len(close) > 21 else 0.0
@@ -819,10 +820,10 @@ def _calc_v9_score_from_hist(hist: pd.DataFrame, industry_strength: float = 0.0)
 
     vol_20 = pct.tail(20).std() / 100.0 if pct.tail(20).std() is not None else 0.0
 
-    fund_score = max(0.0, min(20.0, (flow_ratio + 0.02) / 0.08 * 20.0))
-    volume_score = max(0.0, min(15.0, (vol_ratio - 0.6) / 1.0 * 15.0))
-    momentum_score = max(0.0, min(8.0, momentum_20 * 100 / 10.0 * 8.0)) + \
-                     max(0.0, min(7.0, momentum_60 * 100 / 20.0 * 7.0))
+    fund_score = max(0.0, min(20.0, (flow_ratio + 0.03) / 0.12 * 20.0))
+    volume_score = max(0.0, min(15.0, (vol_ratio - 0.5) / 1.0 * 15.0))
+    momentum_score = max(0.0, min(8.0, momentum_20 * 100 / 8.0 * 8.0)) + \
+                     max(0.0, min(7.0, momentum_60 * 100 / 16.0 * 7.0))
     sector_score = max(0.0, min(15.0, (industry_strength + 2.0) / 6.0 * 15.0))
 
     if vol_20 <= 0.03:
@@ -834,9 +835,16 @@ def _calc_v9_score_from_hist(hist: pd.DataFrame, industry_strength: float = 0.0)
     else:
         vola_score = 0.0
 
-    trend_score = 15.0 if trend_ok else 0.0
+    trend_score = 15.0 if trend_strong else (10.0 if trend_ok else 0.0)
 
-    total_score = fund_score + volume_score + momentum_score + sector_score + vola_score + trend_score
+    rolling_peak = close.cummax()
+    drawdown = (rolling_peak - close) / rolling_peak
+    max_dd = float(drawdown.tail(60).max())
+    dd_penalty = 0.0
+    if max_dd > 0.15:
+        dd_penalty = min(10.0, (max_dd - 0.15) / 0.15 * 10.0)
+
+    total_score = fund_score + volume_score + momentum_score + sector_score + vola_score + trend_score - dd_penalty
     return float(total_score)
 
 
