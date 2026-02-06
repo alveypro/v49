@@ -15,8 +15,9 @@
 
 import sqlite3
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
-from typing import List, Dict
+from typing import List, Dict, Tuple
 import json
 import logging
 from pathlib import Path
@@ -219,17 +220,38 @@ class TradingAssistant:
             推荐股票列表
         """
         logger.info("🔍 开始每日选股扫描...")
-        
+
         try:
             # 获取配置
             min_score = float(self.get_config('min_score'))
             market_cap_min = float(self.get_config('market_cap_min'))
             market_cap_max = float(self.get_config('market_cap_max'))
-            
-            # 使用v4.0策略选股
+            base_threshold = min_score
+            thr_v4 = base_threshold
+            thr_v5 = base_threshold
+            thr_v7 = base_threshold + 5
+            thr_v8 = base_threshold + 5
+            thr_v9 = base_threshold
+
+            weights = {
+                "v4": 0.15,
+                "v5": 0.15,
+                "v7": 0.30,
+                "v8": 0.25,
+                "v9": 0.15,
+            }
+
+            # 共识策略评分器
             from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
-            evaluator = ComprehensiveStockEvaluatorV4()
-            
+            from comprehensive_stock_evaluator_v5 import ComprehensiveStockEvaluatorV5
+            from comprehensive_stock_evaluator_v7_ultimate import ComprehensiveStockEvaluatorV7Ultimate
+            from comprehensive_stock_evaluator_v8_ultimate import ComprehensiveStockEvaluatorV8Ultimate
+
+            evaluator_v4 = ComprehensiveStockEvaluatorV4()
+            evaluator_v5 = ComprehensiveStockEvaluatorV5()
+            evaluator_v7 = ComprehensiveStockEvaluatorV7Ultimate(self.db_path)
+            evaluator_v8 = ComprehensiveStockEvaluatorV8Ultimate(self.db_path)
+
             # 获取候选股票
             conn = sqlite3.connect(self.db_path)
             query = """
@@ -248,58 +270,146 @@ class TradingAssistant:
             conn.close()
             
             logger.info(f"📊 候选股票: {len(candidates)}只")
-            
-            # 评分筛选
-            recommendations = []
-            
-            for idx, row in candidates.iterrows():
-                ts_code = row['ts_code']
-                stock_name = row['name']
-                
-                # 获取最近数据
+
+            # 预加载指数数据（上证指数）供v8使用
+            index_data = pd.DataFrame()
+            try:
                 conn = sqlite3.connect(self.db_path)
-                stock_data = pd.read_sql_query(f"""
-                    SELECT * FROM daily_trading_data
-                    WHERE ts_code = '{ts_code}'
+                index_data = pd.read_sql_query("""
+                    SELECT trade_date, close_price as close, vol as volume
+                    FROM daily_trading_data
+                    WHERE ts_code = '000001.SH'
                     ORDER BY trade_date DESC
-                    LIMIT 100
+                    LIMIT 120
                 """, conn)
                 conn.close()
-                
-                if len(stock_data) < 60:
+            except Exception:
+                index_data = pd.DataFrame()
+            if len(index_data) >= 60 and 'trade_date' in index_data.columns:
+                index_data = index_data.sort_values('trade_date').reset_index(drop=True)
+            else:
+                index_data = None
+
+            # 资金类加分（全局/个股/行业）
+            bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = self._load_external_bonus_maps()
+
+            # 预读取历史数据 + 行业强度
+            history_cache = {}
+            industry_vals = {}
+            for _, row in candidates.iterrows():
+                ts_code = row['ts_code']
+                conn = sqlite3.connect(self.db_path)
+                stock_data = pd.read_sql_query(f"""
+                    SELECT trade_date, close_price, high_price, low_price, vol, amount, pct_chg, turnover_rate
+                    FROM daily_trading_data
+                    WHERE ts_code = '{ts_code}'
+                    ORDER BY trade_date DESC
+                    LIMIT 160
+                """, conn)
+                conn.close()
+                if stock_data is None or len(stock_data) < 80:
                     continue
-                
-                # 评分
-                result = evaluator.evaluate_stock_v4(stock_data)
-                
-                if result['success'] and result['final_score'] >= min_score:
-                    latest_price = stock_data.iloc[0]['close_price']
-                    
-                    # ✅ 生成详细推荐理由
-                    reason_parts = []
-                    reason_parts.append(result.get('description', '优质标的'))
-                    
-                    # 添加关键维度信息
-                    dim_scores = result.get('dimension_scores', {})
-                    if dim_scores:
-                        top_dims = sorted(dim_scores.items(), key=lambda x: x[1], reverse=True)[:3]
-                        reason_parts.append(f"核心优势: {', '.join([f'{k}({v:.0f}分)' for k, v in top_dims])}")
-                    
-                    recommendations.append({
-                        'ts_code': ts_code,
-                        'stock_name': stock_name,
-                        'score': result['final_score'],
-                        'price': latest_price,
-                        'reason': ' | '.join(reason_parts),
-                        'market_cap': row['circ_mv'] * 10000,
-                        'industry': row['industry'],
-                        'grade': result.get('grade', ''),
-                        'dimension_scores': dim_scores
-                    })
-                
-                if len(recommendations) >= top_n * 2:
-                    break
-            
+                stock_data = stock_data.sort_values('trade_date').reset_index(drop=True)
+                history_cache[ts_code] = stock_data
+                close = pd.to_numeric(stock_data['close_price'], errors='coerce').ffill()
+                if len(close) > 21:
+                    r20 = (close.iloc[-1] / close.iloc[-21] - 1.0) * 100
+                    industry_vals.setdefault(row['industry'], []).append(r20)
+            industry_scores = {k: float(np.mean(v)) for k, v in industry_vals.items() if v}
+
+            # 评分筛选（共识）
+            recommendations = []
+
+            for _, row in candidates.iterrows():
+                ts_code = row['ts_code']
+                stock_name = row['name']
+                industry = row['industry']
+                stock_data = history_cache.get(ts_code)
+                if stock_data is None or len(stock_data) < 80:
+                    continue
+
+                stock_data['name'] = stock_name
+
+                v4_res = evaluator_v4.evaluate_stock_v4(stock_data)
+                v4_score = float(v4_res.get('final_score', 0)) if v4_res else None
+
+                v5_res = evaluator_v5.evaluate_stock_v4(stock_data)
+                v5_score = float(v5_res.get('final_score', 0)) if v5_res else None
+
+                v7_res = evaluator_v7.evaluate_stock_v7(stock_data, ts_code, industry)
+                v7_score = float(v7_res.get('final_score', 0)) if v7_res and v7_res.get('success') else None
+
+                v8_res = evaluator_v8.evaluate_stock_v8(stock_data, ts_code=ts_code, index_data=index_data)
+                v8_score = float(v8_res.get('final_score', 0)) if v8_res and v8_res.get('success') else None
+
+                ind_strength = industry_scores.get(industry, 0.0)
+                v9_info = self._calc_v9_score_from_hist(stock_data, industry_strength=ind_strength)
+                v9_score = float(v9_info.get('score', 0)) if v9_info else None
+
+                agree = 0
+                if v4_score is not None and v4_score >= thr_v4:
+                    agree += 1
+                if v5_score is not None and v5_score >= thr_v5:
+                    agree += 1
+                if v7_score is not None and v7_score >= thr_v7:
+                    agree += 1
+                if v8_score is not None and v8_score >= thr_v8:
+                    agree += 1
+                if v9_score is not None and v9_score >= thr_v9:
+                    agree += 1
+                if agree < 3:
+                    continue
+
+                scores = {
+                    "v4": v4_score,
+                    "v5": v5_score,
+                    "v7": v7_score,
+                    "v8": v8_score,
+                    "v9": v9_score,
+                }
+                weight_sum = sum(weights[k] for k, v in scores.items() if v is not None)
+                if weight_sum <= 0:
+                    continue
+                weighted_score = sum(
+                    (scores[k] * weights[k]) for k in scores if scores[k] is not None
+                ) / weight_sum
+
+                extra = self._calc_external_bonus(
+                    ts_code,
+                    industry,
+                    bonus_global,
+                    bonus_stock_map,
+                    top_list_set,
+                    top_inst_set,
+                    bonus_industry_map,
+                )
+                final_score = weighted_score + extra
+
+                if final_score < base_threshold:
+                    continue
+
+                latest_price = stock_data.iloc[-1]['close_price']
+                reason = f"共识评分{final_score:.1f} | 一致数{agree} | 资金加分{extra:.1f}"
+
+                recommendations.append({
+                    'ts_code': ts_code,
+                    'stock_name': stock_name,
+                    'score': final_score,
+                    'price': latest_price,
+                    'reason': reason,
+                    'market_cap': row['circ_mv'] * 10000,
+                    'industry': industry,
+                    'grade': '',
+                    'dimension_scores': {
+                        'v4': v4_score,
+                        'v5': v5_score,
+                        'v7': v7_score,
+                        'v8': v8_score,
+                        'v9': v9_score,
+                        'agree': agree
+                    }
+                })
+
             # 按分数排序，取Top N
             recommendations.sort(key=lambda x: x['score'], reverse=True)
             top_recommendations = recommendations[:top_n]
@@ -320,6 +430,181 @@ class TradingAssistant:
             import traceback
             logger.error(traceback.format_exc())
             return []
+
+    def _calc_v9_score_from_hist(self, hist: pd.DataFrame, industry_strength: float = 0.0) -> Dict:
+        if hist is None or hist.empty or len(hist) < 80:
+            return {"score": 0.0, "details": {}}
+        h = hist.sort_values("trade_date")
+        close = pd.to_numeric(h["close_price"], errors="coerce").ffill()
+        vol = pd.to_numeric(h.get("vol", pd.Series(dtype=float)), errors="coerce").fillna(0.0)
+        amount = pd.to_numeric(h.get("amount", pd.Series(dtype=float)), errors="coerce").fillna(0.0)
+        pct = pd.to_numeric(h.get("pct_chg", pd.Series(dtype=float)), errors="coerce")
+        if pct.isna().all():
+            pct = close.pct_change() * 100
+
+        ma20 = close.rolling(20).mean()
+        ma60 = close.rolling(60).mean()
+        ma120 = close.rolling(120).mean()
+
+        trend_strong = bool(ma20.iloc[-1] > ma60.iloc[-1] > ma120.iloc[-1])
+        trend_ok = bool((ma20.iloc[-1] > ma60.iloc[-1]) and (ma20.iloc[-1] > ma20.iloc[-5]) and (ma60.iloc[-1] >= ma60.iloc[-5]))
+
+        momentum_20 = (close.iloc[-1] / close.iloc[-21] - 1.0) if len(close) > 21 else 0.0
+        momentum_60 = (close.iloc[-1] / close.iloc[-61] - 1.0) if len(close) > 61 else 0.0
+
+        vol_ratio = (vol.iloc[-1] / vol.tail(20).mean()) if vol.tail(20).mean() > 0 else 0.0
+
+        flow_sign = pct.fillna(0).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+        flow_val = (amount * flow_sign).tail(20).sum()
+        flow_base = amount.tail(20).sum() if amount.tail(20).sum() > 0 else 1.0
+        flow_ratio = flow_val / flow_base
+
+        vol_20 = pct.tail(20).std() / 100.0 if pct.tail(20).std() is not None else 0.0
+
+        fund_score = max(0.0, min(20.0, (flow_ratio + 0.03) / 0.12 * 20.0))
+        volume_score = max(0.0, min(15.0, (vol_ratio - 0.5) / 1.0 * 15.0))
+        momentum_score = max(0.0, min(8.0, momentum_20 * 100 / 8.0 * 8.0)) + \
+                         max(0.0, min(7.0, momentum_60 * 100 / 16.0 * 7.0))
+        sector_score = max(0.0, min(15.0, (industry_strength + 2.0) / 6.0 * 15.0))
+
+        if vol_20 <= 0.03:
+            vola_score = 12.0
+        elif vol_20 <= 0.06:
+            vola_score = 15.0
+        elif vol_20 <= 0.10:
+            vola_score = 8.0
+        else:
+            vola_score = 0.0
+
+        trend_score = 15.0 if trend_strong else (10.0 if trend_ok else 0.0)
+
+        rolling_peak = close.cummax()
+        drawdown = (rolling_peak - close) / rolling_peak
+        max_dd = float(drawdown.tail(60).max())
+        dd_penalty = 0.0
+        if max_dd > 0.15:
+            dd_penalty = min(10.0, (max_dd - 0.15) / 0.15 * 10.0)
+
+        total_score = fund_score + volume_score + momentum_score + sector_score + vola_score + trend_score - dd_penalty
+        return {"score": round(total_score, 2), "details": {}}
+
+    def _load_external_bonus_maps(self) -> Tuple[float, Dict[str, float], set, set, Dict[str, float]]:
+        bonus_global = 0.0
+        bonus_stock = {}
+        bonus_industry = {}
+        top_list_set = set()
+        top_inst_set = set()
+        last_trade = None
+        try:
+            conn = sqlite3.connect(self.db_path)
+            df_last = pd.read_sql_query("SELECT MAX(trade_date) AS max_date FROM daily_trading_data", conn)
+            last_trade = str(df_last["max_date"].iloc[0]) if not df_last.empty else None
+            conn.close()
+        except Exception:
+            last_trade = None
+
+        try:
+            conn = sqlite3.connect(self.db_path)
+            nb = pd.read_sql_query("SELECT north_money FROM northbound_flow ORDER BY trade_date DESC LIMIT 5", conn)
+            if not nb.empty:
+                avg_nb = float(nb["north_money"].mean())
+                if avg_nb > 0:
+                    bonus_global += 1.0
+            conn.close()
+        except Exception:
+            pass
+
+        try:
+            conn = sqlite3.connect(self.db_path)
+            m = pd.read_sql_query("SELECT rzye, rqye FROM margin_summary ORDER BY trade_date DESC LIMIT 5", conn)
+            if not m.empty:
+                rzye = float(m["rzye"].mean())
+                if rzye > 0:
+                    bonus_global += 0.5
+            conn.close()
+        except Exception:
+            pass
+
+        try:
+            conn = sqlite3.connect(self.db_path)
+            mf = pd.read_sql_query(
+                "SELECT ts_code, net_mf_amount FROM moneyflow_daily WHERE trade_date = (SELECT MAX(trade_date) FROM moneyflow_daily)",
+                conn,
+            )
+            if not mf.empty:
+                bonus_stock = {r["ts_code"]: float(r["net_mf_amount"]) for _, r in mf.iterrows()}
+            conn.close()
+        except Exception:
+            pass
+
+        try:
+            conn = sqlite3.connect(self.db_path)
+            df = pd.read_sql_query(
+                "SELECT ts_code FROM top_list WHERE trade_date = (SELECT MAX(trade_date) FROM top_list)",
+                conn,
+            )
+            if not df.empty:
+                top_list_set = set(df["ts_code"].astype(str).tolist())
+            conn.close()
+        except Exception:
+            pass
+
+        try:
+            conn = sqlite3.connect(self.db_path)
+            df = pd.read_sql_query(
+                "SELECT ts_code FROM top_inst WHERE trade_date = (SELECT MAX(trade_date) FROM top_inst)",
+                conn,
+            )
+            if not df.empty:
+                top_inst_set = set(df["ts_code"].astype(str).tolist())
+            conn.close()
+        except Exception:
+            pass
+
+        try:
+            conn = sqlite3.connect(self.db_path)
+            df = pd.read_sql_query(
+                "SELECT industry, net_mf_amount FROM moneyflow_ind_ths WHERE trade_date = (SELECT MAX(trade_date) FROM moneyflow_ind_ths)",
+                conn,
+            )
+            if not df.empty:
+                bonus_industry = {r["industry"]: float(r["net_mf_amount"]) for _, r in df.iterrows() if r.get("industry")}
+            conn.close()
+        except Exception:
+            pass
+
+        return bonus_global, bonus_stock, top_list_set, top_inst_set, bonus_industry
+
+    def _calc_external_bonus(
+        self,
+        ts_code: str,
+        industry: str | None,
+        bonus_global: float,
+        bonus_stock_map: Dict[str, float],
+        top_list_set: set,
+        top_inst_set: set,
+        bonus_industry_map: Dict[str, float],
+    ) -> float:
+        extra = 0.0
+        extra += bonus_global
+        mf_net = bonus_stock_map.get(ts_code, 0.0)
+        if mf_net > 1e8:
+            extra += 2.0
+        elif mf_net > 0:
+            extra += 1.0
+        elif mf_net < 0:
+            extra -= 1.0
+        if ts_code in top_list_set:
+            extra += 1.5
+        if ts_code in top_inst_set:
+            extra += 1.0
+        if industry:
+            ind_flow = bonus_industry_map.get(industry, 0.0)
+            if ind_flow > 0:
+                extra += 1.0
+            elif ind_flow < 0:
+                extra -= 1.0
+        return extra
     
     def _save_daily_recommendations(self, date: str, recommendations: List[Dict]):
         """保存每日推荐"""
@@ -1081,4 +1366,3 @@ if __name__ == "__main__":
     print(f"   胜率: {stats['win_rate']*100:.1f}%")
     
     print("\n✅ 测试完成！")
-
