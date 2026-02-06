@@ -8712,9 +8712,24 @@ def main():
             if evo_params_v9:
                 st.success(f"🧬 已应用自动进化参数（v9.0，{evolve_v9.get('run_at', 'unknown')}）")
 
+            def _load_history_full_fallback(ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
+                if not os.path.exists(PERMANENT_DB_PATH):
+                    return pd.DataFrame()
+                conn = sqlite3.connect(PERMANENT_DB_PATH)
+                query = """
+                    SELECT trade_date, close_price, vol, amount, pct_chg, turnover_rate
+                    FROM daily_trading_data
+                    WHERE ts_code = ? AND trade_date >= ? AND trade_date <= ?
+                    ORDER BY trade_date
+                """
+                try:
+                    return pd.read_sql_query(query, conn, params=(ts_code, start_date, end_date))
+                finally:
+                    conn.close()
+
             load_history_full = getattr(vp_analyzer, "_load_history_full", None)
             if not callable(load_history_full):
-                load_history_full = vp_analyzer._load_history_from_sqlite
+                load_history_full = _load_history_full_fallback
                 st.warning("⚠️ 当前版本缺少 v9 完整历史加载器，已降级为基础历史数据读取")
 
             st.info("""
