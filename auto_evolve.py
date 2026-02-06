@@ -885,6 +885,7 @@ def _backtest_simple_v9(
         ind_strength = industry_strength.get(ind, 0.0)
         amount = pd.to_numeric(stock_data["amount"], errors="coerce").fillna(0.0)
         avg_amount = float(amount.iloc[last_valid_idx - 19:last_valid_idx + 1].mean()) if last_valid_idx >= 19 else 0.0
+        # amount unit is thousand yuan; convert to hundred-million yuan (亿)
         avg_amount_yi = avg_amount / 1e5
         if avg_amount_yi < min_turnover:
             continue
