@@ -6709,6 +6709,19 @@ def main():
                 st.warning(f"⚠️ 需更新（{status.get('days_old', 999)}天前）")
         else:
             st.error(f"❌ {status['error']}")
+
+        # 侧边栏健康警报（读取最近报告）
+        try:
+            report_path = os.path.join(os.path.dirname(__file__), "evolution", "health_report.json")
+            if os.path.exists(report_path):
+                with open(report_path, "r", encoding="utf-8") as f:
+                    report = json.load(f)
+                if report and not report.get("ok", True):
+                    warnings = report.get("warnings", [])
+                    preview = "\n".join(warnings[:3]) if warnings else "存在异常"
+                    st.warning(f"⚠️ 健康警报\n{preview}")
+        except Exception:
+            pass
         
         st.divider()
         
@@ -9539,6 +9552,14 @@ def main():
                                 (scores[k] * weights[k]) for k in scores if scores[k] is not None
                             ) / weight_sum
 
+                            contrib = {
+                                "v4贡献": (scores["v4"] * weights["v4"] / weight_sum) if scores["v4"] is not None else 0.0,
+                                "v5贡献": (scores["v5"] * weights["v5"] / weight_sum) if scores["v5"] is not None else 0.0,
+                                "v7贡献": (scores["v7"] * weights["v7"] / weight_sum) if scores["v7"] is not None else 0.0,
+                                "v8贡献": (scores["v8"] * weights["v8"] / weight_sum) if scores["v8"] is not None else 0.0,
+                                "v9贡献": (scores["v9"] * weights["v9"] / weight_sum) if scores["v9"] is not None else 0.0,
+                            }
+
                             extra = _calc_external_bonus(
                                 ts_code,
                                 industry,
@@ -9557,6 +9578,7 @@ def main():
                                 "行业": industry,
                                 "流通市值": f"{row['circ_mv']/10000:.1f}亿",
                                 "共识评分": f"{final_score:.1f}",
+                                "共识基础分": f"{weighted_score:.1f}",
                                 "资金加分": f"{extra:.1f}",
                                 "一致数": agree_count,
                                 "v4": f"{v4_score:.1f}" if v4_score is not None else "-",
@@ -9564,6 +9586,7 @@ def main():
                                 "v7": f"{v7_score:.1f}" if v7_score is not None else "-",
                                 "v8": f"{v8_score:.1f}" if v8_score is not None else "-",
                                 "v9": f"{v9_score:.1f}" if v9_score is not None else "-",
+                                **{k: f"{v:.1f}" for k, v in contrib.items()},
                                 "建议持仓": "5-15天",
                             }
 
@@ -9591,6 +9614,14 @@ def main():
                                 st.success(f"✅ 选出 Top {top_percent_combo}%（{len(results_df)} 只）")
 
                             st.dataframe(results_df, use_container_width=True, hide_index=True)
+                            with st.expander("🔍 共识贡献拆解", expanded=False):
+                                cols = [
+                                    "股票代码", "股票名称", "共识评分", "共识基础分", "资金加分", "一致数",
+                                    "v4贡献", "v5贡献", "v7贡献", "v8贡献", "v9贡献",
+                                    "v4", "v5", "v7", "v8", "v9",
+                                ]
+                                show_cols = [c for c in cols if c in results_df.columns]
+                                st.dataframe(results_df[show_cols], use_container_width=True, hide_index=True)
                             st.download_button(
                                 "📥 导出完整结果（CSV）",
                                 data=_df_to_csv_bytes(results_df),
@@ -12150,6 +12181,23 @@ def main():
                     with col_s3:
                         recent = stats.get("recent_trade_dates", [])
                         st.metric("近10交易日", f"{len(recent)}天")
+
+                # 建议操作
+                if warnings:
+                    st.markdown("**建议处理**")
+                    tips = []
+                    for w in warnings:
+                        if "table missing" in w or "not updated" in w or "lagging" in w:
+                            tips.append("到「数据与参数管理」执行一次数据更新，并确保自动任务在收盘后运行。")
+                        elif "records low" in w:
+                            tips.append("检查交易日是否完整，必要时执行深度更新（90天）。")
+                        elif "win_rate low" in w:
+                            tips.append("检查评分阈值是否过低或市场环境偏弱，建议提高阈值或减少策略一致数。")
+                        elif "max_drawdown high" in w:
+                            tips.append("考虑开启弱市空仓或提高止损严格度。")
+                    if tips:
+                        for t in sorted(set(tips)):
+                            st.markdown(f"- {t}")
         
         st.markdown("---")
         
