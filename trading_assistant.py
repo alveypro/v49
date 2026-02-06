@@ -22,12 +22,16 @@ import json
 import logging
 from pathlib import Path
 
-# 配置日志
+# 配置日志（优先写入 /opt/airivo/logs）
+_log_path = Path("/opt/airivo/logs/trading_assistant.log")
+if not _log_path.parent.exists():
+    _log_path = Path(__file__).with_name("trading_assistant.log")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('trading_assistant.log'),
+        logging.FileHandler(str(_log_path)),
         logging.StreamHandler()
     ]
 )
@@ -55,6 +59,7 @@ class TradingAssistant:
         self.db_path = db_path
         self.assistant_db = "trading_assistant.db"
         self._init_database()
+        self.last_scan_debug = {}
         
         # 初始化通知服务
         self.notifier = None
@@ -439,6 +444,23 @@ class TradingAssistant:
             today = datetime.now().strftime('%Y-%m-%d')
             self._save_daily_recommendations(today, top_recommendations)
             
+            self.last_scan_debug = {
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "min_score": min_score,
+                "market_cap_min": market_cap_min,
+                "market_cap_max": market_cap_max,
+                "base_threshold": base_threshold,
+                "thresholds": {
+                    "v4": thr_v4,
+                    "v5": thr_v5,
+                    "v7": thr_v7,
+                    "v8": thr_v8,
+                    "v9": thr_v9,
+                },
+                "counts": debug_counts,
+                "selected": len(top_recommendations),
+            }
+
             logger.info(
                 "✅ 选股完成，推荐%s只 | cand=%s scored=%s agree3=%s agree2=%s pass_base=%s",
                 len(top_recommendations),
@@ -458,6 +480,10 @@ class TradingAssistant:
             logger.error(f"❌ 选股失败: {e}")
             import traceback
             logger.error(traceback.format_exc())
+            self.last_scan_debug = {
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "error": str(e),
+            }
             return []
 
     def _calc_v9_score_from_hist(self, hist: pd.DataFrame, industry_strength: float = 0.0) -> Dict:

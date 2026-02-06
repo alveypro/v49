@@ -12476,7 +12476,10 @@ def main():
                         with st.spinner("🔍 正在扫描全市场...（可能需要2-3分钟）"):
                             recommendations = assistant.daily_stock_scan(top_n=top_n)
                             st.session_state['daily_recommendations'] = recommendations
-                            st.success(f"✅ 选股完成！找到{len(recommendations)}只推荐股票")
+                            if recommendations:
+                                st.success(f"✅ 选股完成！找到{len(recommendations)}只推荐股票")
+                            else:
+                                st.warning("⚠️ 本次未选出股票，已记录诊断信息")
                             st.rerun()
                 
                 # 显示推荐结果
@@ -12530,6 +12533,11 @@ def main():
                                     )
                                     st.success(f"✅ 已记录买入 {rec['stock_name']}")
                                     st.rerun()
+                elif 'daily_recommendations' in st.session_state:
+                    st.warning("⚠️ 本次未选出股票，请查看诊断信息")
+                    debug_info = getattr(assistant, "last_scan_debug", None)
+                    if debug_info:
+                        st.code(json.dumps(debug_info, ensure_ascii=False, indent=2))
             
             # ========== 子Tab 2: 持仓管理 ==========
             with sub_tab2:
