@@ -8765,6 +8765,106 @@ def main():
             env_label = env_map.get(market_env, "🟡 震荡")
             st.caption(f"📊 当前市场环境：{env_label}")
 
+            # 外部资金数据加分（北向/融资/龙虎榜/个股资金流/板块资金流）
+            def _load_external_bonus(conn: sqlite3.Connection):
+                bonus_global = 0.0
+                bonus_stock = {}
+                bonus_industry = {}
+                last_trade = None
+                try:
+                    df_last = pd.read_sql_query(
+                        "SELECT MAX(trade_date) AS max_date FROM daily_trading_data",
+                        conn,
+                    )
+                    last_trade = str(df_last["max_date"].iloc[0]) if not df_last.empty else None
+                except Exception:
+                    last_trade = None
+
+                # 北向资金（近5日均值）
+                try:
+                    nb = pd.read_sql_query(
+                        "SELECT north_money FROM northbound_flow ORDER BY trade_date DESC LIMIT 5",
+                        conn,
+                    )
+                    if not nb.empty:
+                        nb_mean = float(nb["north_money"].mean())
+                        if nb_mean > 0:
+                            bonus_global += 2.0
+                        elif nb_mean < 0:
+                            bonus_global -= 2.0
+                except Exception:
+                    pass
+
+                # 融资融券（近5日趋势）
+                try:
+                    mg = pd.read_sql_query(
+                        "SELECT rzye FROM margin_summary ORDER BY trade_date DESC LIMIT 5",
+                        conn,
+                    )
+                    if len(mg) >= 2:
+                        if mg["rzye"].iloc[0] > mg["rzye"].iloc[-1]:
+                            bonus_global += 1.0
+                        elif mg["rzye"].iloc[0] < mg["rzye"].iloc[-1]:
+                            bonus_global -= 1.0
+                except Exception:
+                    pass
+
+                # 个股资金流（日）
+                try:
+                    if last_trade:
+                        mf = pd.read_sql_query(
+                            "SELECT ts_code, net_mf_amount FROM moneyflow_daily WHERE trade_date = ?",
+                            conn,
+                            params=(last_trade,),
+                        )
+                        for _, r in mf.iterrows():
+                            bonus_stock[r["ts_code"]] = float(r.get("net_mf_amount", 0) or 0)
+                except Exception:
+                    pass
+
+                # 龙虎榜（当日出现）
+                top_list_set = set()
+                try:
+                    if last_trade:
+                        tl = pd.read_sql_query(
+                            "SELECT DISTINCT ts_code FROM top_list WHERE trade_date = ?",
+                            conn,
+                            params=(last_trade,),
+                        )
+                        top_list_set = set(tl["ts_code"].tolist())
+                except Exception:
+                    pass
+
+                top_inst_set = set()
+                try:
+                    if last_trade:
+                        ti = pd.read_sql_query(
+                            "SELECT DISTINCT ts_code FROM top_inst WHERE trade_date = ?",
+                            conn,
+                            params=(last_trade,),
+                        )
+                        top_inst_set = set(ti["ts_code"].tolist())
+                except Exception:
+                    pass
+
+                # 行业资金流（同花顺行业）
+                try:
+                    if last_trade:
+                        ind = pd.read_sql_query(
+                            "SELECT * FROM moneyflow_ind_ths WHERE trade_date = ?",
+                            conn,
+                            params=(last_trade,),
+                        )
+                        for _, r in ind.iterrows():
+                            ind_name = r.get("industry") or r.get("industry_name") or r.get("name")
+                            net = r.get("net_flow") if "net_flow" in r else r.get("net_flow_amt")
+                            if ind_name and net is not None:
+                                bonus_industry[str(ind_name)] = float(net)
+                except Exception:
+                    pass
+
+                return bonus_global, bonus_stock, top_list_set, top_inst_set, bonus_industry
+
             evo_thr_v9 = int(evo_params_v9.get("score_threshold", 65))
             evo_hold_v9 = int(evo_params_v9.get("holding_days", 20))
             evo_lookback_v9 = int(evo_params_v9.get("lookback_days", 160))
@@ -8843,6 +8943,8 @@ def main():
 
                         stocks_df = stocks_df.head(candidate_count_v9)
 
+                        bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus(conn)
+
                         # 预计算行业强度（20日动量均值）
                         industry_scores = {}
                         ind_vals = {}
@@ -8884,7 +8986,33 @@ def main():
 
                             ind_strength = industry_scores.get(row["industry"], 0.0)
                             score_info = vp_analyzer._calc_v9_score_from_hist(hist, industry_strength=ind_strength)
-                            score = score_info["score"]
+                            base_score = float(score_info["score"])
+
+                            # 资金类加分
+                            extra = 0.0
+                            # 北向/融资全局加分
+                            extra += bonus_global
+                            # 个股资金流
+                            mf_net = bonus_stock_map.get(ts_code, 0.0)
+                            if mf_net > 1e8:
+                                extra += 2.0
+                            elif mf_net > 0:
+                                extra += 1.0
+                            elif mf_net < 0:
+                                extra -= 1.0
+                            # 龙虎榜
+                            if ts_code in top_list_set:
+                                extra += 1.5
+                            if ts_code in top_inst_set:
+                                extra += 1.0
+                            # 行业资金流
+                            ind_flow = bonus_industry_map.get(row["industry"], 0.0)
+                            if ind_flow > 0:
+                                extra += 1.0
+                            elif ind_flow < 0:
+                                extra -= 1.0
+
+                            score = base_score + extra
                             row_item = {
                                 "股票代码": ts_code,
                                 "股票名称": row["name"],
@@ -8896,6 +9024,7 @@ def main():
                                 "趋势": score_info["details"].get("trend_score"),
                                 "波动": score_info["details"].get("volatility_score"),
                                 "板块强度": score_info["details"].get("sector_score"),
+                                "资金加分": f"{extra:.1f}",
                                 "建议持仓": f"{holding_days_v9}天",
                             }
 
