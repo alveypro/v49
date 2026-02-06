@@ -248,12 +248,18 @@ class TradingAssistant:
 
             # 共识策略评分器
             from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
-            from comprehensive_stock_evaluator_v5 import ComprehensiveStockEvaluatorV5
+            try:
+                from comprehensive_stock_evaluator_v5 import ComprehensiveStockEvaluatorV5
+                v5_ok = True
+            except Exception:
+                ComprehensiveStockEvaluatorV5 = None
+                v5_ok = False
+                logger.warning("⚠️ v5评分器未找到，回退使用v4评分器")
             from comprehensive_stock_evaluator_v7_ultimate import ComprehensiveStockEvaluatorV7Ultimate
             from comprehensive_stock_evaluator_v8_ultimate import ComprehensiveStockEvaluatorV8Ultimate
 
             evaluator_v4 = ComprehensiveStockEvaluatorV4()
-            evaluator_v5 = ComprehensiveStockEvaluatorV5()
+            evaluator_v5 = ComprehensiveStockEvaluatorV5() if v5_ok else evaluator_v4
             evaluator_v7 = ComprehensiveStockEvaluatorV7Ultimate(self.db_path)
             evaluator_v8 = ComprehensiveStockEvaluatorV8Ultimate(self.db_path)
 
