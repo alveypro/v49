@@ -99,6 +99,116 @@ def _load_evolve_params(filename: str) -> Dict[str, Any]:
         pass
     return {}
 
+
+def _load_external_bonus_maps(conn: sqlite3.Connection) -> Tuple[float, Dict[str, float], set, set, Dict[str, float]]:
+    """Load external money/flow bonus maps from DB (northbound, margin, moneyflow, top list, industry flow)."""
+    bonus_global = 0.0
+    bonus_stock: Dict[str, float] = {}
+    bonus_industry: Dict[str, float] = {}
+    top_list_set = set()
+    top_inst_set = set()
+    last_trade = None
+
+    try:
+        df_last = pd.read_sql_query("SELECT MAX(trade_date) AS max_date FROM daily_trading_data", conn)
+        last_trade = str(df_last["max_date"].iloc[0]) if not df_last.empty else None
+    except Exception:
+        last_trade = None
+
+    # 北向资金（近5日均值）
+    try:
+        nb = pd.read_sql_query("SELECT north_money FROM northbound_flow ORDER BY trade_date DESC LIMIT 5", conn)
+        if not nb.empty:
+            nb_mean = float(nb["north_money"].mean())
+            if nb_mean > 0:
+                bonus_global += 2.0
+            elif nb_mean < 0:
+                bonus_global -= 2.0
+    except Exception:
+        pass
+
+    # 融资融券（近5日趋势）
+    try:
+        mg = pd.read_sql_query("SELECT rzye FROM margin_summary ORDER BY trade_date DESC LIMIT 5", conn)
+        if len(mg) >= 2:
+            if mg["rzye"].iloc[0] > mg["rzye"].iloc[-1]:
+                bonus_global += 1.0
+            elif mg["rzye"].iloc[0] < mg["rzye"].iloc[-1]:
+                bonus_global -= 1.0
+    except Exception:
+        pass
+
+    # 个股资金流（日）
+    try:
+        if last_trade:
+            mf = pd.read_sql_query(
+                "SELECT ts_code, net_mf_amount FROM moneyflow_daily WHERE trade_date = ?",
+                conn,
+                params=(last_trade,),
+            )
+            for _, r in mf.iterrows():
+                bonus_stock[r["ts_code"]] = float(r.get("net_mf_amount", 0) or 0)
+    except Exception:
+        pass
+
+    # 龙虎榜
+    try:
+        if last_trade:
+            tl = pd.read_sql_query("SELECT DISTINCT ts_code FROM top_list WHERE trade_date = ?", conn, params=(last_trade,))
+            top_list_set = set(tl["ts_code"].tolist())
+    except Exception:
+        pass
+
+    try:
+        if last_trade:
+            ti = pd.read_sql_query("SELECT DISTINCT ts_code FROM top_inst WHERE trade_date = ?", conn, params=(last_trade,))
+            top_inst_set = set(ti["ts_code"].tolist())
+    except Exception:
+        pass
+
+    # 行业资金流（同花顺行业）
+    try:
+        if last_trade:
+            ind = pd.read_sql_query("SELECT * FROM moneyflow_ind_ths WHERE trade_date = ?", conn, params=(last_trade,))
+            for _, r in ind.iterrows():
+                ind_name = r.get("industry") or r.get("industry_name") or r.get("name")
+                net = r.get("net_flow") if "net_flow" in r else r.get("net_flow_amt")
+                if ind_name and net is not None:
+                    bonus_industry[str(ind_name)] = float(net)
+    except Exception:
+        pass
+
+    return bonus_global, bonus_stock, top_list_set, top_inst_set, bonus_industry
+
+
+def _calc_external_bonus(
+    ts_code: str,
+    industry: str,
+    bonus_global: float,
+    bonus_stock_map: Dict[str, float],
+    top_list_set: set,
+    top_inst_set: set,
+    bonus_industry_map: Dict[str, float],
+) -> float:
+    extra = bonus_global
+    mf_net = bonus_stock_map.get(ts_code, 0.0)
+    if mf_net > 1e8:
+        extra += 2.0
+    elif mf_net > 0:
+        extra += 1.0
+    elif mf_net < 0:
+        extra -= 1.0
+    if ts_code in top_list_set:
+        extra += 1.5
+    if ts_code in top_inst_set:
+        extra += 1.0
+    ind_flow = bonus_industry_map.get(industry, 0.0)
+    if ind_flow > 0:
+        extra += 1.0
+    elif ind_flow < 0:
+        extra -= 1.0
+    return extra
+
 # 🔥 导入v4.0综合优选评分器（潜伏为王·长期稳健版）
 try:
     from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
@@ -6718,6 +6828,7 @@ def main():
                     try:
                         # 获取数据
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
+                        bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
                         
                         # 🔥 构建查询条件（对齐v6.0逻辑）
                         if scan_all_v4 and cap_min_v4 == 0 and cap_max_v4 == 0:
@@ -6813,15 +6924,31 @@ def main():
                                         # 使用v4.0评分器
                                         score_result = vp_analyzer.evaluator_v4.evaluate_stock_v4(stock_data)
                                         
-                                        if score_result and score_result.get('final_score', 0) >= score_threshold_v4:
+                                        if score_result:
+                                            extra = _calc_external_bonus(
+                                                ts_code,
+                                                row['industry'],
+                                                bonus_global,
+                                                bonus_stock_map,
+                                                top_list_set,
+                                                top_inst_set,
+                                                bonus_industry_map,
+                                            )
+                                            final_score = float(score_result.get('final_score', 0)) + extra
+                                        else:
+                                            extra = 0.0
+                                            final_score = 0.0
+
+                                        if score_result and final_score >= score_threshold_v4:
                                             dim_scores = score_result.get('dimension_scores', {})
                                             results.append({
                                                 '股票代码': ts_code,
                                                 '股票名称': stock_name,
                                                 '行业': row['industry'],
                                                 '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
+                                                '综合评分': f"{final_score:.1f}",
                                                 '评级': score_result.get('grade', '-'),
+                                                '资金加分': f"{extra:.1f}",
                                                 '潜伏价值': f"{dim_scores.get('潜伏价值', 0):.1f}",
                                                 '底部特征': f"{dim_scores.get('底部特征', 0):.1f}",
                                                 '量价配合': f"{dim_scores.get('量价配合', 0):.1f}",
@@ -6883,15 +7010,15 @@ def main():
                                 
                                 # 根据模式选择列
                                 if view_mode == "📊 完整评分":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分', '评级',
                                                    '潜伏价值', '底部特征', '量价配合', 'MACD趋势', 
                                                    '均线多头', '主力行为', '启动确认', '涨停基因',
                                                    '最新价格', '止损价', '止盈价', '推荐理由']
                                 elif view_mode == "🎯 核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
+                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分', '评级',
                                                    '潜伏价值', '底部特征', '最新价格', '止损价', '止盈价', '推荐理由']
                                 else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
+                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分',
                                                    '评级', '最新价格', '推荐理由']
                                 
                                 display_df = results_df[display_cols]
@@ -7218,15 +7345,31 @@ def main():
                                         # 使用v5.0评分器（v5.0的方法名仍然是evaluate_stock_v4）
                                         score_result = vp_analyzer.evaluator_v5.evaluate_stock_v4(stock_data)
                                         
-                                        if score_result and score_result.get('final_score', 0) >= score_threshold_v5:
+                                        if score_result:
+                                            extra = _calc_external_bonus(
+                                                ts_code,
+                                                row['industry'],
+                                                bonus_global,
+                                                bonus_stock_map,
+                                                top_list_set,
+                                                top_inst_set,
+                                                bonus_industry_map,
+                                            )
+                                            final_score = float(score_result.get('final_score', 0)) + extra
+                                        else:
+                                            extra = 0.0
+                                            final_score = 0.0
+
+                                        if score_result and final_score >= score_threshold_v5:
                                             dim_scores = score_result.get('dimension_scores', {})
                                             results.append({
                                                 '股票代码': ts_code,
                                                 '股票名称': stock_name,
                                                 '行业': row['industry'],
                                                 '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
+                                                '综合评分': f"{final_score:.1f}",
                                                 '评级': score_result.get('grade', '-'),
+                                                '资金加分': f"{extra:.1f}",
                                                 '启动确认': f"{dim_scores.get('启动确认', 0):.1f}",
                                                 '主力行为': f"{dim_scores.get('主力行为', 0):.1f}",
                                                 '涨停基因': f"{dim_scores.get('涨停基因', 0):.1f}",
@@ -7289,15 +7432,15 @@ def main():
                                 # 根据模式选择列
                                 if view_mode == "📊 完整评分":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '启动确认', '主力行为', '涨停基因', 'MACD趋势', 
+                                                   '资金加分', '启动确认', '主力行为', '涨停基因', 'MACD趋势', 
                                                    '量价配合', '均线多头', '潜伏价值', '底部特征',
                                                    '最新价格', '止损价', '止盈价', '推荐理由']
                                 elif view_mode == "🎯 核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '启动确认', '主力行为', '最新价格', '止损价', '止盈价', '推荐理由']
+                                                   '资金加分', '启动确认', '主力行为', '最新价格', '止损价', '止盈价', '推荐理由']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '评级', '最新价格', '推荐理由']
+                                                   '资金加分', '评级', '最新价格', '推荐理由']
                                 
                                 display_df = results_df[display_cols]
                                 
@@ -7528,6 +7671,7 @@ def main():
                             conn.close()
                         else:
                             st.info(f"✅ 找到 {len(stocks_df)} 只符合市值条件的股票，开始三级过滤...")
+                            bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
                             
                             # 进度条
                             progress_bar = st.progress(0)
@@ -7567,16 +7711,32 @@ def main():
                                         if score_result.get('filter_failed', False):
                                             filter_failed_count += 1
                                             continue
-                                        
-                                        if score_result and score_result.get('final_score', 0) >= score_threshold_v6_tab1:
+
+                                        if score_result:
+                                            extra = _calc_external_bonus(
+                                                ts_code,
+                                                row['industry'],
+                                                bonus_global,
+                                                bonus_stock_map,
+                                                top_list_set,
+                                                top_inst_set,
+                                                bonus_industry_map,
+                                            )
+                                            final_score = float(score_result.get('final_score', 0)) + extra
+                                        else:
+                                            extra = 0.0
+                                            final_score = 0.0
+
+                                        if score_result and final_score >= score_threshold_v6_tab1:
                                             dim_scores = score_result.get('dimension_scores', {})
                                             results.append({
                                                 '股票代码': ts_code,
                                                 '股票名称': stock_name,
                                                 '行业': row['industry'],
                                                 '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
+                                                '综合评分': f"{final_score:.1f}",
                                                 '评级': score_result.get('grade', '-'),
+                                                '资金加分': f"{extra:.1f}",
                                                 '资金流向': f"{dim_scores.get('资金流向', 0):.1f}",
                                                 '板块热度': f"{dim_scores.get('板块热度', 0):.1f}",
                                                 '短期动量': f"{dim_scores.get('短期动量', 0):.1f}",
@@ -7656,14 +7816,14 @@ def main():
                                 
                                 if view_mode == "📊 完整评分":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金流向', '板块热度', '短期动量', '龙头属性', '相对强度', '技术突破', '安全边际',
+                                                   '资金加分', '资金流向', '板块热度', '短期动量', '龙头属性', '相对强度', '技术突破', '安全边际',
                                                    '最新价格', '止损价', '止盈价', '推荐理由', '协同组合']
                                 elif view_mode == "🎯 核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金流向', '板块热度', '龙头属性', '最新价格', '止损价', '止盈价', '推荐理由']
+                                                   '资金加分', '资金流向', '板块热度', '龙头属性', '最新价格', '止损价', '止盈价', '推荐理由']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '评级', '最新价格', '推荐理由', '协同组合']
+                                                   '资金加分', '评级', '最新价格', '推荐理由', '协同组合']
                                 
                                 display_df = results_df[display_cols]
                                 
@@ -7975,15 +8135,26 @@ def main():
                                             filter_failed += 1
                                             continue
                                         
-                                        if score_result['final_score'] >= score_threshold_v7:
+                                        extra = _calc_external_bonus(
+                                            ts_code,
+                                            industry,
+                                            bonus_global,
+                                            bonus_stock_map,
+                                            top_list_set,
+                                            top_inst_set,
+                                            bonus_industry_map,
+                                        )
+                                        final_score = float(score_result['final_score']) + extra
+                                        if final_score >= score_threshold_v7:
                                             dim_scores = score_result.get('dimension_scores', {})
                                             results.append({
                                                 '股票代码': ts_code,
                                                 '股票名称': stock_name,
                                                 '行业': industry,
                                                 '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
+                                                '综合评分': f"{final_score:.1f}",
                                                 '评级': score_result.get('grade', '-'),
+                                                '资金加分': f"{extra:.1f}",
                                                 '市场环境': score_result.get('market_regime', '-'),
                                                 '行业热度': f"{score_result.get('industry_heat', 0):.2f}",
                                                 '行业排名': f"#{score_result.get('industry_rank', 0)}" if score_result.get('industry_rank', 0) > 0 else "未进Top8",
@@ -8058,14 +8229,14 @@ def main():
                                 
                                 if view_mode == "📊 完整信息":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '市场环境', '行业热度', '行业排名', '行业加分',
+                                                   '资金加分', '市场环境', '行业热度', '行业排名', '行业加分',
                                                    '最新价格', '智能止损', '智能止盈', '推荐理由']
                                 elif view_mode == "🎯 核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '行业热度', '行业排名', '最新价格', '智能止损', '智能止盈']
+                                                   '资金加分', '行业热度', '行业排名', '最新价格', '智能止损', '智能止盈']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '评级', '最新价格', '推荐理由']
+                                                   '资金加分', '评级', '最新价格', '推荐理由']
                                 
                                 display_df = results_df[display_cols]
                                 
@@ -8476,9 +8647,19 @@ def main():
                                             filter_failed += 1
                                             continue
                                         
-                                        # 评分区间过滤
+                                        # 评分区间过滤（叠加资金加分）
+                                        extra = _calc_external_bonus(
+                                            ts_code,
+                                            industry,
+                                            bonus_global,
+                                            bonus_stock_map,
+                                            top_list_set,
+                                            top_inst_set,
+                                            bonus_industry_map,
+                                        )
+                                        final_score = float(score_result['final_score']) + extra
                                         min_thr, max_thr = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
-                                        if min_thr <= score_result['final_score'] <= max_thr:
+                                        if min_thr <= final_score <= max_thr:
                                             # 计算凯利仓位（如果启用）
                                             kelly_position = ""
                                             if enable_kelly and 'win_rate' in score_result and 'win_loss_ratio' in score_result:
@@ -8496,8 +8677,9 @@ def main():
                                                 '股票名称': stock_name,
                                                 '行业': industry,
                                                 '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
+                                                '综合评分': f"{final_score:.1f}",
                                                 '评级': score_result.get('grade', '-'),
+                                                '资金加分': f"{extra:.1f}",
                                                 '星级': f"{score_result.get('star_rating', 0)}⭐" if score_result.get('star_rating', 0) else "-",
                                                 '建议仓位': f"{score_result.get('position_suggestion', 0)*100:.0f}%" if score_result.get('position_suggestion') else "-",
                                                 '预期胜率': f"{score_result.get('win_rate', 0)*100:.1f}%" if 'win_rate' in score_result else "-",
@@ -8628,16 +8810,16 @@ def main():
                                 
                                 if view_mode == "📊 完整信息":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '星级', '建议仓位', '预期胜率', '盈亏比', '凯利仓位',
+                                                   '资金加分', '星级', '建议仓位', '预期胜率', '盈亏比', '凯利仓位',
                                                    '最新价格', 'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损', '止损幅度%', '止盈幅度%',
                                                    '推荐理由']
                                 elif view_mode == "🎯 核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '综合评分', '评级', '星级',
+                                    display_cols = ['股票代码', '股票名称', '行业', '综合评分', '评级', '资金加分', '星级',
                                                    '建议仓位', '预期胜率', '凯利仓位', '最新价格',
                                                    'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '综合评分', 
-                                                   '评级', '星级', '建议仓位', '最新价格', '推荐理由']
+                                                   '资金加分', '评级', '星级', '建议仓位', '最新价格', '推荐理由']
                                 
                                 display_df = results_df[display_cols]
                                 
@@ -8765,106 +8947,6 @@ def main():
             env_label = env_map.get(market_env, "🟡 震荡")
             st.caption(f"📊 当前市场环境：{env_label}")
 
-            # 外部资金数据加分（北向/融资/龙虎榜/个股资金流/板块资金流）
-            def _load_external_bonus(conn: sqlite3.Connection):
-                bonus_global = 0.0
-                bonus_stock = {}
-                bonus_industry = {}
-                last_trade = None
-                try:
-                    df_last = pd.read_sql_query(
-                        "SELECT MAX(trade_date) AS max_date FROM daily_trading_data",
-                        conn,
-                    )
-                    last_trade = str(df_last["max_date"].iloc[0]) if not df_last.empty else None
-                except Exception:
-                    last_trade = None
-
-                # 北向资金（近5日均值）
-                try:
-                    nb = pd.read_sql_query(
-                        "SELECT north_money FROM northbound_flow ORDER BY trade_date DESC LIMIT 5",
-                        conn,
-                    )
-                    if not nb.empty:
-                        nb_mean = float(nb["north_money"].mean())
-                        if nb_mean > 0:
-                            bonus_global += 2.0
-                        elif nb_mean < 0:
-                            bonus_global -= 2.0
-                except Exception:
-                    pass
-
-                # 融资融券（近5日趋势）
-                try:
-                    mg = pd.read_sql_query(
-                        "SELECT rzye FROM margin_summary ORDER BY trade_date DESC LIMIT 5",
-                        conn,
-                    )
-                    if len(mg) >= 2:
-                        if mg["rzye"].iloc[0] > mg["rzye"].iloc[-1]:
-                            bonus_global += 1.0
-                        elif mg["rzye"].iloc[0] < mg["rzye"].iloc[-1]:
-                            bonus_global -= 1.0
-                except Exception:
-                    pass
-
-                # 个股资金流（日）
-                try:
-                    if last_trade:
-                        mf = pd.read_sql_query(
-                            "SELECT ts_code, net_mf_amount FROM moneyflow_daily WHERE trade_date = ?",
-                            conn,
-                            params=(last_trade,),
-                        )
-                        for _, r in mf.iterrows():
-                            bonus_stock[r["ts_code"]] = float(r.get("net_mf_amount", 0) or 0)
-                except Exception:
-                    pass
-
-                # 龙虎榜（当日出现）
-                top_list_set = set()
-                try:
-                    if last_trade:
-                        tl = pd.read_sql_query(
-                            "SELECT DISTINCT ts_code FROM top_list WHERE trade_date = ?",
-                            conn,
-                            params=(last_trade,),
-                        )
-                        top_list_set = set(tl["ts_code"].tolist())
-                except Exception:
-                    pass
-
-                top_inst_set = set()
-                try:
-                    if last_trade:
-                        ti = pd.read_sql_query(
-                            "SELECT DISTINCT ts_code FROM top_inst WHERE trade_date = ?",
-                            conn,
-                            params=(last_trade,),
-                        )
-                        top_inst_set = set(ti["ts_code"].tolist())
-                except Exception:
-                    pass
-
-                # 行业资金流（同花顺行业）
-                try:
-                    if last_trade:
-                        ind = pd.read_sql_query(
-                            "SELECT * FROM moneyflow_ind_ths WHERE trade_date = ?",
-                            conn,
-                            params=(last_trade,),
-                        )
-                        for _, r in ind.iterrows():
-                            ind_name = r.get("industry") or r.get("industry_name") or r.get("name")
-                            net = r.get("net_flow") if "net_flow" in r else r.get("net_flow_amt")
-                            if ind_name and net is not None:
-                                bonus_industry[str(ind_name)] = float(net)
-                except Exception:
-                    pass
-
-                return bonus_global, bonus_stock, top_list_set, top_inst_set, bonus_industry
-
             evo_thr_v9 = int(evo_params_v9.get("score_threshold", 65))
             evo_hold_v9 = int(evo_params_v9.get("holding_days", 20))
             evo_lookback_v9 = int(evo_params_v9.get("lookback_days", 160))
@@ -8943,7 +9025,7 @@ def main():
 
                         stocks_df = stocks_df.head(candidate_count_v9)
 
-                        bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus(conn)
+                        bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
 
                         # 预计算行业强度（20日动量均值）
                         industry_scores = {}
@@ -9190,15 +9272,31 @@ def main():
                                         # 使用v6.0评分器（必须传ts_code）
                                         score_result = vp_analyzer.evaluator_v6.evaluate_stock_v6(stock_data, ts_code)
                                         
-                                        if score_result and score_result.get('final_score', 0) >= score_threshold_v6:
+                                        if score_result:
+                                            extra = _calc_external_bonus(
+                                                ts_code,
+                                                row['industry'],
+                                                bonus_global,
+                                                bonus_stock_map,
+                                                top_list_set,
+                                                top_inst_set,
+                                                bonus_industry_map,
+                                            )
+                                            final_score = float(score_result.get('final_score', 0)) + extra
+                                        else:
+                                            extra = 0.0
+                                            final_score = 0.0
+
+                                        if score_result and final_score >= score_threshold_v6:
                                             dim_scores = score_result.get('dim_scores', {})
                                             results.append({
                                                 '股票代码': ts_code,
                                                 '股票名称': stock_name,
                                                 '行业': row['industry'],
                                                 '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{score_result['final_score']:.1f}",
+                                                '综合评分': f"{final_score:.1f}",
                                                 '评级': score_result.get('grade', '-'),
+                                                '资金加分': f"{extra:.1f}",
                                                 '板块热度': f"{dim_scores.get('板块热度', 0):.1f}",
                                                 '资金流向': f"{dim_scores.get('资金流向', 0):.1f}",
                                                 '技术突破': f"{dim_scores.get('技术突破', 0):.1f}",
@@ -9261,15 +9359,15 @@ def main():
                                 # 根据模式选择列
                                 if view_mode == "📊 完整评分":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '板块热度', '资金流向', '技术突破', '短期动量', 
+                                                   '资金加分', '板块热度', '资金流向', '技术突破', '短期动量', 
                                                    '相对强度', '量能配合', '筹码结构', '安全边际',
                                                    '最新价格', '止损价', '止盈价', '推荐理由']
                                 elif view_mode == "🎯 核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '板块热度', '资金流向', '最新价格', '止损价', '止盈价', '推荐理由']
+                                                   '资金加分', '板块热度', '资金流向', '最新价格', '止损价', '止盈价', '推荐理由']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '评级', '最新价格', '推荐理由']
+                                                   '资金加分', '评级', '最新价格', '推荐理由']
                                 
                                 display_df = results_df[display_cols]
                                 
