@@ -8844,7 +8844,8 @@ def main():
 
                             # 成交额过滤
                             avg_amount = pd.to_numeric(hist["amount"], errors="coerce").tail(20).mean()
-                            if avg_amount < min_turnover_v9 * 1e8:
+                            avg_amount_yi = avg_amount / 1e5
+                            if avg_amount_yi < min_turnover_v9:
                                 continue
 
                             ind_strength = industry_scores.get(row["industry"], 0.0)
