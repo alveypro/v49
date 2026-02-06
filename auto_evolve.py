@@ -37,6 +37,46 @@ TOKEN_PATH = os.path.join(ROOT, "tushare_token.txt")
 EVOLUTION_DIR = os.path.join(ROOT, "evolution")
 LOG_PATH = os.path.join(ROOT, "auto_evolve.log")
 LOCK_PATH = "/tmp/auto_evolve.lock"
+SSE_INDEX_CODE = "000001.SH"
+
+
+def _get_last_trade_date(pro: ts.pro_api) -> str | None:
+    """Get last open trade date from SSE calendar."""
+    end_date = datetime.now().strftime("%Y%m%d")
+    start_date = (datetime.now() - timedelta(days=20)).strftime("%Y%m%d")
+    try:
+        trade_cal = pro.trade_cal(exchange="SSE", start_date=start_date, end_date=end_date, is_open="1")
+        if trade_cal is None or trade_cal.empty:
+            return None
+        return trade_cal["cal_date"].iloc[-1]
+    except Exception:
+        return None
+
+
+def _get_db_latest_trade_date(db_path: str) -> str | None:
+    try:
+        conn = _connect(db_path)
+        df = pd.read_sql_query(
+            f"SELECT MAX(trade_date) AS max_date FROM daily_trading_data WHERE ts_code = '{SSE_INDEX_CODE}'",
+            conn,
+        )
+        conn.close()
+        if df is None or df.empty:
+            return None
+        return str(df["max_date"].iloc[0]) if df["max_date"].iloc[0] else None
+    except Exception:
+        return None
+
+
+def _is_data_fresh(db_path: str) -> Tuple[bool, str | None, str | None]:
+    """Check if DB latest trade date matches exchange last trade date."""
+    token = _load_tushare_token()
+    if not token:
+        return False, None, None
+    pro = ts.pro_api(token)
+    last_trade = _get_last_trade_date(pro)
+    db_last = _get_db_latest_trade_date(db_path)
+    return (last_trade is not None and db_last == last_trade), db_last, last_trade
 
 
 def _setup_logger() -> logging.Logger:
@@ -1154,6 +1194,13 @@ def main() -> None:
         LOGGER.info("updating data: last %s days", update_days)
         update_result = _update_stock_data(db_path, days=update_days)
         LOGGER.info("update result: %s", update_result)
+
+        # 1.1) 数据完整性检查（当日未更新则退出，等待下一次任务）
+        fresh, db_last, last_trade = _is_data_fresh(db_path)
+        LOGGER.info("data freshness: db_last=%s, last_trade=%s, fresh=%s", db_last, last_trade, fresh)
+        if not fresh:
+            LOGGER.warning("data not fresh yet, exiting early to wait for next run")
+            return
 
         # 2) 更新市值
         mc_result = _update_market_cap(db_path)
