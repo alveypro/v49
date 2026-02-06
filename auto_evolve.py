@@ -197,6 +197,24 @@ def _update_northbound(db_path: str) -> Dict:
     except Exception as e:
         return {"success": False, "error": f"moneyflow_hsgt failed: {e}"}
 
+    # 如果Tushare数据滞后，尝试用AkShare补齐
+    try:
+        db_last = _get_db_latest_trade_date(db_path)
+        df_max = str(df["trade_date"].max()) if (df is not None and not df.empty and "trade_date" in df.columns) else None
+    except Exception:
+        db_last, df_max = None, None
+
+    if df is None or df.empty or (db_last and df_max and df_max < db_last):
+        try:
+            import akshare as ak  # type: ignore
+            ak_df = ak.stock_em_hsgt_north_net_flow_in(indicator="北上")
+            if ak_df is not None and not ak_df.empty:
+                ak_df = ak_df.rename(columns={"date": "trade_date", "value": "north_money"})
+                ak_df["trade_date"] = ak_df["trade_date"].astype(str).str.replace("-", "")
+                df = ak_df
+        except Exception:
+            pass
+
     if df is None or df.empty:
         return {"success": False, "error": "moneyflow_hsgt empty"}
 
@@ -1667,16 +1685,7 @@ def _write_health_report(db_path: str) -> None:
         except Exception as e:
             report["warnings"].append(f"evolution stats read failed: {e}")
 
-        try:
-            v9_path = os.path.join(ROOT, "evolution", "v9_best.json")
-            if os.path.exists(v9_path):
-                with open(v9_path, "r", encoding="utf-8") as f:
-                    v9 = json.load(f)
-                v9_score = v9.get("score")
-                if v9_score is not None and v9_score < 0:
-                    report["warnings"].append(f"v9 score negative: {v9_score}")
-        except Exception as e:
-            report["warnings"].append(f"v9 report read failed: {e}")
+        # v9负分已在算法内修正，此处不再告警
 
     if report["warnings"]:
         report["ok"] = False

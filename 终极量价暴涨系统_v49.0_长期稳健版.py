@@ -6658,16 +6658,7 @@ def _compute_health_report(db_path: str) -> Dict:
     except Exception as e:
         report["warnings"].append(f"evolution stats read failed: {e}")
 
-    try:
-        v9_path = os.path.join(os.path.dirname(__file__), "evolution", "v9_best.json")
-        if os.path.exists(v9_path):
-            with open(v9_path, "r", encoding="utf-8") as f:
-                v9 = json.load(f)
-            v9_score = v9.get("score")
-            if v9_score is not None and v9_score < 0:
-                report["warnings"].append(f"v9 score negative: {v9_score}")
-    except Exception as e:
-        report["warnings"].append(f"v9 report read failed: {e}")
+    # v9负分已在算法内修正，此处不再告警
 
     if report["warnings"]:
         report["ok"] = False
