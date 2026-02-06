@@ -1535,8 +1535,8 @@ def _write_health_report(db_path: str) -> None:
                 return cursor.fetchone() is not None
 
             table_checks = {
-                "moneyflow_hsgt": "trade_date",
-                "margin": "trade_date",
+                "northbound_flow": "trade_date",
+                "margin_summary": "trade_date",
                 "margin_detail": "trade_date",
                 "moneyflow_daily": "trade_date",
                 "moneyflow_ind_ths": "trade_date",

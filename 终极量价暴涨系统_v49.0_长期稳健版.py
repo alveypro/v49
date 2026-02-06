@@ -6587,8 +6587,8 @@ def _compute_health_report(db_path: str) -> Dict:
             return cursor.fetchone() is not None
 
         table_checks = {
-            "moneyflow_hsgt": "trade_date",
-            "margin": "trade_date",
+            "northbound_flow": "trade_date",
+            "margin_summary": "trade_date",
             "margin_detail": "trade_date",
             "moneyflow_daily": "trade_date",
             "moneyflow_ind_ths": "trade_date",
@@ -12770,7 +12770,6 @@ def main():
                         # 保存通知配置
                         if enable_email and email_address and smtp_user and smtp_password:
                             try:
-                                import json
                                 notification_config = {
                                     "email": {
                                         "enabled": True,
