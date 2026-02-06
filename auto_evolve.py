@@ -184,11 +184,14 @@ def _update_northbound(db_path: str) -> Dict:
         return {"success": False, "error": "Tushare token not found"}
     pro = ts.pro_api(token)
 
-    last_trade = _get_recent_trade_date(pro, lookback_days=60)
+    last_trade = _get_db_latest_trade_date(db_path) or _get_recent_trade_date(pro, lookback_days=60)
     if not last_trade:
         return {"success": False, "error": "no recent trade date"}
 
-    start_date = (datetime.now() - timedelta(days=60)).strftime("%Y%m%d")
+    try:
+        start_date = (datetime.strptime(last_trade, "%Y%m%d") - timedelta(days=60)).strftime("%Y%m%d")
+    except Exception:
+        start_date = (datetime.now() - timedelta(days=60)).strftime("%Y%m%d")
     try:
         df = pro.moneyflow_hsgt(start_date=start_date, end_date=last_trade)
     except Exception as e:
@@ -241,11 +244,14 @@ def _update_margin(db_path: str) -> Dict:
         return {"success": False, "error": "Tushare token not found"}
     pro = ts.pro_api(token)
 
-    last_trade = _get_recent_trade_date(pro, lookback_days=60)
+    last_trade = _get_db_latest_trade_date(db_path) or _get_recent_trade_date(pro, lookback_days=60)
     if not last_trade:
         return {"success": False, "error": "no recent trade date"}
 
-    start_date = (datetime.now() - timedelta(days=60)).strftime("%Y%m%d")
+    try:
+        start_date = (datetime.strptime(last_trade, "%Y%m%d") - timedelta(days=60)).strftime("%Y%m%d")
+    except Exception:
+        start_date = (datetime.now() - timedelta(days=60)).strftime("%Y%m%d")
     try:
         df = pro.margin(start_date=start_date, end_date=last_trade)
     except Exception as e:
