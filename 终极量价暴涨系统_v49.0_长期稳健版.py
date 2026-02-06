@@ -8715,6 +8715,7 @@ def main():
             evo_params_v9 = evolve_v9.get("params", {}) if isinstance(evolve_v9, dict) else {}
             if evo_params_v9:
                 st.success(f"🧬 已应用自动进化参数（v9.0，{evolve_v9.get('run_at', 'unknown')}）")
+                st.caption(f"推荐阈值: {evo_params_v9.get('score_threshold')} | 持仓: {evo_params_v9.get('holding_days')} | 窗口: {evo_params_v9.get('lookback_days')} | 最低成交额(亿): {evo_params_v9.get('min_turnover')}")
 
             def _load_history_full_fallback(ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
                 if not os.path.exists(PERMANENT_DB_PATH):
