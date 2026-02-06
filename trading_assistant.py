@@ -259,7 +259,7 @@ class TradingAssistant:
                 FROM stock_basic sb
                 WHERE sb.circ_mv >= ? AND sb.circ_mv <= ?
                 ORDER BY RANDOM()
-                LIMIT 200
+                LIMIT 800
             """
             
             candidates = pd.read_sql_query(
@@ -319,8 +319,16 @@ class TradingAssistant:
 
             # 评分筛选（共识）
             recommendations = []
+            debug_counts = {
+                "cand": 0,
+                "scored": 0,
+                "agree3": 0,
+                "agree2": 0,
+                "pass_base": 0,
+            }
 
             for _, row in candidates.iterrows():
+                debug_counts["cand"] += 1
                 ts_code = row['ts_code']
                 stock_name = row['name']
                 industry = row['industry']
@@ -357,8 +365,7 @@ class TradingAssistant:
                     agree += 1
                 if v9_score is not None and v9_score >= thr_v9:
                     agree += 1
-                if agree < 3:
-                    continue
+                debug_counts["scored"] += 1
 
                 scores = {
                     "v4": v4_score,
@@ -385,9 +392,6 @@ class TradingAssistant:
                 )
                 final_score = weighted_score + extra
 
-                if final_score < base_threshold:
-                    continue
-
                 latest_price = stock_data.iloc[-1]['close_price']
                 reason = f"共识评分{final_score:.1f} | 一致数{agree} | 资金加分{extra:.1f}"
 
@@ -410,15 +414,40 @@ class TradingAssistant:
                     }
                 })
 
-            # 按分数排序，取Top N
-            recommendations.sort(key=lambda x: x['score'], reverse=True)
-            top_recommendations = recommendations[:top_n]
+            # 按条件分层筛选
+            recs_agree3 = [r for r in recommendations if r["dimension_scores"]["agree"] >= 3]
+            recs_agree2 = [r for r in recommendations if r["dimension_scores"]["agree"] >= 2]
+            recs_pass_base = [r for r in recommendations if r["score"] >= base_threshold]
+
+            debug_counts["agree3"] = len(recs_agree3)
+            debug_counts["agree2"] = len(recs_agree2)
+            debug_counts["pass_base"] = len(recs_pass_base)
+
+            if recs_agree3 and recs_pass_base:
+                candidates_final = [r for r in recs_agree3 if r["score"] >= base_threshold]
+            elif recs_agree2:
+                # 降低门槛，保证有结果
+                lower_threshold = max(50.0, base_threshold - 5)
+                candidates_final = [r for r in recs_agree2 if r["score"] >= lower_threshold]
+            else:
+                candidates_final = recommendations
+
+            candidates_final.sort(key=lambda x: x['score'], reverse=True)
+            top_recommendations = candidates_final[:top_n]
             
             # 保存到数据库
             today = datetime.now().strftime('%Y-%m-%d')
             self._save_daily_recommendations(today, top_recommendations)
             
-            logger.info(f"✅ 选股完成，推荐{len(top_recommendations)}只")
+            logger.info(
+                "✅ 选股完成，推荐%s只 | cand=%s scored=%s agree3=%s agree2=%s pass_base=%s",
+                len(top_recommendations),
+                debug_counts["cand"],
+                debug_counts["scored"],
+                debug_counts["agree3"],
+                debug_counts["agree2"],
+                debug_counts["pass_base"],
+            )
             
             # 🆕 发送选股通知
             self._send_stock_selection_notification(top_recommendations)
