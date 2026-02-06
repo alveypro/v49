@@ -1223,6 +1223,8 @@ def _calc_v9_score_from_hist(hist: pd.DataFrame, industry_strength: float = 0.0)
         dd_penalty = min(10.0, (max_dd - 0.15) / 0.15 * 10.0)
 
     total_score = fund_score + volume_score + momentum_score + sector_score + vola_score + trend_score - dd_penalty
+    if total_score < 0:
+        total_score = 0.0
     return float(total_score)
 
 
@@ -1586,8 +1588,9 @@ def _write_health_report(db_path: str) -> None:
                 "moneyflow_ind_ths": "trade_date",
                 "top_list": "trade_date",
                 "top_inst": "trade_date",
-                "fund_portfolio_cache": "trade_date",
             }
+            if os.getenv("FUND_PORTFOLIO_FUNDS", "").strip():
+                table_checks["fund_portfolio_cache"] = "trade_date"
             for table, col in table_checks.items():
                 if not _table_exists(table):
                     report["warnings"].append(f"table missing: {table}")

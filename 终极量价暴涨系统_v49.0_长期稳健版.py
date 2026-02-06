@@ -6622,8 +6622,9 @@ def _compute_health_report(db_path: str) -> Dict:
             "moneyflow_ind_ths": "trade_date",
             "top_list": "trade_date",
             "top_inst": "trade_date",
-            "fund_portfolio_cache": "trade_date",
         }
+        if os.getenv("FUND_PORTFOLIO_FUNDS", "").strip():
+            table_checks["fund_portfolio_cache"] = "trade_date"
         for table, col in table_checks.items():
             if not _table_exists(table):
                 report["warnings"].append(f"table missing: {table}")
