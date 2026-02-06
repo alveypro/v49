@@ -1526,6 +1526,23 @@ def _write_health_report(db_path: str) -> None:
                 report["stats"]["recent_trade_dates"] = distinct_dates
                 if len(distinct_dates) < 5:
                     report["warnings"].append("recent trade dates < 5")
+                # 最近3日记录数检查
+                recent_counts = {}
+                for d in distinct_dates[:3]:
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM daily_trading_data WHERE trade_date = ?",
+                        (d,),
+                    )
+                    recent_counts[d] = cursor.fetchone()[0]
+                report["stats"]["recent_counts"] = recent_counts
+                if recent_counts:
+                    vals = list(recent_counts.values())
+                    if min(vals) < 2000:
+                        report["warnings"].append("recent trade day records low (<2000)")
+                    if len(vals) >= 2 and vals[0] > 0:
+                        drop_ratio = (vals[0] - vals[-1]) / max(vals[0], 1)
+                        if drop_ratio > 0.3:
+                            report["warnings"].append("recent trade day records drop >30%")
 
             def _table_exists(name: str) -> bool:
                 cursor.execute(
@@ -1553,6 +1570,8 @@ def _write_health_report(db_path: str) -> None:
                 report["stats"][f"{table}_max_date"] = max_date
                 if last_trade and max_date and str(max_date) < str(last_trade):
                     report["warnings"].append(f"{table} lagging: {max_date} < {last_trade}")
+                if distinct_dates and max_date and max_date not in distinct_dates[:3]:
+                    report["warnings"].append(f"{table} not updated in last 3 trading days")
         finally:
             conn.close()
 

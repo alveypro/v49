@@ -6578,6 +6578,23 @@ def _compute_health_report(db_path: str) -> Dict:
             report["stats"]["recent_trade_dates"] = distinct_dates
             if len(distinct_dates) < 5:
                 report["warnings"].append("recent trade dates < 5")
+            # 最近3日记录数检查
+            recent_counts = {}
+            for d in distinct_dates[:3]:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM daily_trading_data WHERE trade_date = ?",
+                    (d,),
+                )
+                recent_counts[d] = cursor.fetchone()[0]
+            report["stats"]["recent_counts"] = recent_counts
+            if recent_counts:
+                vals = list(recent_counts.values())
+                if min(vals) < 2000:
+                    report["warnings"].append("recent trade day records low (<2000)")
+                if len(vals) >= 2 and vals[0] > 0:
+                    drop_ratio = (vals[0] - vals[-1]) / max(vals[0], 1)
+                    if drop_ratio > 0.3:
+                        report["warnings"].append("recent trade day records drop >30%")
 
         def _table_exists(name: str) -> bool:
             cursor.execute(
@@ -6605,6 +6622,8 @@ def _compute_health_report(db_path: str) -> Dict:
             report["stats"][f"{table}_max_date"] = max_date
             if last_trade and max_date and str(max_date) < str(last_trade):
                 report["warnings"].append(f"{table} lagging: {max_date} < {last_trade}")
+            if distinct_dates and max_date and max_date not in distinct_dates[:3]:
+                report["warnings"].append(f"{table} not updated in last 3 trading days")
     finally:
         conn.close()
 
@@ -9296,9 +9315,9 @@ def main():
 
             col_g, col_h, col_i = st.columns(3)
             with col_g:
-                combo_threshold = st.slider("共识阈值", 50, 90, 65, 5, key="combo_threshold")
+                combo_threshold = st.slider("共识阈值", 50, 90, 68, 5, key="combo_threshold")
             with col_h:
-                top_percent_combo = st.slider("Top百分比", 1, 10, 3, 1, key="combo_top_percent")
+                top_percent_combo = st.slider("Top百分比", 1, 10, 2, 1, key="combo_top_percent")
             with col_i:
                 lookback_days_combo = st.slider("评分窗口（天）", 80, 200, 120, 10, key="combo_lookback_days")
 
@@ -9306,13 +9325,13 @@ def main():
             st.subheader("⚖️ 权重设置（总和自动归一化）")
             w1, w2, w3, w4, w5 = st.columns(5)
             with w1:
-                w_v4 = st.slider("v4权重", 0.0, 1.0, 0.20, 0.05, key="w_v4")
+                w_v4 = st.slider("v4权重", 0.0, 1.0, 0.15, 0.05, key="w_v4")
             with w2:
-                w_v5 = st.slider("v5权重", 0.0, 1.0, 0.20, 0.05, key="w_v5")
+                w_v5 = st.slider("v5权重", 0.0, 1.0, 0.15, 0.05, key="w_v5")
             with w3:
-                w_v7 = st.slider("v7权重", 0.0, 1.0, 0.25, 0.05, key="w_v7")
+                w_v7 = st.slider("v7权重", 0.0, 1.0, 0.30, 0.05, key="w_v7")
             with w4:
-                w_v8 = st.slider("v8权重", 0.0, 1.0, 0.20, 0.05, key="w_v8")
+                w_v8 = st.slider("v8权重", 0.0, 1.0, 0.25, 0.05, key="w_v8")
             with w5:
                 w_v9 = st.slider("v9权重", 0.0, 1.0, 0.15, 0.05, key="w_v9")
 
