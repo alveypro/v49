@@ -8793,7 +8793,7 @@ def main():
 
             col_mode1, col_mode2, col_mode3 = st.columns(3)
             with col_mode1:
-                select_mode_v9 = st.selectbox("选股模式", ["阈值筛选", "分位数筛选(Top%)"], index=0, key="select_mode_v9")
+                select_mode_v9 = st.selectbox("选股模式", ["分位数筛选(Top%)", "阈值筛选"], index=0, key="select_mode_v9")
             with col_mode2:
                 top_percent_v9 = st.slider("Top百分比", 1, 10, 3, 1, key="top_percent_v9")
             with col_mode3:
