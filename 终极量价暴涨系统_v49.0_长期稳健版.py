@@ -6660,6 +6660,28 @@ def _compute_health_report(db_path: str) -> Dict:
     return report
 
 
+def _run_funding_repair(db_path: str) -> Dict[str, Dict]:
+    """Repair missing funding-related tables by calling auto_evolve update helpers."""
+    results: Dict[str, Dict] = {}
+    try:
+        import auto_evolve as ae
+    except Exception as e:
+        return {"error": {"success": False, "error": f"import auto_evolve failed: {e}"}}
+
+    try:
+        results["northbound_flow"] = ae._update_northbound(db_path)
+        results["margin_summary"] = ae._update_margin(db_path)
+        results["margin_detail"] = ae._update_margin_detail(db_path)
+        results["moneyflow_daily"] = ae._update_moneyflow_daily(db_path)
+        results["moneyflow_ind_ths"] = ae._update_moneyflow_industry(db_path)
+        results["top_list"] = ae._update_top_list(db_path)
+        results["top_inst"] = ae._update_top_inst(db_path)
+        results["fund_portfolio_cache"] = ae._update_fund_portfolio(db_path)
+    except Exception as e:
+        results["error"] = {"success": False, "error": str(e)}
+    return results
+
+
 # ===================== 主界面（完整集成版）=====================
 def main():
     """主界面"""
@@ -12135,11 +12157,13 @@ def main():
         with st.expander("🧪 自动健康检测", expanded=False):
             report_path = os.path.join(os.path.dirname(__file__), "evolution", "health_report.json")
 
-            col_h1, col_h2 = st.columns([1, 3])
+            col_h1, col_h2, col_h3 = st.columns([1, 2, 2])
             with col_h1:
                 run_now = st.button("立即检测", use_container_width=True, key="health_check_now")
             with col_h2:
                 st.caption("说明：后台每日自动生成健康报告，手动检测会立即刷新报告。")
+            with col_h3:
+                repair_now = st.button("一键修复资金表", use_container_width=True, key="health_repair_now")
 
             report = None
             if run_now:
@@ -12151,6 +12175,23 @@ def main():
                     st.success("✅ 健康报告已刷新")
                 except Exception as e:
                     st.error(f"写入健康报告失败: {e}")
+            elif repair_now:
+                with st.spinner("正在修复资金表数据（可能需要1-3分钟）..."):
+                    repair = _run_funding_repair(PERMANENT_DB_PATH)
+                    if "error" in repair:
+                        st.error(f"❌ 修复失败: {repair['error'].get('error')}")
+                    else:
+                        ok_count = sum(1 for r in repair.values() if r and r.get("success"))
+                        st.success(f"✅ 修复完成：成功 {ok_count}/{len(repair)}")
+                        st.json(repair)
+                # 修复后立即刷新健康报告
+                report = _compute_health_report(PERMANENT_DB_PATH)
+                try:
+                    os.makedirs(os.path.dirname(report_path), exist_ok=True)
+                    with open(report_path, "w", encoding="utf-8") as f:
+                        json.dump(report, f, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
             elif os.path.exists(report_path):
                 try:
                     with open(report_path, "r", encoding="utf-8") as f:
