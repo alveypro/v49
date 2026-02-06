@@ -8557,13 +8557,13 @@ def main():
                                 st.metric("最终推荐", f"{len(results)}只",
                                          delta=f"{len(results)/len(stocks_df)*100:.2f}%")
                             
-                                if results:
-                                    st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v7}分）")
-                                    
-                                    # 转换为DataFrame
-                                    results_df = pd.DataFrame(results)
-                                    _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
+                            if results:
+                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v7}分）")
                                 
+                                # 转换为DataFrame
+                                results_df = pd.DataFrame(results)
+                                _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
+                            
                                 # 保存到session_state
                                 st.session_state['v7_scan_results_tab1'] = results_df
                                 
@@ -8577,10 +8577,8 @@ def main():
                                     max_score = results_df['综合评分'].astype(float).max()
                                     st.metric("最高评分", f"{max_score:.1f}分")
                                 with col3:
-                                    # 统计5星和4星
-                                    grade_5 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐⭐' in str(g))
-                                    grade_4 = sum(1 for g in results_df['评级'] if '⭐⭐⭐⭐' in str(g) and '⭐⭐⭐⭐⭐' not in str(g))
-                                    st.metric("5+4星", f"{grade_5+grade_4}只")
+                                    grade_high = sum(1 for g in results_df['评级'] if str(g).strip() in ("S", "A", "A+"))
+                                    st.metric("高评级", f"{grade_high}只")
                                 with col4:
                                     # 统计热门行业股票
                                     hot_count = sum(1 for r in results_df['行业排名'] if '#' in str(r) and int(str(r).replace('#', '')) <= 5)
@@ -9151,9 +9149,9 @@ def main():
                                     max_score = results_df['综合评分'].astype(float).max()
                                     st.metric("最高评分", f"{max_score:.1f}分")
                                 with col3:
-                                # 统计高评级
-                                grade_high = sum(1 for g in results_df['评级'] if str(g) in ("S", "A", "A+"))
-                                st.metric("高评级", f"{grade_high}只")
+                                    # 统计高评级
+                                    grade_high = sum(1 for g in results_df['评级'] if str(g) in ("S", "A", "A+"))
+                                    st.metric("高评级", f"{grade_high}只")
                                 with col4:
                                     # 平均凯利仓位
                                     if enable_kelly:
