@@ -4798,6 +4798,9 @@ class CompleteVolumePriceAnalyzer:
             dd_penalty = min(10.0, (max_dd - 0.15) / 0.15 * 10.0)
 
         total_score = fund_score + volume_score + momentum_score + sector_score + vola_score + trend_score - dd_penalty
+        # 稳定性修正：避免负分
+        if total_score < 0:
+            total_score = 0.0
 
         return {
             "score": round(total_score, 2),
