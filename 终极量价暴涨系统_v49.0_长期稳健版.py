@@ -102,6 +102,8 @@ def _load_evolve_params(filename: str) -> Dict[str, Any]:
 
 def _load_external_bonus_maps(conn: sqlite3.Connection) -> Tuple[float, Dict[str, float], set, set, Dict[str, float]]:
     """Load external money/flow bonus maps from DB (northbound, margin, moneyflow, top list, industry flow)."""
+    if not _fund_bonus_enabled():
+        return 0.0, {}, set(), set(), {}
     bonus_global = 0.0
     bonus_stock: Dict[str, float] = {}
     bonus_industry: Dict[str, float] = {}
@@ -295,6 +297,12 @@ _CONFIG = _load_config()
 PERMANENT_DB_PATH = os.getenv("PERMANENT_DB_PATH") or _CONFIG.get("PERMANENT_DB_PATH") or DEFAULT_PERMANENT_DB_PATH
 TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN") or _CONFIG.get("TUSHARE_TOKEN") or DEFAULT_TUSHARE_TOKEN
 SIM_TRADING_DB_PATH = os.path.join(BASE_DIR, "sim_trading.db")
+DEFAULT_ENABLE_FUND_BONUS = bool(int(os.getenv("ENABLE_FUND_BONUS", _CONFIG.get("ENABLE_FUND_BONUS", 1))))
+
+def _fund_bonus_enabled() -> bool:
+    if "enable_fund_bonus" in st.session_state:
+        return bool(st.session_state["enable_fund_bonus"])
+    return DEFAULT_ENABLE_FUND_BONUS
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -6625,6 +6633,10 @@ def _compute_health_report(db_path: str) -> Dict:
         }
         if os.getenv("FUND_PORTFOLIO_FUNDS", "").strip():
             table_checks["fund_portfolio_cache"] = "trade_date"
+
+        if not _fund_bonus_enabled():
+            # 资金类数据已关闭，跳过相关检查
+            return report
         for table, col in table_checks.items():
             if not _table_exists(table):
                 report["warnings"].append(f"table missing: {table}")
@@ -12180,6 +12192,15 @@ def main():
                     st.info("未发现自动进化结果文件。后台任务未运行或尚未生成。")
             except Exception as e:
                 st.error(f"读取自动进化结果失败: {e}")
+
+        # 资金类数据开关
+        with st.expander("💰 资金类数据开关", expanded=False):
+            st.caption("当资金接口延迟严重时，可关闭资金加分与相关健康告警。")
+            enable_funds = st.checkbox("启用资金类加分", value=_fund_bonus_enabled(), key="enable_fund_bonus")
+            if enable_funds:
+                st.success("资金类加分已启用")
+            else:
+                st.warning("资金类加分已关闭（健康检测将忽略资金表）")
 
         # 自动健康检测
         with st.expander("🧪 自动健康检测", expanded=False):
