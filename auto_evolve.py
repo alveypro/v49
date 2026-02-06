@@ -806,7 +806,7 @@ def _calc_v9_score_from_hist(hist: pd.DataFrame, industry_strength: float = 0.0)
     ma20 = close.rolling(20).mean()
     ma60 = close.rolling(60).mean()
     ma120 = close.rolling(120).mean()
-    trend_ok = bool(ma20.iloc[-1] > ma60.iloc[-1] > ma120.iloc[-1] and ma20.iloc[-1] > ma20.iloc[-5])
+    trend_ok = bool((ma20.iloc[-1] > ma60.iloc[-1]) and (ma20.iloc[-1] > ma20.iloc[-5]) and (ma60.iloc[-1] >= ma60.iloc[-5]))
 
     momentum_20 = (close.iloc[-1] / close.iloc[-21] - 1.0) if len(close) > 21 else 0.0
     momentum_60 = (close.iloc[-1] / close.iloc[-61] - 1.0) if len(close) > 61 else 0.0
@@ -819,17 +819,17 @@ def _calc_v9_score_from_hist(hist: pd.DataFrame, industry_strength: float = 0.0)
 
     vol_20 = pct.tail(20).std() / 100.0 if pct.tail(20).std() is not None else 0.0
 
-    fund_score = max(0.0, min(20.0, (flow_ratio + 0.02) / 0.04 * 20.0))
-    volume_score = max(0.0, min(15.0, (vol_ratio - 0.8) / 1.2 * 15.0))
-    momentum_score = max(0.0, min(8.0, momentum_20 * 100 / 15.0 * 8.0)) + \
-                     max(0.0, min(7.0, momentum_60 * 100 / 30.0 * 7.0))
+    fund_score = max(0.0, min(20.0, (flow_ratio + 0.02) / 0.08 * 20.0))
+    volume_score = max(0.0, min(15.0, (vol_ratio - 0.6) / 1.0 * 15.0))
+    momentum_score = max(0.0, min(8.0, momentum_20 * 100 / 10.0 * 8.0)) + \
+                     max(0.0, min(7.0, momentum_60 * 100 / 20.0 * 7.0))
     sector_score = max(0.0, min(15.0, (industry_strength + 2.0) / 6.0 * 15.0))
 
-    if vol_20 <= 0.02:
-        vola_score = 8.0
-    elif vol_20 <= 0.05:
+    if vol_20 <= 0.03:
+        vola_score = 12.0
+    elif vol_20 <= 0.06:
         vola_score = 15.0
-    elif vol_20 <= 0.08:
+    elif vol_20 <= 0.10:
         vola_score = 8.0
     else:
         vola_score = 0.0
