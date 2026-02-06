@@ -112,6 +112,30 @@ def _append_df(conn: sqlite3.Connection, table: str, df: pd.DataFrame, trade_dat
     return len(df)
 
 
+def _append_df_safe(
+    conn: sqlite3.Connection,
+    table: str,
+    df: pd.DataFrame,
+    trade_date: str | None = None,
+) -> int:
+    """Append with schema repair if table has incompatible columns."""
+    if df is None or df.empty:
+        return 0
+    try:
+        return _append_df(conn, table, df, trade_date=trade_date)
+    except Exception as e:
+        msg = str(e)
+        if "has no column named" in msg or "no such column" in msg:
+            try:
+                conn.execute(f"DROP TABLE IF EXISTS {table}")
+                conn.commit()
+            except Exception:
+                pass
+            df.to_sql(table, conn, if_exists="replace", index=False)
+            return len(df)
+        raise
+
+
 def _update_northbound(db_path: str) -> Dict:
     token = _load_tushare_token()
     if not token:
@@ -237,8 +261,7 @@ def _update_margin_detail(db_path: str) -> Dict:
     if df is None or df.empty:
         return {"success": False, "error": "margin_detail empty"}
     conn = _connect(db_path)
-    _ensure_table(conn, "CREATE TABLE IF NOT EXISTS margin_detail (dummy TEXT)")
-    updated = _append_df(conn, "margin_detail", df, trade_date=last_trade)
+    updated = _append_df_safe(conn, "margin_detail", df, trade_date=last_trade)
     conn.commit()
     conn.close()
     return {"success": True, "updated": updated, "last_trade": last_trade}
@@ -259,8 +282,7 @@ def _update_moneyflow_daily(db_path: str) -> Dict:
     if df is None or df.empty:
         return {"success": False, "error": "moneyflow empty"}
     conn = _connect(db_path)
-    _ensure_table(conn, "CREATE TABLE IF NOT EXISTS moneyflow_daily (dummy TEXT)")
-    updated = _append_df(conn, "moneyflow_daily", df, trade_date=last_trade)
+    updated = _append_df_safe(conn, "moneyflow_daily", df, trade_date=last_trade)
     conn.commit()
     conn.close()
     return {"success": True, "updated": updated, "last_trade": last_trade}
@@ -281,8 +303,7 @@ def _update_moneyflow_industry(db_path: str) -> Dict:
     if df is None or df.empty:
         return {"success": False, "error": "moneyflow_ind_ths empty"}
     conn = _connect(db_path)
-    _ensure_table(conn, "CREATE TABLE IF NOT EXISTS moneyflow_ind_ths (dummy TEXT)")
-    updated = _append_df(conn, "moneyflow_ind_ths", df, trade_date=last_trade)
+    updated = _append_df_safe(conn, "moneyflow_ind_ths", df, trade_date=last_trade)
     conn.commit()
     conn.close()
     return {"success": True, "updated": updated, "last_trade": last_trade}
@@ -303,8 +324,7 @@ def _update_top_list(db_path: str) -> Dict:
     if df is None or df.empty:
         return {"success": False, "error": "top_list empty"}
     conn = _connect(db_path)
-    _ensure_table(conn, "CREATE TABLE IF NOT EXISTS top_list (dummy TEXT)")
-    updated = _append_df(conn, "top_list", df, trade_date=last_trade)
+    updated = _append_df_safe(conn, "top_list", df, trade_date=last_trade)
     conn.commit()
     conn.close()
     return {"success": True, "updated": updated, "last_trade": last_trade}
@@ -325,8 +345,7 @@ def _update_top_inst(db_path: str) -> Dict:
     if df is None or df.empty:
         return {"success": False, "error": "top_inst empty"}
     conn = _connect(db_path)
-    _ensure_table(conn, "CREATE TABLE IF NOT EXISTS top_inst (dummy TEXT)")
-    updated = _append_df(conn, "top_inst", df, trade_date=last_trade)
+    updated = _append_df_safe(conn, "top_inst", df, trade_date=last_trade)
     conn.commit()
     conn.close()
     return {"success": True, "updated": updated, "last_trade": last_trade}
@@ -1551,6 +1570,14 @@ def _write_health_report(db_path: str) -> None:
                 )
                 return cursor.fetchone() is not None
 
+            def _table_has_column(table: str, col: str) -> bool:
+                try:
+                    cursor.execute(f"PRAGMA table_info({table})")
+                    cols = [row[1] for row in cursor.fetchall()]
+                    return col in cols
+                except Exception:
+                    return False
+
             table_checks = {
                 "northbound_flow": "trade_date",
                 "margin_summary": "trade_date",
@@ -1564,6 +1591,9 @@ def _write_health_report(db_path: str) -> None:
             for table, col in table_checks.items():
                 if not _table_exists(table):
                     report["warnings"].append(f"table missing: {table}")
+                    continue
+                if not _table_has_column(table, col):
+                    report["warnings"].append(f"{table} missing column: {col}")
                     continue
                 cursor.execute(f"SELECT MAX({col}) FROM {table}")
                 max_date = cursor.fetchone()[0]

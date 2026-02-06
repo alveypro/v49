@@ -6603,6 +6603,14 @@ def _compute_health_report(db_path: str) -> Dict:
             )
             return cursor.fetchone() is not None
 
+        def _table_has_column(table: str, col: str) -> bool:
+            try:
+                cursor.execute(f"PRAGMA table_info({table})")
+                cols = [row[1] for row in cursor.fetchall()]
+                return col in cols
+            except Exception:
+                return False
+
         table_checks = {
             "northbound_flow": "trade_date",
             "margin_summary": "trade_date",
@@ -6616,6 +6624,9 @@ def _compute_health_report(db_path: str) -> Dict:
         for table, col in table_checks.items():
             if not _table_exists(table):
                 report["warnings"].append(f"table missing: {table}")
+                continue
+            if not _table_has_column(table, col):
+                report["warnings"].append(f"{table} missing column: {col}")
                 continue
             cursor.execute(f"SELECT MAX({col}) FROM {table}")
             max_date = cursor.fetchone()[0]
