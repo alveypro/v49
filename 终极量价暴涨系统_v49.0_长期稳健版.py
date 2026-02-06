@@ -7284,7 +7284,8 @@ def main():
 
 
         elif "稳定上涨" in strategy_mode:
-            st.markdown("""
+            exp_uptrend = st.expander("📘 稳定上涨策略说明", expanded=False)
+            exp_uptrend.markdown("""
             <div style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); 
                         padding: 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
                 <h2 style='margin:0; color: white;'>📈 稳定上涨策略</h2>
@@ -7303,7 +7304,8 @@ def main():
         elif "v5.0" in strategy_mode:
             evolve_v5_core = _load_evolve_params("v5_best.json")
             # 🎨 全新顶级UI设计 - Hero Section
-            st.markdown("""
+            exp_v5 = st.expander("📘 v5.0 策略说明", expanded=False)
+            exp_v5.markdown("""
             <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
@@ -7336,7 +7338,7 @@ def main():
             
             # 🔥 v5.0版本特别提示
             if V5_EVALUATOR_AVAILABLE:
-                st.success("""
+                exp_v5.success("""
                 ✅ **当前使用v5.0启动确认版**
                 
                 **🎯 核心差异（对比v4.0潜伏为王版）：**
@@ -7358,7 +7360,7 @@ def main():
                 - 建议配合技术面分析
                 """)
             else:
-                st.error("""
+                exp_v5.error("""
                 ❌ **v5.0启动确认版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v5.py` 文件存在
                 - 建议重启应用后重试
@@ -7369,7 +7371,7 @@ def main():
             st.markdown("### 🎯 选择扫描模式")
             
             # 🔥 市场环境提示
-            st.info("""
+            exp_v5.info("""
             **📊 当前市场环境说明：**
             
             v5.0"启动确认版"要求股票已经明确启动（站上均线、连续阳线、放量上涨），评分标准较严格。
@@ -8062,7 +8064,8 @@ def main():
             # --- 🌟 v7.0 终极智能选股系统 核心逻辑 ---
             
             # 🎨 v7.0版本说明
-            st.markdown("""
+            exp_v7 = st.expander("📘 v7.0 策略说明", expanded=False)
+            exp_v7.markdown("""
             <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%, #f093fb 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
@@ -8095,7 +8098,7 @@ def main():
             
             # 🔥 v7.0版本特别提示
             if V7_EVALUATOR_AVAILABLE:
-                st.success("""
+                exp_v7.success("""
                 ✅ **当前使用v7.0终极智能选股系统（全球顶级标准）**
                 
                 **🎯 核心创新：五大智能系统协同工作！**
@@ -8141,7 +8144,7 @@ def main():
                 - 长期（2-3年）：胜率62-70%，达到优秀私募水平
                 """)
             else:
-                st.error("""
+                exp_v7.error("""
                 ❌ **v7.0终极智能选股系统评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v7_ultimate.py` 文件存在
                 - 建议重启应用后重试
@@ -9337,7 +9340,8 @@ def main():
                 st.dataframe(results_df, use_container_width=True, hide_index=True)
 
         elif "组合策略" in strategy_mode:
-            st.markdown("""
+            exp_combo = st.expander("📘 组合策略说明", expanded=False)
+            exp_combo.markdown("""
             <div style='background: linear-gradient(135deg, #1f4037 0%, #99f2c8 100%); 
                         padding: 35px 30px; border-radius: 15px; color: #0b1f17; margin-bottom: 25px;'>
                 <h1 style='margin:0; color: #0b1f17; font-size: 2.1em; font-weight: 700; text-align: center;'>
@@ -9349,7 +9353,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
-            st.info("""
+            exp_combo.info("""
             **共识逻辑：**
             - v4/v5/v7/v8/v9 五大策略同时评分
             - 评分按权重融合为“共识分”
