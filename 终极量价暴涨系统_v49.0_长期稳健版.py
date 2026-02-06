@@ -880,6 +880,21 @@ code, pre, .stCodeBlock {
 </style>
 """, unsafe_allow_html=True)
 
+def _render_page_header(title: str, subtitle: str = "", tag: str = ""):
+    tag_html = f"<span style='background:#e2e8f0;color:#0f172a;padding:4px 10px;border-radius:999px;font-size:0.75rem;font-weight:600;margin-left:10px;'>{tag}</span>" if tag else ""
+    st.markdown(
+        f"""
+        <div class="airivo-card" style="display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="font-size:1.35rem;font-weight:700;">{title}</div>
+            {tag_html}
+          </div>
+          <div style="color:#64748b;font-size:0.95rem;">{subtitle}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 # ===================== 完整的量价分析器（集成v43+v44）=====================
 class CompleteVolumePriceAnalyzer:
@@ -10097,15 +10112,11 @@ def main():
 
     # ==================== Tab 2: 🚀 板块热点分析 ====================
     with tab_sector:
-        st.markdown("""
-        <div style='background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); 
-                    padding: 25px; border-radius: 15px; color: white; margin-bottom: 20px;'>
-            <h1 style='margin:0; color: white;'>🚀 板块热点分析 - 捕捉主力轮动路径</h1>
-            <p style='margin:10px 0 0 0; font-size:1.1em; opacity:0.9;'>
-                快速识别热门板块 · 生命周期分析 · 萌芽期重点关注
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        _render_page_header(
+            "🚀 板块热点分析",
+            "快速识别热门板块 · 生命周期分析 · 萌芽期重点关注",
+            tag="Sector Flow",
+        )
         
         col1, col2 = st.columns([3, 1])
         
@@ -10249,15 +10260,11 @@ def main():
 
     # ==================== Tab 3: 📊 超级回测系统 ====================
     with tab_backtest:
-        st.markdown("""
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 25px; border-radius: 15px; color: white; margin-bottom: 20px;'>
-            <h1 style='margin:0; color: white;'>📊 超级回测与策略对比</h1>
-            <p style='margin:10px 0 0 0; font-size:1.1em; opacity:0.9;'>
-                历史数据验证 · 策略表现评估 · 胜率收益分析 · 最优策略推荐
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        _render_page_header(
+            "📊 超级回测与策略对比",
+            "历史数据验证 · 策略表现评估 · 胜率收益分析 · 最优策略推荐",
+            tag="Backtest Lab",
+        )
         
         # 选择回测模式
         backtest_mode = st.radio(
@@ -10272,7 +10279,8 @@ def main():
         if backtest_mode == "📊 v4/v5/v6/v7/v8/v9🚀🚀🚀 策略对比":
             st.subheader("📊 六大策略全面对比（新增v9.0中线均衡版！）")
             
-            st.info("""
+            exp_backtest = st.expander("📘 策略特点说明", expanded=False)
+            exp_backtest.info("""
             ### 🎯 策略特点对比
             
             **v4.0 长期稳健版（潜伏为王）**
@@ -11982,7 +11990,11 @@ def main():
 
     # ==================== Tab 4: 🤖 AI智能选股 ====================
     with tab_ai:
-        st.header("🤖 AI 智能选股（高收益捕获者）")
+        _render_page_header(
+            "🤖 AI 智能选股",
+            "共识与量化结合 · 高收益捕获 · 稳健风控",
+            tag="AI Signal",
+        )
 
         evolve_v5 = _load_evolve_params("ai_v5_best.json")
         evolve_v2 = _load_evolve_params("ai_v2_best.json")
@@ -12004,7 +12016,8 @@ def main():
         
         if use_v3:
             st.markdown("**✅ V5.0 稳健月度目标版：强调安全边际与回撤控制**")
-            st.info("""
+            exp_ai = st.expander("📘 策略说明", expanded=False)
+            exp_ai.info("""
             ### ✨ V5.0 核心特点（稳健月度目标版）
             
             **稳健评分体系**：
@@ -12029,7 +12042,8 @@ def main():
             """)
         else:
             st.markdown("**🛡️ V2.0 追涨版：筛选已涨20%+的高动量标的**")
-            st.info("""
+            exp_ai = st.expander("📘 策略说明", expanded=False)
+            exp_ai.info("""
             ### ⚠️ V2.0 策略特点
             - **大盘风控**：自动检测上证指数，空头市场自动预警并下调评分
             - **板块共振**：挖掘"板块集体爆发"个股，提升板块领头羊权重
@@ -12243,8 +12257,12 @@ def main():
 
     # ==================== Tab 5: 🔄 数据与参数管理 ====================
     with tab_data:
-        st.header("🔄 数据库管理")
-        st.markdown("**一键更新市场数据·保持数据新鲜**")
+        _render_page_header(
+            "🔄 数据与参数管理",
+            "一键更新市场数据 · 自动进化 · 健康检测",
+            tag="Data Ops",
+        )
+        st.caption("一键更新市场数据 · 保持数据新鲜")
         
         # 数据库状态
         with st.expander("📊 数据库状态", expanded=True):
@@ -12535,15 +12553,11 @@ def main():
 
     # ==================== Tab 5: 🎯 智能交易助手 ====================
     with tab_assistant:
-        st.markdown("""
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
-            <h1 style='margin:0; color: white;'>🎯 智能交易助手 v1.0</h1>
-            <p style='margin:10px 0 0 0; font-size:1.2em; opacity:0.9;'>
-                半自动化交易助手 · 每日选股 · 持仓管理 · 止盈止损提醒
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        _render_page_header(
+            "🎯 智能交易助手",
+            "半自动化交易 · 每日选股 · 持仓管理 · 止盈止损提醒",
+            tag="Execution",
+        )
         
         # 导入交易助手
         try:
@@ -13375,7 +13389,11 @@ def main():
 
     # ==================== Tab 6: 📚 实战指南 ====================
     with tab_guide:
-        st.header("📚 终极实战操作指南")
+        _render_page_header(
+            "📚 实战操作指南",
+            "系统用法 · 风险提示 · 实战流程",
+            tag="Guide",
+        )
         # (内容由原 Tab9 填充)
 
     # ==========================================================
