@@ -8707,6 +8707,11 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
+            evolve_v9 = _load_evolve_params("v9_best.json")
+            evo_params_v9 = evolve_v9.get("params", {}) if isinstance(evolve_v9, dict) else {}
+            if evo_params_v9:
+                st.success(f"🧬 已应用自动进化参数（v9.0，{evolve_v9.get('run_at', 'unknown')}）")
+
             st.info("""
             **v9.0 核心逻辑：**
             - 资金流向：上涨成交额占比越高越好
@@ -8716,17 +8721,27 @@ def main():
             - 板块强度：所属行业平均动量加分
             """)
 
+            evo_thr_v9 = int(evo_params_v9.get("score_threshold", 65))
+            evo_hold_v9 = int(evo_params_v9.get("holding_days", 20))
+            evo_lookback_v9 = int(evo_params_v9.get("lookback_days", 160))
+            evo_min_turnover_v9 = float(evo_params_v9.get("min_turnover", 5.0))
+
+            evo_thr_v9 = max(50, min(90, evo_thr_v9))
+            evo_hold_v9 = max(10, min(30, evo_hold_v9))
+            evo_lookback_v9 = max(80, min(200, evo_lookback_v9))
+            evo_min_turnover_v9 = max(1.0, min(50.0, evo_min_turnover_v9))
+
             col1, col2, col3 = st.columns(3)
             with col1:
-                score_threshold_v9 = st.slider("评分阈值（v9.0）", 50, 90, 65, 5, key="score_threshold_v9")
+                score_threshold_v9 = st.slider("评分阈值（v9.0）", 50, 90, evo_thr_v9, 5, key="score_threshold_v9")
             with col2:
-                holding_days_v9 = st.slider("建议持仓天数", 10, 30, 20, 1, key="holding_days_v9")
+                holding_days_v9 = st.slider("建议持仓天数", 10, 30, evo_hold_v9, 1, key="holding_days_v9")
             with col3:
-                lookback_days_v9 = st.slider("评分窗口（天）", 80, 200, 160, 10, key="lookback_days_v9")
+                lookback_days_v9 = st.slider("评分窗口（天）", 80, 200, evo_lookback_v9, 10, key="lookback_days_v9")
 
             col4, col5, col6 = st.columns(3)
             with col4:
-                min_turnover_v9 = st.slider("最低成交额（亿）", 1.0, 50.0, 5.0, 1.0, key="min_turnover_v9")
+                min_turnover_v9 = st.slider("最低成交额（亿）", 1.0, 50.0, evo_min_turnover_v9, 1.0, key="min_turnover_v9")
             with col5:
                 candidate_count_v9 = st.slider("候选数量（按市值）", 200, 3000, 800, 100, key="candidate_count_v9")
             with col6:

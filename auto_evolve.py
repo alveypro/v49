@@ -792,6 +792,136 @@ def _grid_search_v8(df: pd.DataFrame, db_path: str, index_data: pd.DataFrame) ->
     return best_params, best_stats, best_score
 
 
+def _calc_v9_score_from_hist(hist: pd.DataFrame, industry_strength: float = 0.0) -> float:
+    if hist is None or hist.empty or len(hist) < 80:
+        return 0.0
+    h = hist.sort_values("trade_date")
+    close = pd.to_numeric(h["close_price"], errors="coerce").ffill()
+    vol = pd.to_numeric(h.get("vol", pd.Series(dtype=float)), errors="coerce").fillna(0.0)
+    amount = pd.to_numeric(h.get("amount", pd.Series(dtype=float)), errors="coerce").fillna(0.0)
+    pct = pd.to_numeric(h.get("pct_chg", pd.Series(dtype=float)), errors="coerce")
+    if pct.isna().all():
+        pct = close.pct_change() * 100
+
+    ma20 = close.rolling(20).mean()
+    ma60 = close.rolling(60).mean()
+    ma120 = close.rolling(120).mean()
+    trend_ok = bool(ma20.iloc[-1] > ma60.iloc[-1] > ma120.iloc[-1] and ma20.iloc[-1] > ma20.iloc[-5])
+
+    momentum_20 = (close.iloc[-1] / close.iloc[-21] - 1.0) if len(close) > 21 else 0.0
+    momentum_60 = (close.iloc[-1] / close.iloc[-61] - 1.0) if len(close) > 61 else 0.0
+    vol_ratio = (vol.iloc[-1] / vol.tail(20).mean()) if vol.tail(20).mean() > 0 else 0.0
+
+    flow_sign = pct.fillna(0).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    flow_val = (amount * flow_sign).tail(20).sum()
+    flow_base = amount.tail(20).sum() if amount.tail(20).sum() > 0 else 1.0
+    flow_ratio = flow_val / flow_base
+
+    vol_20 = pct.tail(20).std() / 100.0 if pct.tail(20).std() is not None else 0.0
+
+    fund_score = max(0.0, min(20.0, (flow_ratio + 0.02) / 0.04 * 20.0))
+    volume_score = max(0.0, min(15.0, (vol_ratio - 0.8) / 1.2 * 15.0))
+    momentum_score = max(0.0, min(8.0, momentum_20 * 100 / 15.0 * 8.0)) + \
+                     max(0.0, min(7.0, momentum_60 * 100 / 30.0 * 7.0))
+    sector_score = max(0.0, min(15.0, (industry_strength + 2.0) / 6.0 * 15.0))
+
+    if vol_20 <= 0.02:
+        vola_score = 8.0
+    elif vol_20 <= 0.05:
+        vola_score = 15.0
+    elif vol_20 <= 0.08:
+        vola_score = 8.0
+    else:
+        vola_score = 0.0
+
+    trend_score = 15.0 if trend_ok else 0.0
+
+    total_score = fund_score + volume_score + momentum_score + sector_score + vola_score + trend_score
+    return float(total_score)
+
+
+def _backtest_simple_v9(
+    df: pd.DataFrame,
+    score_threshold: float,
+    holding_days: int,
+    lookback_days: int,
+    min_turnover: float,
+) -> Dict:
+    returns = []
+    unique_stocks = df["ts_code"].unique()
+    sample_size = min(600, len(unique_stocks))
+    if len(unique_stocks) > sample_size:
+        np.random.seed(42)
+        sample_stocks = np.random.choice(unique_stocks, sample_size, replace=False)
+    else:
+        sample_stocks = unique_stocks
+
+    # industry strength based on last 20d return
+    industry_strength = {}
+    try:
+        ind_vals = {}
+        for ts_code in sample_stocks:
+            g = df[df["ts_code"] == ts_code].sort_values("trade_date")
+            if len(g) >= 21:
+                close = pd.to_numeric(g["close_price"], errors="coerce").ffill()
+                r20 = (close.iloc[-1] / close.iloc[-21] - 1.0) * 100
+                ind = g["industry"].iloc[-1] if "industry" in g.columns else None
+                if ind:
+                    ind_vals.setdefault(ind, []).append(float(r20))
+        industry_strength = {k: float(np.mean(v)) for k, v in ind_vals.items()}
+    except Exception:
+        industry_strength = {}
+
+    for ts_code in sample_stocks:
+        stock_data = df[df["ts_code"] == ts_code].copy()
+        if len(stock_data) < lookback_days + holding_days + 5:
+            continue
+        stock_data = stock_data.sort_values("trade_date")
+        last_valid_idx = len(stock_data) - holding_days - 1
+        if last_valid_idx < lookback_days:
+            continue
+        hist = stock_data.iloc[last_valid_idx - lookback_days + 1:last_valid_idx + 1].copy()
+        ind = stock_data["industry"].iloc[-1] if "industry" in stock_data.columns else None
+        ind_strength = industry_strength.get(ind, 0.0)
+        amount = pd.to_numeric(stock_data["amount"], errors="coerce").fillna(0.0)
+        avg_amount = float(amount.iloc[last_valid_idx - 19:last_valid_idx + 1].mean()) if last_valid_idx >= 19 else 0.0
+        avg_amount_yi = avg_amount / 1e5
+        if avg_amount_yi < min_turnover:
+            continue
+
+        score = _calc_v9_score_from_hist(hist, industry_strength=ind_strength)
+        if score >= score_threshold:
+            buy_price = stock_data.iloc[last_valid_idx]["close_price"]
+            sell_price = stock_data.iloc[last_valid_idx + holding_days]["close_price"]
+            if buy_price:
+                returns.append((sell_price - buy_price) / buy_price * 100)
+
+    return _calc_stats(returns, holding_days)
+
+
+def _grid_search_v9(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
+    thresholds = [55, 60, 65, 70]
+    holding_days = [10, 15, 20, 25]
+    lookback_days = [120, 160]
+    min_turnovers = [3.0, 5.0, 8.0]
+    best_params, best_stats, best_score = {}, {}, -1e9
+    for thr in thresholds:
+        for hd in holding_days:
+            for lb in lookback_days:
+                for mt in min_turnovers:
+                    stats = _backtest_simple_v9(df, thr, hd, lb, mt)
+                    score = _score_result(stats)
+                    if score > best_score:
+                        best_score, best_params, best_stats = score, {
+                            "score_threshold": thr,
+                            "holding_days": hd,
+                            "lookback_days": lb,
+                            "min_turnover": mt,
+                        }, stats
+                        LOGGER.info("v9 best score=%.3f params=%s", best_score, best_params)
+    return best_params, best_stats, best_score
+
+
 def _grid_search_stable_uptrend(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
     # Use last ~240 trading days for evaluation
     df = df.copy()
@@ -975,6 +1105,7 @@ def _git_push() -> None:
             "evolution/v6_best.json",
             "evolution/v7_best.json",
             "evolution/v8_best.json",
+            "evolution/v9_best.json",
             "evolution/stable_uptrend_best.json",
         ]
         files = [f for f in candidates if os.path.exists(os.path.join(ROOT, f))]
@@ -1083,7 +1214,15 @@ def main() -> None:
         else:
             LOGGER.warning("V8 evolution skipped: no index data")
 
-        # 8) 稳定上涨策略进化
+        # 8) v9 中线均衡版进化
+        v9_params, v9_stats, v9_score = _grid_search_v9(df)
+        if v9_params:
+            _write_ai_report("v9_best.json", "V9", v9_params, v9_stats, v9_score)
+            _save_ai_to_db(db_path, "V9", v9_params, v9_stats, v9_score)
+        else:
+            LOGGER.warning("V9 evolution failed: no params")
+
+        # 9) 稳定上涨策略进化
         stable_params, stable_stats, stable_score = _grid_search_stable_uptrend(df)
         if stable_params:
             _write_ai_report("stable_uptrend_best.json", "STABLE_UPTREND", stable_params, stable_stats, stable_score)
@@ -1091,7 +1230,7 @@ def main() -> None:
         else:
             LOGGER.warning("Stable uptrend evolution failed: no params")
 
-        # 9) 可选推送
+        # 10) 可选推送
         _git_push()
 
         LOGGER.info("auto evolve finished")
