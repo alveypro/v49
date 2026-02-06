@@ -768,6 +768,118 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ===================== 全局专业主题样式 =====================
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --airivo-bg: #f6f8fb;
+  --airivo-card: #ffffff;
+  --airivo-border: #e6ebf2;
+  --airivo-text: #0f172a;
+  --airivo-subtext: #475569;
+  --airivo-accent: #0ea5e9;
+  --airivo-accent-2: #10b981;
+  --airivo-warning: #f59e0b;
+  --airivo-danger: #ef4444;
+  --airivo-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+html, body, [class*="css"]  {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--airivo-text);
+}
+
+body {
+  background: linear-gradient(180deg, #f4f7fb 0%, #ffffff 45%, #f6f8fb 100%);
+}
+
+.block-container {
+  padding-top: 2.2rem;
+  padding-bottom: 3rem;
+  max-width: 1500px;
+}
+
+section[data-testid="stSidebar"] {
+  background: #0b1220;
+  color: #e2e8f0;
+}
+
+section[data-testid="stSidebar"] * {
+  color: #e2e8f0 !important;
+}
+
+div[data-testid="stMetric"] {
+  background: var(--airivo-card);
+  border: 1px solid var(--airivo-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: var(--airivo-shadow);
+}
+
+div[data-testid="stMetric"] label {
+  color: var(--airivo-subtext);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+div[data-testid="stMetric"] div {
+  font-weight: 700;
+}
+
+div[data-testid="stExpander"] > details {
+  background: var(--airivo-card);
+  border: 1px solid var(--airivo-border);
+  border-radius: 12px;
+  box-shadow: var(--airivo-shadow);
+}
+
+div[data-testid="stExpander"] details > summary {
+  font-weight: 600;
+}
+
+div[data-testid="stDataFrame"] {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--airivo-border);
+  box-shadow: var(--airivo-shadow);
+}
+
+button[kind="primary"] {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+  border: none !important;
+  border-radius: 10px !important;
+}
+
+button[kind="secondary"] {
+  border-radius: 10px !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+  font-weight: 600;
+  color: var(--airivo-subtext);
+}
+
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+  color: var(--airivo-text);
+  border-bottom: 2px solid var(--airivo-accent);
+}
+
+code, pre, .stCodeBlock {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.airivo-card {
+  background: var(--airivo-card);
+  border: 1px solid var(--airivo-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: var(--airivo-shadow);
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # ===================== 完整的量价分析器（集成v43+v44）=====================
 class CompleteVolumePriceAnalyzer:
