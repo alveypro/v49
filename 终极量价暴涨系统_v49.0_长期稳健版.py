@@ -8754,6 +8754,17 @@ def main():
             - 板块强度：所属行业平均动量加分
             """)
 
+            # 市场环境判断（弱市空仓保护）
+            market_env = "oscillation"
+            try:
+                market_env = vp_analyzer.get_market_environment()
+            except Exception:
+                market_env = "oscillation"
+
+            env_map = {"bull": "🟢 牛市", "bear": "🔴 熊市", "oscillation": "🟡 震荡"}
+            env_label = env_map.get(market_env, "🟡 震荡")
+            st.caption(f"📊 当前市场环境：{env_label}")
+
             evo_thr_v9 = int(evo_params_v9.get("score_threshold", 65))
             evo_hold_v9 = int(evo_params_v9.get("holding_days", 20))
             evo_lookback_v9 = int(evo_params_v9.get("lookback_days", 160))
@@ -8780,6 +8791,14 @@ def main():
             with col6:
                 scan_all_v9 = st.checkbox("🌍 全市场扫描", value=True, key="scan_all_v9")
 
+            col_mode1, col_mode2, col_mode3 = st.columns(3)
+            with col_mode1:
+                select_mode_v9 = st.selectbox("选股模式", ["阈值筛选", "分位数筛选(Top%)"], index=0, key="select_mode_v9")
+            with col_mode2:
+                top_percent_v9 = st.slider("Top百分比", 1, 10, 3, 1, key="top_percent_v9")
+            with col_mode3:
+                weak_market_filter_v9 = st.checkbox("弱市空仓保护", value=True, key="weak_market_filter_v9")
+
             col7, col8 = st.columns(2)
             with col7:
                 cap_min_v9 = st.number_input("最小市值（亿元）", min_value=0, max_value=5000, value=0, step=10, key="cap_min_v9")
@@ -8789,6 +8808,12 @@ def main():
             if st.button("🚀 开始扫描（v9.0中线均衡版）", type="primary", use_container_width=True, key="scan_v9"):
                 with st.spinner("🧭 v9.0 中线均衡版扫描中..."):
                     try:
+                        # 弱市空仓保护
+                        if weak_market_filter_v9 and market_env == "bear":
+                            st.warning(f"⚠️ 当前市场环境：{env_label}，建议空仓观望。")
+                            if not st.checkbox("⚠️ 我理解风险，仍要继续扫描", key="force_scan_v9"):
+                                st.stop()
+
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
                         if scan_all_v9 and cap_min_v9 == 0 and cap_max_v9 == 0:
                             query = """
@@ -8860,20 +8885,25 @@ def main():
                             ind_strength = industry_scores.get(row["industry"], 0.0)
                             score_info = vp_analyzer._calc_v9_score_from_hist(hist, industry_strength=ind_strength)
                             score = score_info["score"]
-                            if score >= score_threshold_v9:
-                                results.append({
-                                    "股票代码": ts_code,
-                                    "股票名称": row["name"],
-                                    "行业": row["industry"],
-                                    "流通市值": f"{row['circ_mv']/10000:.1f}亿",
-                                    "综合评分": f"{score:.1f}",
-                                    "资金流": score_info["details"].get("fund_score"),
-                                    "动量": score_info["details"].get("momentum_score"),
-                                    "趋势": score_info["details"].get("trend_score"),
-                                    "波动": score_info["details"].get("volatility_score"),
-                                    "板块强度": score_info["details"].get("sector_score"),
-                                    "建议持仓": f"{holding_days_v9}天",
-                                })
+                            row_item = {
+                                "股票代码": ts_code,
+                                "股票名称": row["name"],
+                                "行业": row["industry"],
+                                "流通市值": f"{row['circ_mv']/10000:.1f}亿",
+                                "综合评分": f"{score:.1f}",
+                                "资金流": score_info["details"].get("fund_score"),
+                                "动量": score_info["details"].get("momentum_score"),
+                                "趋势": score_info["details"].get("trend_score"),
+                                "波动": score_info["details"].get("volatility_score"),
+                                "板块强度": score_info["details"].get("sector_score"),
+                                "建议持仓": f"{holding_days_v9}天",
+                            }
+
+                            if select_mode_v9 == "阈值筛选":
+                                if score >= score_threshold_v9:
+                                    results.append(row_item)
+                            else:
+                                results.append(row_item)
 
                         progress_bar.empty()
                         status_text.empty()
@@ -8881,8 +8911,19 @@ def main():
 
                         if results:
                             results_df = pd.DataFrame(results)
+
+                            # 分位数筛选：取 Top N%
+                            if select_mode_v9 != "阈值筛选":
+                                results_df["score_val"] = pd.to_numeric(results_df["综合评分"], errors="coerce")
+                                results_df = results_df.sort_values("score_val", ascending=False)
+                                keep_n = max(1, int(len(results_df) * top_percent_v9 / 100))
+                                results_df = results_df.head(keep_n).drop(columns=["score_val"])
+
                             st.session_state["v9_scan_results_tab1"] = results_df
-                            st.success(f"✅ 找到 {len(results)} 只符合条件的股票（≥{score_threshold_v9}分）")
+                            if select_mode_v9 == "阈值筛选":
+                                st.success(f"✅ 找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v9}分）")
+                            else:
+                                st.success(f"✅ 选出 Top {top_percent_v9}%（{len(results_df)} 只）")
                             st.dataframe(results_df, use_container_width=True, hide_index=True)
                             st.download_button(
                                 "📥 导出完整结果（CSV）",
