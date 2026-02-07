@@ -70,6 +70,7 @@ from plotly.subplots import make_subplots
 import warnings
 import time
 import hashlib
+import re
 from typing import Dict, List, Tuple, Optional, Any
 import json
 import os
@@ -958,6 +959,132 @@ def _standardize_result_df(df: pd.DataFrame, score_col: str = "综合评分") ->
     preferred = ["股票代码", "股票名称", "行业", score_col]
     cols = [c for c in preferred if c in out.columns] + [c for c in out.columns if c not in preferred]
     return out[cols]
+
+
+def _append_reason_col(display_cols: List[str], df: pd.DataFrame) -> List[str]:
+    if df is None or df.empty:
+        return display_cols
+    if "核心理由" in df.columns and "核心理由" not in display_cols:
+        return display_cols + ["核心理由"]
+    return display_cols
+
+
+def _get_ts_code_col(df: pd.DataFrame) -> Optional[str]:
+    for col in ("股票代码", "ts_code", "TS_CODE"):
+        if col in df.columns:
+            return col
+    return None
+
+
+def _apply_multi_period_filter(
+    df: pd.DataFrame,
+    db_path: str,
+    min_align: int = 2
+) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    ts_col = _get_ts_code_col(df)
+    if not ts_col:
+        return df
+    conn = sqlite3.connect(db_path)
+    rows = []
+    try:
+        for _, row in df.iterrows():
+            ts_code = row[ts_col]
+            q = """
+                SELECT trade_date, close_price
+                FROM daily_trading_data
+                WHERE ts_code = ?
+                ORDER BY trade_date DESC
+                LIMIT 61
+            """
+            hist = pd.read_sql_query(q, conn, params=(ts_code,))
+            if len(hist) < 21:
+                continue
+            hist = hist.sort_values("trade_date").reset_index(drop=True)
+            closes = pd.to_numeric(hist["close_price"], errors="coerce").dropna()
+            if len(closes) < 21:
+                continue
+            def _ret(n: int) -> float:
+                if len(closes) <= n:
+                    return 0.0
+                base = closes.iloc[-(n + 1)]
+                return (closes.iloc[-1] / base - 1.0) if base else 0.0
+            r5, r20, r60 = _ret(5), _ret(20), _ret(60)
+            pos = sum(1 for v in (r5, r20, r60) if v >= 0)
+            neg = 3 - pos
+            align = max(pos, neg)
+            if align >= min_align:
+                row = row.copy()
+                row["5日趋势"] = "上行" if r5 >= 0 else "下行"
+                row["20日趋势"] = "上行" if r20 >= 0 else "下行"
+                row["60日趋势"] = "上行" if r60 >= 0 else "下行"
+                row["趋势一致数"] = align
+                rows.append(row)
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows)
+    finally:
+        conn.close()
+
+
+def _add_reason_summary(df: pd.DataFrame, score_col: str = "综合评分") -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    def _build(row) -> str:
+        reasons = []
+        if score_col in row:
+            try:
+                reasons.append(f"评分{float(row[score_col]):.1f}")
+            except Exception:
+                pass
+        if "资金加分" in row:
+            try:
+                val = float(str(row["资金加分"]).replace("+", ""))
+                if val > 0:
+                    reasons.append(f"资金加分+{val:.1f}")
+            except Exception:
+                pass
+        if "行业热度" in row:
+            try:
+                reasons.append(f"行业热度{float(row['行业热度']):.2f}")
+            except Exception:
+                pass
+        if "行业排名" in row and str(row["行业排名"]).startswith("#"):
+            reasons.append(f"行业排名{row['行业排名']}")
+        if "回撤%" in row:
+            try:
+                reasons.append(f"回撤{float(str(row['回撤%']).replace('%','')):.1f}%")
+            except Exception:
+                pass
+        if "波动率%" in row:
+            try:
+                reasons.append(f"波动{float(str(row['波动率%']).replace('%','')):.1f}%")
+            except Exception:
+                pass
+        if len(reasons) < 3 and "筛选理由" in row and row["筛选理由"]:
+            raw = str(row["筛选理由"])
+            parts = [p.strip() for p in re.split(r"[·;；,，/]+", raw) if p.strip()]
+            reasons.extend(parts[:2])
+        if len(reasons) < 3:
+            reasons.append("满足筛选阈值")
+        return "；".join(reasons[:5])
+    out["核心理由"] = out.apply(_build, axis=1)
+    return out
+
+
+def _signal_density_hint(results_count: int, candidate_count: int) -> Tuple[str, str]:
+    if candidate_count <= 0:
+        return ("候选池为空，请检查数据与筛选条件。", "warning")
+    ratio = results_count / candidate_count
+    if results_count == 0:
+        return ("信号为空，建议放宽阈值或降低过滤强度。", "warning")
+    if results_count < 5:
+        return ("信号偏稀疏，当前市场或阈值偏严。", "info")
+    if results_count > 200 or ratio > 0.3:
+        return ("信号偏密集，建议提高阈值或收紧过滤。", "warning")
+    return ("信号密度正常。", "info")
 
 
 def _apply_filter_mode(
@@ -7202,6 +7329,12 @@ def main():
                 )
             with filter_col2_v4:
                 top_percent_v4 = st.slider("Top百分比", 1, 10, 2, 1, key="v4_top_percent")
+
+            filter_col3_v4, filter_col4_v4 = st.columns(2)
+            with filter_col3_v4:
+                enable_consistency_v4 = st.checkbox("启用多周期一致性过滤", value=True, key="v4_consistency")
+            with filter_col4_v4:
+                min_align_v4 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v4_consistency_min")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -7392,6 +7525,13 @@ def main():
                                     threshold=score_threshold_v4,
                                     top_percent=top_percent_v4
                                 )
+                                if enable_consistency_v4 and not results_df.empty:
+                                    results_df = _apply_multi_period_filter(
+                                        results_df,
+                                        PERMANENT_DB_PATH,
+                                        min_align=min_align_v4
+                                    )
+                                results_df = _add_reason_summary(results_df, score_col="综合评分")
                                 if results_df.empty:
                                     st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
                                     st.stop()
@@ -7404,6 +7544,8 @@ def main():
                                     st.success(f"选出 Top {top_percent_v4}%（{len(results_df)} 只）")
 
                                 _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
+                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
+                                getattr(st, level)(msg)
                                 
                                 # 保存到session_state
                                 st.session_state['v4_scan_results'] = results_df
@@ -7447,6 +7589,8 @@ def main():
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分',
                                                    '评级', '最新价格', '筛选理由']
+                                
+                                display_cols = _append_reason_col(display_cols, results_df)
                                 
                                 display_df = results_df[display_cols]
                                 display_df = _standardize_result_df(display_df, score_col="综合评分")
@@ -7711,6 +7855,12 @@ def main():
                 )
             with filter_col2_v5:
                 top_percent_v5 = st.slider("Top百分比", 1, 10, 2, 1, key="v5_top_percent")
+
+            filter_col3_v5, filter_col4_v5 = st.columns(2)
+            with filter_col3_v5:
+                enable_consistency_v5 = st.checkbox("启用多周期一致性过滤", value=True, key="v5_consistency")
+            with filter_col4_v5:
+                min_align_v5 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v5_consistency_min")
             
             st.info("v5.0策略将扫描所有符合市值条件的股票（无数量限制）")
             evo_hold = evolve_v5_core.get("params", {}).get("holding_days")
@@ -7844,6 +7994,13 @@ def main():
                                     threshold=score_threshold_v5,
                                     top_percent=top_percent_v5
                                 )
+                                if enable_consistency_v5 and not results_df.empty:
+                                    results_df = _apply_multi_period_filter(
+                                        results_df,
+                                        PERMANENT_DB_PATH,
+                                        min_align=min_align_v5
+                                    )
+                                results_df = _add_reason_summary(results_df, score_col="综合评分")
                                 if results_df.empty:
                                     st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
                                     st.stop()
@@ -7856,6 +8013,8 @@ def main():
                                     st.success(f"选出 Top {top_percent_v5}%（{len(results_df)} 只）")
                                 
                                 results_df = results_df.reset_index(drop=True)
+                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
+                                getattr(st, level)(msg)
                                 
                                 # 保存到session_state
                                 st.session_state['v5_scan_results'] = results_df
@@ -7899,6 +8058,8 @@ def main():
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
                                                    '资金加分', '评级', '最新价格', '筛选理由']
+                                
+                                display_cols = _append_reason_col(display_cols, results_df)
                                 
                                 display_df = results_df[display_cols]
                                 display_df = _standardize_result_df(display_df, score_col="综合评分")
@@ -8089,6 +8250,12 @@ def main():
                 )
             with filter_col2_v6:
                 top_percent_v6 = st.slider("Top百分比", 1, 10, 2, 1, key="v6_top_percent_tab1")
+
+            filter_col3_v6, filter_col4_v6 = st.columns(2)
+            with filter_col3_v6:
+                enable_consistency_v6 = st.checkbox("启用多周期一致性过滤", value=True, key="v6_consistency_tab1")
+            with filter_col4_v6:
+                min_align_v6 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v6_consistency_min_tab1")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -8258,6 +8425,13 @@ def main():
                                     threshold=score_threshold_v6_tab1,
                                     top_percent=top_percent_v6
                                 )
+                                if enable_consistency_v6 and not results_df.empty:
+                                    results_df = _apply_multi_period_filter(
+                                        results_df,
+                                        PERMANENT_DB_PATH,
+                                        min_align=min_align_v6
+                                    )
+                                results_df = _add_reason_summary(results_df, score_col="综合评分")
                                 if results_df.empty:
                                     st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
                                     st.stop()
@@ -8270,6 +8444,8 @@ def main():
                                     st.success(f"选出 Top {top_percent_v6}%（{len(results_df)} 只）")
                                 
                                 results_df = results_df.reset_index(drop=True)
+                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
+                                getattr(st, level)(msg)
                                 _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
                                 
                                 # 保存到session_state
@@ -8313,6 +8489,8 @@ def main():
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
                                                    '资金加分', '评级', '最新价格', '筛选理由', '协同组合']
+                                
+                                display_cols = _append_reason_col(display_cols, results_df)
                                 
                                 display_df = results_df[display_cols]
                                 display_df = _standardize_result_df(display_df, score_col="综合评分")
@@ -8461,6 +8639,12 @@ def main():
                 )
             with filter_col2_v7:
                 top_percent_v7 = st.slider("Top百分比", 1, 10, 2, 1, key="v7_top_percent_tab1")
+
+            filter_col3_v7, filter_col4_v7 = st.columns(2)
+            with filter_col3_v7:
+                enable_consistency_v7 = st.checkbox("启用多周期一致性过滤", value=True, key="v7_consistency_tab1")
+            with filter_col4_v7:
+                min_align_v7 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v7_consistency_min_tab1")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -8652,6 +8836,13 @@ def main():
                                     threshold=score_threshold_v7,
                                     top_percent=top_percent_v7
                                 )
+                                if enable_consistency_v7 and not results_df.empty:
+                                    results_df = _apply_multi_period_filter(
+                                        results_df,
+                                        PERMANENT_DB_PATH,
+                                        min_align=min_align_v7
+                                    )
+                                results_df = _add_reason_summary(results_df, score_col="综合评分")
                                 if results_df.empty:
                                     st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
                                     st.stop()
@@ -8665,6 +8856,8 @@ def main():
                                 
                                 results_df = results_df.reset_index(drop=True)
                                 _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
+                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
+                                getattr(st, level)(msg)
                             
                                 # 保存到session_state
                                 st.session_state['v7_scan_results_tab1'] = results_df
@@ -8708,6 +8901,8 @@ def main():
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
                                                    '资金加分', '评级', '最新价格', '筛选理由']
+                                
+                                display_cols = _append_reason_col(display_cols, results_df)
                                 
                                 display_df = results_df[display_cols]
                                 display_df = _standardize_result_df(display_df, score_col="综合评分")
@@ -8859,6 +9054,12 @@ def main():
                 )
             with filter_col2_v8:
                 top_percent_v8 = st.slider("Top百分比", 1, 10, 2, 1, key="v8_top_percent_tab1")
+
+            filter_col3_v8, filter_col4_v8 = st.columns(2)
+            with filter_col3_v8:
+                enable_consistency_v8 = st.checkbox("启用多周期一致性过滤", value=True, key="v8_consistency_tab1")
+            with filter_col4_v8:
+                min_align_v8 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v8_consistency_min_tab1")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -9170,6 +9371,13 @@ def main():
                                     threshold=min_thr,
                                     top_percent=top_percent_v8
                                 )
+                                if enable_consistency_v8 and not results_df.empty:
+                                    results_df = _apply_multi_period_filter(
+                                        results_df,
+                                        PERMANENT_DB_PATH,
+                                        min_align=min_align_v8
+                                    )
+                                results_df = _add_reason_summary(results_df, score_col="综合评分")
 
                             if results and results_df.empty:
                                 st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
@@ -9203,6 +9411,8 @@ def main():
                                 else:
                                     st.success(f"选出 Top {top_percent_v8}%（{len(results_df)} 只）")
                                 _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
+                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
+                                getattr(st, level)(msg)
                                 
                                 # 保存到session_state
                                 st.session_state['v8_scan_results_tab1'] = results_df
@@ -9260,6 +9470,8 @@ def main():
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '综合评分', 
                                                    '资金加分', '评级', '星级', '建议仓位', '最新价格', '筛选理由']
+                                
+                                display_cols = _append_reason_col(display_cols, results_df)
                                 
                                 display_df = results_df[display_cols]
                                 display_df = _standardize_result_df(display_df, score_col="综合评分")
@@ -9423,6 +9635,12 @@ def main():
             with col_mode3:
                 weak_market_filter_v9 = st.checkbox("弱市空仓保护", value=True, key="weak_market_filter_v9")
 
+            col_mode4, col_mode5 = st.columns(2)
+            with col_mode4:
+                enable_consistency_v9 = st.checkbox("启用多周期一致性过滤", value=True, key="v9_consistency")
+            with col_mode5:
+                min_align_v9 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v9_consistency_min")
+
             col7, col8 = st.columns(2)
             with col7:
                 cap_min_v9 = st.number_input("最小市值（亿元）", min_value=0, max_value=5000, value=0, step=10, key="cap_min_v9")
@@ -9571,6 +9789,13 @@ def main():
                                 results_df = results_df.sort_values("score_val", ascending=False)
                                 keep_n = max(1, int(len(results_df) * top_percent_v9 / 100))
                                 results_df = results_df.head(keep_n).drop(columns=["score_val"])
+                            if enable_consistency_v9 and not results_df.empty:
+                                results_df = _apply_multi_period_filter(
+                                    results_df,
+                                    PERMANENT_DB_PATH,
+                                    min_align=min_align_v9
+                                )
+                            results_df = _add_reason_summary(results_df, score_col="综合评分")
 
                             st.session_state["v9_scan_results_tab1"] = results_df
                             if select_mode_v9 == "阈值筛选":
@@ -9578,6 +9803,8 @@ def main():
                             else:
                                 st.success(f"选出 Top {top_percent_v9}%（{len(results_df)} 只）")
                             _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
+                            msg, level = _signal_density_hint(len(results_df), len(stocks_df))
+                            getattr(st, level)(msg)
                             results_df = _standardize_result_df(results_df, score_col="综合评分")
                             st.dataframe(results_df, use_container_width=True, hide_index=True)
                             st.download_button(
@@ -9658,6 +9885,12 @@ def main():
                 disagree_count_weight = st.slider("分歧惩罚/项", 0.0, 5.0, 1.0, 0.5, key="combo_disagree_count")
             with col_l:
                 market_adjust_strength = st.slider("市场状态调节强度", 0.0, 1.0, 0.5, 0.05, key="combo_market_strength")
+
+            col_m, col_n = st.columns(2)
+            with col_m:
+                enable_consistency_combo = st.checkbox("启用多周期一致性过滤", value=True, key="combo_consistency")
+            with col_n:
+                min_align_combo = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="combo_consistency_min")
 
             st.markdown("---")
             st.subheader("权重设置（总和自动归一化）")
@@ -9984,6 +10217,13 @@ def main():
                                 results_df = results_df.sort_values("score_val", ascending=False)
                                 keep_n = max(1, int(len(results_df) * top_percent_combo / 100))
                                 results_df = results_df.head(keep_n).drop(columns=["score_val"])
+                            if enable_consistency_combo and not results_df.empty:
+                                results_df = _apply_multi_period_filter(
+                                    results_df,
+                                    PERMANENT_DB_PATH,
+                                    min_align=min_align_combo
+                                )
+                            results_df = _add_reason_summary(results_df, score_col="共识评分")
 
                             st.session_state["combo_scan_results"] = results_df
                             if select_mode_combo == "阈值筛选":
@@ -9994,6 +10234,8 @@ def main():
                                 st.success(f"选出 Top {top_percent_combo}%（{len(results_df)} 只）")
 
                             _render_result_overview(results_df, score_col="共识评分", title="组合策略结果概览")
+                            msg, level = _signal_density_hint(len(results_df), len(stocks_df))
+                            getattr(st, level)(msg)
                             results_df = _standardize_result_df(results_df, score_col="共识评分")
                             st.dataframe(results_df, use_container_width=True, hide_index=True)
                             with st.expander("共识贡献拆解", expanded=False):
@@ -10069,6 +10311,12 @@ def main():
                 )
             with filter_col2_v6b:
                 top_percent_v6b = st.slider("Top百分比", 1, 10, 2, 1, key="v6_top_percent")
+
+            filter_col3_v6b, filter_col4_v6b = st.columns(2)
+            with filter_col3_v6b:
+                enable_consistency_v6b = st.checkbox("启用多周期一致性过滤", value=True, key="v6_consistency")
+            with filter_col4_v6b:
+                min_align_v6b = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v6_consistency_min")
             
             # v6.0数据依赖说明
             st.warning("""
@@ -10210,6 +10458,13 @@ def main():
                                     threshold=score_threshold_v6,
                                     top_percent=top_percent_v6b
                                 )
+                                if enable_consistency_v6b and not results_df.empty:
+                                    results_df = _apply_multi_period_filter(
+                                        results_df,
+                                        PERMANENT_DB_PATH,
+                                        min_align=min_align_v6b
+                                    )
+                                results_df = _add_reason_summary(results_df, score_col="综合评分")
                                 if results_df.empty:
                                     st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
                                     st.stop()
@@ -10222,6 +10477,8 @@ def main():
                                     st.success(f"选出 Top {top_percent_v6b}%（{len(results_df)} 只）")
                                 
                                 results_df = results_df.reset_index(drop=True)
+                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
+                                getattr(st, level)(msg)
                                 
                                 # 保存到session_state
                                 st.session_state['v6_scan_results'] = results_df
@@ -10264,6 +10521,8 @@ def main():
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
                                                    '资金加分', '评级', '最新价格', '筛选理由']
+                                
+                                display_cols = _append_reason_col(display_cols, results_df)
                                 
                                 display_df = results_df[display_cols]
                                 
@@ -12321,6 +12580,12 @@ def main():
         with adj_ai_col2:
             disagree_std_weight_ai = st.slider("分歧惩罚强度", 0.0, 1.5, 0.35, 0.05, key="ai_disagree_weight")
 
+        adj_ai_col3, adj_ai_col4 = st.columns(2)
+        with adj_ai_col3:
+            enable_consistency_ai = st.checkbox("启用多周期一致性过滤", value=True, key="ai_consistency")
+        with adj_ai_col4:
+            min_align_ai = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="ai_consistency_min")
+
         with st.expander("市值筛选（可选）", expanded=False):
             if use_v3:
                 evo_min_mc = evolve_v5.get("params", {}).get("min_market_cap")
@@ -12383,6 +12648,7 @@ def main():
                             version_name = "V2.0"
                         
                         if not stocks.empty:
+                            candidate_count = len(stocks)
                             stocks = stocks.copy()
                             if "评分" in stocks.columns:
                                 stocks["评分"] = pd.to_numeric(stocks["评分"], errors="coerce")
@@ -12424,11 +12690,19 @@ def main():
                                     threshold=score_threshold_ai,
                                     top_percent=top_percent_ai
                                 )
+                            if enable_consistency_ai and not stocks.empty:
+                                stocks = _apply_multi_period_filter(
+                                    stocks,
+                                    PERMANENT_DB_PATH,
+                                    min_align=min_align_ai
+                                )
+                            stocks = _add_reason_summary(stocks, score_col="评分")
                             if stocks.empty:
                                 st.error("AI 未找到符合筛选条件的标的，请放宽阈值或筛选比例")
                                 st.stop()
 
                             st.session_state[session_key] = stocks
+                            st.session_state['ai_candidate_count'] = candidate_count
                             st.session_state['ai_strategy_version'] = version_name
                             st.success(f"{version_name} 扫描完成：找到 {len(stocks)} 只{'综合潜力' if use_v3 else '高收益潜力'}标的")
                             sim_account = _get_sim_account()
@@ -12475,6 +12749,9 @@ def main():
             st.divider()
             st.subheader(f"AI 优选名单 ({version_name} {'稳健月度目标版' if use_v3 else '追涨版'})")
             _render_result_overview(stocks, score_col="评分", title="AI 结果概览")
+            candidate_count = st.session_state.get('ai_candidate_count', len(stocks))
+            msg, level = _signal_density_hint(len(stocks), candidate_count)
+            getattr(st, level)(msg)
             auto_buy_info = st.session_state.get('last_ai_auto_buy')
             if auto_buy_info:
                 if auto_buy_info.get('status') == 'duplicate':
@@ -12515,7 +12792,8 @@ def main():
                 hide_index=True,
                 column_config={
                     "评分": st.column_config.NumberColumn(format="%.1f "),
-                    "筛选理由": st.column_config.TextColumn(width="large")
+                    "筛选理由": st.column_config.TextColumn(width="large"),
+                    "核心理由": st.column_config.TextColumn(width="large")
                 }
             )
             
