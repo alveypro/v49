@@ -929,6 +929,7 @@ def _render_result_overview(df: pd.DataFrame, score_col: str = "综合评分", t
         if scores is not None and not scores.empty:
             bins = pd.cut(scores, bins=8)
             hist = bins.value_counts().sort_index()
+            hist.index = hist.index.astype(str)
             st.bar_chart(hist, height=220)
             st.caption("评分分布")
         else:
