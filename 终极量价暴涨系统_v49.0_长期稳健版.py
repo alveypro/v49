@@ -6879,7 +6879,25 @@ def main():
     """主界面"""
     
     st.title("量价策略系统 v49.0 - 长期稳健版")
-    st.markdown("**真实数据验证·胜率56.6%·平均持仓约5天·年化10-15%·v4.0评分器**")
+    evolve_latest = _load_evolve_params("last_run.json")
+    if isinstance(evolve_latest, dict) and evolve_latest.get("stats"):
+        stats = evolve_latest.get("stats", {})
+        win_rate = stats.get("win_rate")
+        avg_return = stats.get("avg_return")
+        avg_hold = stats.get("avg_holding_days")
+        summary_parts = []
+        if isinstance(win_rate, (int, float)):
+            summary_parts.append(f"胜率{win_rate:.1f}%")
+        if isinstance(avg_hold, (int, float)):
+            summary_parts.append(f"平均持仓{avg_hold:.1f}天")
+        if isinstance(avg_return, (int, float)):
+            summary_parts.append(f"平均收益{avg_return:.2f}%")
+        if summary_parts:
+            st.markdown("**最新回测摘要：" + " · ".join(summary_parts) + "**")
+        else:
+            st.markdown("**基于当前数据库与策略配置生成结果**")
+    else:
+        st.markdown("**基于当前数据库与策略配置生成结果**")
     st.markdown("---")
     
     # 初始化
