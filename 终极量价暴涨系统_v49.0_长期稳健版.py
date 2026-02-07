@@ -8249,82 +8249,36 @@ def main():
             #  v7.0版本说明
             exp_v7 = st.expander("v7.0 策略说明", expanded=False)
             exp_v7.markdown("""
-            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%, #f093fb 100%); 
-                        padding: 40px 30px; border-radius: 15px; color: white; 
-                        margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
-                <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     v7.0 智能选股系统 - 专业标准
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 32px 28px; border-radius: 15px; color: white; 
+                        margin-bottom: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
+                <h1 style='margin:0; color: white; font-size: 2.2em; font-weight: 700; text-align: center;'>
+                     v7.0 智能选股系统
                 </h1>
-                <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
-                    市场环境识别·行业轮动·动态权重·三层过滤·预期胜率62-70%
+                <p style='margin: 12px 0 0 0; font-size: 1.05em; text-align: center; opacity: 0.95;'>
+                    多因子协同，聚焦环境识别与行业轮动，强调稳定信号与一致性
                 </p>
-                <div style='display: flex; justify-content: center; gap: 30px; margin-top: 25px; flex-wrap: wrap;'>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>62-70%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>预期胜率</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>28-38%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>年化收益</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>1.5-2.2</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>夏普比率</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'><15%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>最大回撤</div>
-                    </div>
-                </div>
             </div>
             """, unsafe_allow_html=True)
             
             #  v7.0版本特别提示
             if V7_EVALUATOR_AVAILABLE:
                 exp_v7.success("""
-                 **当前使用v7.0智能选股系统（专业标准）**
-                
-                ** 核心创新：五大智能系统协同工作！**
-                
-                **【系统1】市场环境识别器 **
-                -  稳健牛市：追涨有效，趋势为王
-                -  波动牛市：波段操作，注意回调
-                -  熊市：安全第一，超跌反弹
-                -  急跌恐慌：空仓观望
-                -  震荡市：潜伏策略，等待突破
-                
-                **【系统2】市场情绪计算器 **
-                - 涨跌比分析（权重50%）
-                - 涨停跌停比（权重30%）
-                - 平均涨跌幅（权重20%）
-                → 情绪指标：-1（极度恐慌）到 +1（极度贪婪）
-                
-                **【系统3】行业轮动分析器 **
-                - 自动识别热门行业Top8
-                - 行业热度：5日平均涨幅+上涨比例+涨停数量
-                - 热门行业加分：Top1(+10分), Top3(+7分), Top5(+5分)
-                
-                **【系统4】动态权重系统 **
-                - 根据市场环境自动调整v4.0八维权重
-                - 牛市：提高趋势和多头权重
-                - 熊市：提高底部和安全权重
-                - 震荡市：使用平衡权重
-                
-                **【系统5】三层智能过滤器 **
-                - 过滤器1：市场情绪过滤（恐慌/贪婪提高门槛）
-                - 过滤器2：行业景气度过滤（冷门行业提高门槛）
-                - 过滤器3：个股资金流向过滤（成交量萎缩提高门槛）
-                
-                ** 适用场景：**
-                -  追求稳定高胜率
-                -  希望系统自动适应市场
-                -  看重行业轮动机会
-                -  需要智能风险控制
-                
-                ** 预期效果：**
-                - 短期（1-3个月）：胜率55-62%
-                - 中期（6-12个月）：胜率60-68%
-                - 长期（2-3年）：胜率62-70%，达到优秀私募水平
+                **当前使用 v7.0 智能版**
+
+                **体系要点：**
+                - 环境识别：趋势、波动与风险偏好
+                - 情绪与资金：强弱扩散与成交结构
+                - 行业轮动：热度与相对强度跟踪
+                - 动态权重：随环境调整因子贡献
+                - 分层过滤：市场 → 行业 → 个股
+
+                **适用场景：**
+                - 需要随市自适应的稳定选股
+                - 重视行业轮动与结构一致性
+
+                **说明：**
+                - 回测指标以最新数据库与参数为准
                 """)
             else:
                 exp_v7.error("""
@@ -8668,92 +8622,32 @@ def main():
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     v8.0 进阶版 - 量化策略系统
+                     v8.0 进阶版 · 量化风控体系
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
-                    ATR动态风控·凯利公式·18维度评分·五星评级·预期胜率70-78%
+                    ATR 风控 + 市场过滤 + 仓位管理 + 多因子评分
                 </p>
-                <div style='display: flex; justify-content: center; gap: 30px; margin-top: 25px; flex-wrap: wrap;'>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>70-78%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>预期胜率</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>35-52%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>年化收益</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>2.5-3.2</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>夏普比率</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'><12%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>最大回撤</div>
-                    </div>
-                </div>
             </div>
             """, unsafe_allow_html=True)
             
             #  v8.0版本特别提示
             if V8_EVALUATOR_AVAILABLE:
                 exp_v8.success("""
-                 **当前使用v8.0进阶版（量化策略系统）**
-                
-                ** 六大革命性创新！**
-                
-                **【创新1】ATR动态风控系统 **
-                - 根据股票波动率自动调整止损止盈位
-                - 波动大 → 止损宽松，波动小 → 止损严格
-                - 告别"一刀切"，每只股票都有定制化风控
-                
-                **【创新2】三级市场过滤器（择时系统）**
-                - Level 1: 市场趋势（20日均线）
-                - Level 2: 市场情绪（涨跌比例）
-                - Level 3: 市场热度（成交量）
-                → 只在好市场中选股，熊市自动退出
-                
-                **【创新3】凯利公式仓位管理 **
-                - 根据胜率和盈亏比自动计算最优仓位
-                - 高胜率+高盈亏比 → 重仓
-                - 低胜率 → 轻仓甚至不操作
-                - 资金利用效率提升30-50%
-                
-                **【创新4】18维度高级评分（v7的8维→v8的18维）**
-                - v7的8个基础维度
-                - +10个高级因子：
-                  1. 换手率质量（识别健康放量）
-                  2. 资金集中度（大单占比）
-                  3. 量价背离度（发现异常）
-                  4. 筹码密集度（支撑位判断）
-                  5. 板块相对强度（龙头识别）
-                  6. 短期波动率（风险评估）
-                  7. 趋势稳定性（MACD稳定性）
-                  8. 价格位置（20/60/120日均线位置）
-                  9. 连续上涨天数（动量衰减预警）
-                  10. 北向资金偏好（外资青睐度）
-                
-                **【创新5】五星评级系统 ⭐⭐⭐⭐⭐**
-                - 90+ ⭐⭐⭐⭐⭐ 极力推荐（预期胜率75-80%）
-                - 80-89 ⭐⭐⭐⭐ 强烈推荐（预期胜率68-75%）
-                - 70-79 ⭐⭐⭐ 推荐（预期胜率62-68%）
-                - 60-69 ⭐⭐ 可考虑（预期胜率55-62%）
-                - <60 ⭐ 不推荐（预期胜率<55%）
-                
-                **【创新6】动态再平衡系统 **
-                - 自动锁定50%利润
-                - 持续评分，低于阈值自动换股
-                - 识别更好机会，优化持仓组合
-                
-                ** 适用场景：**
-                -  追求极致胜率和收益
-                -  希望系统全自动风控
-                -  需要精准择时能力
-                -  追求专业私募基金水平
-                
-                ** 预期效果：**
-                - 短期（1-3个月）：胜率62-68%
-                - 中期（6-12个月）：胜率68-74%
-                - 长期（2-3年）：胜率70-78%，达到高级私募水平
+                **当前使用 v8.0 进阶版**
+
+                **体系要点：**
+                - ATR 风控：按波动自动调节止损/止盈
+                - 市场过滤：趋势、情绪与成交热度
+                - 仓位管理：基于胜率与盈亏比的自适应仓位
+                - 多因子评分：结构、资金、动量、波动综合评估
+                - 动态再平衡：持仓持续复核与替换
+
+                **适用场景：**
+                - 强调风控与执行纪律
+                - 追求中短周期的稳定性与一致性
+
+                **说明：**
+                - 回测指标以最新数据库与参数为准
                 """)
             else:
                 exp_v8.error("""
