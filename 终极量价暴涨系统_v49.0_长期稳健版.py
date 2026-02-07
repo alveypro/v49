@@ -9362,8 +9362,29 @@ def main():
                                          delta=f"{len(results)/len(stocks_df)*100:.2f}%")
 
                             results_df = pd.DataFrame(results) if results else pd.DataFrame()
+                            filter_counts = {}
                             if not results_df.empty:
                                 min_thr, max_thr = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
+                                filter_counts["raw"] = len(results_df)
+                                preview = results_df.copy()
+                                preview["score_val"] = pd.to_numeric(preview["综合评分"], errors="coerce")
+                                preview = preview.dropna(subset=["score_val"])
+                                if select_mode_v8 in ("阈值筛选", "双重筛选(阈值+Top%)"):
+                                    preview = preview[preview["score_val"] >= min_thr]
+                                filter_counts["after_threshold"] = len(preview)
+                                if select_mode_v8 in ("分位数筛选(Top%)", "双重筛选(阈值+Top%)") and len(preview) > 0:
+                                    preview = preview.sort_values("score_val", ascending=False)
+                                    keep_n = max(1, int(len(preview) * top_percent_v8 / 100))
+                                    preview = preview.head(keep_n)
+                                filter_counts["after_top"] = len(preview)
+                                if enable_consistency_v8 and not preview.empty:
+                                    preview = _apply_multi_period_filter(
+                                        preview,
+                                        PERMANENT_DB_PATH,
+                                        min_align=min_align_v8
+                                    )
+                                filter_counts["after_consistency"] = len(preview)
+
                                 results_df = _apply_filter_mode(
                                     results_df,
                                     score_col="综合评分",
@@ -9381,6 +9402,13 @@ def main():
 
                             if results and results_df.empty:
                                 st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
+                                if filter_counts:
+                                    st.info(
+                                        f"过滤分布：原始{filter_counts.get('raw', 0)} → "
+                                        f"阈值后{filter_counts.get('after_threshold', 0)} → "
+                                        f"Top后{filter_counts.get('after_top', 0)} → "
+                                        f"一致性后{filter_counts.get('after_consistency', 0)}"
+                                    )
                                 st.stop()
 
                             # 分布提示 & 一键推荐阈值
@@ -9405,9 +9433,11 @@ def main():
                             
                             if results and not results_df.empty:
                                 if select_mode_v8 == "阈值筛选":
-                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v8}分）")
+                                    min_thr, _ = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
+                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{min_thr}分）")
                                 elif select_mode_v8 == "双重筛选(阈值+Top%)":
-                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v8}分，Top {top_percent_v8}%（{len(results_df)} 只）")
+                                    min_thr, _ = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
+                                    st.success(f"先阈值后Top筛选：≥{min_thr}分，Top {top_percent_v8}%（{len(results_df)} 只）")
                                 else:
                                     st.success(f"选出 Top {top_percent_v8}%（{len(results_df)} 只）")
                                 _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
