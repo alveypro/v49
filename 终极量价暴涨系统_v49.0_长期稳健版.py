@@ -7688,6 +7688,14 @@ def main():
                 </p>
             </div>
             """, unsafe_allow_html=True)
+            if "stable_uptrend_results" in st.session_state:
+                export_df = st.session_state["stable_uptrend_results"]
+                exp_uptrend.download_button(
+                    " 导出结果（CSV）",
+                    data=_df_to_csv_bytes(export_df),
+                    file_name=f"稳定上涨策略_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv; charset=utf-8"
+                )
 
             if not STABLE_UPTREND_AVAILABLE:
                 st.error("稳定上涨策略模块未找到，请确认 stable_uptrend_strategy.py 已放在系统目录")

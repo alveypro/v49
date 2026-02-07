@@ -157,8 +157,15 @@ def render_stable_uptrend_strategy(ctx, pro=None) -> None:
         return
 
     result_df = pd.DataFrame(results).sort_values("稳定上涨评分", ascending=False).head(result_count)
+    st.session_state["stable_uptrend_results"] = result_df
     st.subheader(f"🎯 稳定上涨候选池（Top {len(result_df)}）")
     st.dataframe(result_df, use_container_width=True)
+    st.download_button(
+        " 导出结果（CSV）",
+        data=result_df.to_csv(index=False).encode("utf-8-sig"),
+        file_name=f"稳定上涨策略_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv; charset=utf-8"
+    )
 
 
 def _score_stable_uptrend(
