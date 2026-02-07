@@ -7053,61 +7053,41 @@ def main():
             <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
-                <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     v4.0 长期稳健版 - 潜伏策略策略
+                <h1 style='margin:0; color: white; font-size: 2.2em; font-weight: 700; text-align: center;'>
+                     v4.0 长期稳健版 - 潜伏策略
                 </h1>
-                <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
-                    真实验证·56.6%胜率·5天平均持仓约5天·年化10-15%·在启动前潜伏
+                <p style='margin: 12px 0 0 0; font-size: 1.05em; text-align: center; opacity: 0.95;'>
+                    定位：在趋势确认前完成布局，强调安全边际与稳定性
                 </p>
-                <div style='display: flex; justify-content: center; gap: 30px; margin-top: 25px; flex-wrap: wrap;'>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>56.6%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>真实胜率</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>5天</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>平均持仓约5天</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>274个</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>真实信号</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>-3.27%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>最大回撤</div>
-                    </div>
-                </div>
             </div>
             """, unsafe_allow_html=True)
             
             #  v4.0版本特别提示
             if V4_EVALUATOR_AVAILABLE:
                 exp_v4.success("""
-                 **当前使用v4.0潜伏策略版（已验证56.6%胜率）**
-                
-                ** 核心理念：在启动前潜伏，而不是启动后追高！**
-                
-                ** 8维100分评分体系：**
-                -  **潜伏价值**：20分（全新！识别即将启动的底部股票）
-                -  **底部特征**：20分（价格低位+超跌反弹）
-                -  **量价配合**：15分（温和放量+主力吸筹）
-                -  **MACD趋势**：15分（金叉初期+能量柱递增）
-                -  **均线多头**：10分（均线粘合+即将发散）
-                -  **主力行为**：10分（大单流入+筹码集中）
-                -  **启动确认**：5分（刚开始启动，不追高）
-                -  **涨停基因**：5分（历史趋势延续能力）
-                
-                ** 适用场景：**
-                -  追求稳健收益的投资者
-                -  愿意等待潜伏期（3-7天）
-                -  注重安全边际和买入成本
-                -  持仓周期5天左右
-                
-                ** 真实回测数据（2000只股票）：**
-                - 胜率：56.6%（超过目标52%）⭐⭐⭐
-                - 平均持仓：4.9天（接近5天平均持仓约5天）
-                - 最大回撤：-3.27%（风险极小）
-                - 夏普比率：0.59（稳健）
+                **当前使用 v4.0 潜伏策略版**
+
+                **核心定位：**
+                - 以安全边际为优先
+                - 在趋势确认前完成布局
+
+                **评分结构（100分制）：**
+                - 潜伏价值：20
+                - 底部特征：20
+                - 量价配合：15
+                - MACD趋势：15
+                - 均线结构：10
+                - 主力行为：10
+                - 启动确认：5
+                - 历史强势：5
+
+                **适用场景：**
+                - 稳健型交易
+                - 愿意等待确认前布局
+                - 关注买入成本与风险控制
+
+                **回测说明：**
+                - 结果以最新数据库与参数为准
                 """)
             else:
                 exp_v4.error("""
