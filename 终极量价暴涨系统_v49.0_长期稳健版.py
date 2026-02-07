@@ -944,6 +944,22 @@ def _render_result_overview(df: pd.DataFrame, score_col: str = "综合评分", t
             st.caption("行业分布（暂无数据）")
 
 
+def _standardize_result_df(df: pd.DataFrame, score_col: str = "综合评分") -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    if "score_val" in out.columns:
+        out = out.drop(columns=["score_val"])
+    if score_col in out.columns:
+        try:
+            out[score_col] = pd.to_numeric(out[score_col], errors="ignore")
+        except Exception:
+            pass
+    preferred = ["股票代码", "股票名称", "行业", score_col]
+    cols = [c for c in preferred if c in out.columns] + [c for c in out.columns if c not in preferred]
+    return out[cols]
+
+
 # ===================== 完整的量价分析器（集成v43+v44）=====================
 class CompleteVolumePriceAnalyzer:
     """完整的量价分析器 - 集成所有功能"""
