@@ -9458,7 +9458,12 @@ def main():
             with col_e:
                 cap_max_combo = st.number_input("最大市值（亿元）", min_value=0, max_value=50000, value=0, step=50, key="combo_cap_max")
             with col_f:
-                select_mode_combo = st.selectbox("筛选模式", ["分位数筛选(Top%)", "阈值筛选"], index=0, key="combo_select_mode")
+                select_mode_combo = st.selectbox(
+                    "筛选模式",
+                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
+                    index=0,
+                    key="combo_select_mode"
+                )
 
             col_g, col_h, col_i = st.columns(3)
             with col_g:
@@ -9467,6 +9472,14 @@ def main():
                 top_percent_combo = st.slider("Top百分比", 1, 10, 2, 1, key="combo_top_percent")
             with col_i:
                 lookback_days_combo = st.slider("评分窗口（天）", 80, 200, 120, 10, key="combo_lookback_days")
+
+            col_j, col_k, col_l = st.columns(3)
+            with col_j:
+                disagree_std_weight = st.slider("分歧惩罚强度", 0.0, 1.5, 0.35, 0.05, key="combo_disagree_std")
+            with col_k:
+                disagree_count_weight = st.slider("分歧惩罚/项", 0.0, 5.0, 1.0, 0.5, key="combo_disagree_count")
+            with col_l:
+                market_adjust_strength = st.slider("市场状态调节强度", 0.0, 1.0, 0.5, 0.05, key="combo_market_strength")
 
             st.markdown("---")
             st.subheader("权重设置（总和自动归一化）")
@@ -9708,6 +9721,32 @@ def main():
                                 (scores[k] * weights[k]) for k in scores if scores[k] is not None
                             ) / weight_sum
 
+                            score_list = [v for v in scores.values() if v is not None]
+                            score_std = float(np.std(score_list)) if len(score_list) > 1 else 0.0
+
+                            disagree_count = 0
+                            if v4_score is not None and v4_score < thr_v4:
+                                disagree_count += 1
+                            if v5_score is not None and v5_score < thr_v5:
+                                disagree_count += 1
+                            if v7_score is not None and v7_score < thr_v7:
+                                disagree_count += 1
+                            if v8_score is not None and v8_score < thr_v8:
+                                disagree_count += 1
+                            if v9_score is not None and v9_score < thr_v9:
+                                disagree_count += 1
+
+                            penalty = (score_std * disagree_std_weight) + (disagree_count * disagree_count_weight)
+
+                            env_multiplier = 1.0
+                            if market_env_combo == "bull":
+                                env_multiplier = 1.02
+                            elif market_env_combo == "bear":
+                                env_multiplier = 0.95
+                            else:
+                                env_multiplier = 0.98
+                            adj_factor = 1.0 - market_adjust_strength + (market_adjust_strength * env_multiplier)
+
                             contrib = {
                                 "v4贡献": (scores["v4"] * weights["v4"] / weight_sum) if scores["v4"] is not None else 0.0,
                                 "v5贡献": (scores["v5"] * weights["v5"] / weight_sum) if scores["v5"] is not None else 0.0,
@@ -9726,7 +9765,7 @@ def main():
                                 bonus_industry_map,
                             )
 
-                            final_score = weighted_score + extra
+                            final_score = (weighted_score * adj_factor) + extra - penalty
 
                             row_item = {
                                 "股票代码": ts_code,
@@ -9736,6 +9775,8 @@ def main():
                                 "共识评分": f"{final_score:.1f}",
                                 "共识基础分": f"{weighted_score:.1f}",
                                 "资金加分": f"{extra:.1f}",
+                                "分歧惩罚": f"{penalty:.2f}",
+                                "市场因子": f"{adj_factor:.2f}",
                                 "一致数": agree_count,
                                 "v4": f"{v4_score:.1f}" if v4_score is not None else "-",
                                 "v5": f"{v5_score:.1f}" if v5_score is not None else "-",
@@ -9747,6 +9788,9 @@ def main():
                             }
 
                             if select_mode_combo == "阈值筛选":
+                                if final_score >= combo_threshold:
+                                    results.append(row_item)
+                            elif select_mode_combo == "双重筛选(阈值+Top%)":
                                 if final_score >= combo_threshold:
                                     results.append(row_item)
                             else:
@@ -9766,6 +9810,8 @@ def main():
                             st.session_state["combo_scan_results"] = results_df
                             if select_mode_combo == "阈值筛选":
                                 st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{combo_threshold}分）")
+                            elif select_mode_combo == "双重筛选(阈值+Top%)":
+                                st.success(f"先阈值后Top筛选：≥{combo_threshold}分，Top {top_percent_combo}%（{len(results_df)} 只）")
                             else:
                                 st.success(f"选出 Top {top_percent_combo}%（{len(results_df)} 只）")
 

@@ -785,12 +785,20 @@ def _ensure_evolution_tables(db_path: str) -> None:
     conn.close()
 
 
+MIN_WIN_RATE = 45.0
+MAX_DRAWDOWN = -12.0
+
+
 def _score_result(stats: Dict) -> float:
     sharpe = stats.get("sharpe_ratio", 0) or 0
     w_avg = stats.get("weighted_avg_return", 0) or 0
     win = stats.get("win_rate", 0) or 0
     avg_ret = stats.get("avg_return", 0) or 0
     max_dd = stats.get("max_drawdown", 0) or 0
+    if win < MIN_WIN_RATE:
+        return -1e9
+    if max_dd < MAX_DRAWDOWN:
+        return -1e9
     score = (sharpe * 1.5) + (w_avg * 0.12) + (avg_ret * 0.08) + (win * 0.02) - (abs(max_dd) * 0.05)
     return float(score)
 
