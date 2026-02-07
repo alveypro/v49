@@ -5611,7 +5611,7 @@ class CompleteVolumePriceAnalyzer:
                             '行业强度%': f"{industry_median*100:.1f}",
                             '市值层级': "中盘" if tier == 'mid' else ("大盘" if tier == 'large' else "-"),
                             '评分': round(score, 1),
-                            '推荐理由': " · ".join(reasons),
+                            '筛选理由': " · ".join(reasons),
                             '流通市值(亿)': f"{stock_data['circ_mv'].iloc[-1]/10000:.1f}" if 'circ_mv' in stock_data.columns else "-"
                         })
                     except Exception:
@@ -5857,7 +5857,7 @@ class CompleteVolumePriceAnalyzer:
                     - (bias * 50)                       # 乖离率惩罚 (过高则扣分)
                 ) * market_score                        # 大盘权重系数
 
-                # 推荐理由构建
+                # 筛选理由构建
                 reasons = [f"20日收益率达{ret_20*100:.1f}%"]
                 if sector_counts.get(industry, 0) > 3:
                     reasons.append(f"所属{industry}板块趋势")
@@ -5878,7 +5878,7 @@ class CompleteVolumePriceAnalyzer:
                     '波动率%': f"{volatility*100:.2f}",
                     '近20日成交额(亿)': f"{avg_amount_20_yi:.2f}",
                     '评分': round(score, 1),
-                    '推荐理由': " · ".join(reasons),
+                    '筛选理由': " · ".join(reasons),
                     '流通市值(亿)': f"{stock_data['circ_mv'].iloc[-1]/10000:.1f}" if 'circ_mv' in stock_data.columns else "-"
                 })
 
@@ -7014,7 +7014,7 @@ def main():
             """, unsafe_allow_html=True)
 
         # 统一使用下方导出按钮，避免表格右上角导出文件名不含策略版本
-        st.caption("提示：请使用下方“导出完整结果（CSV）”按钮，文件名包含策略版本。")
+        st.caption("提示：请使用下方“导出结果（CSV）”按钮，文件名包含策略版本。")
         st.markdown("""
         <style>
         button[title="Download data as CSV"],
@@ -7334,7 +7334,7 @@ def main():
                                                 '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
                                                 '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
                                                 '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '推荐理由': score_result.get('description', ''),
+                                                '筛选理由': score_result.get('description', ''),
                                                 '原始数据': score_result
                                             })
                                 
@@ -7361,7 +7361,7 @@ def main():
                                 # 显示统计
                                 col1, col2, col3, col4 = st.columns(4)
                                 with col1:
-                                    st.metric("推荐股票", f"{len(results)}只")
+                                    st.metric("标的数量", f"{len(results)}只")
                                 with col2:
                                     avg_score = results_df['综合评分'].astype(float).mean()
                                     st.metric("平均评分", f"{avg_score:.1f}分")
@@ -7374,7 +7374,7 @@ def main():
                                     st.metric("S+A级", f"{grade_s+grade_a}只")
                                 
                                 st.markdown("---")
-                                st.subheader("推荐股票列表（v4.0潜伏策略·8维评分）")
+                                st.subheader("结果列表（v4.0潜伏策略·8维评分）")
                                 
                                 # 选择显示模式
                                 _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
@@ -7390,13 +7390,13 @@ def main():
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分', '评级',
                                                    '潜伏价值', '底部特征', '量价配合', 'MACD趋势', 
                                                    '均线多头', '主力行为', '启动确认', '涨停基因',
-                                                   '最新价格', '止损价', '止盈价', '推荐理由']
+                                                   '最新价格', '止损价', '止盈价', '筛选理由']
                                 elif view_mode == "核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分', '评级',
-                                                   '潜伏价值', '底部特征', '最新价格', '止损价', '止盈价', '推荐理由']
+                                                   '潜伏价值', '底部特征', '最新价格', '止损价', '止盈价', '筛选理由']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分',
-                                                   '评级', '最新价格', '推荐理由']
+                                                   '评级', '最新价格', '筛选理由']
                                 
                                 display_df = results_df[display_cols]
                                 display_df = _standardize_result_df(display_df, score_col="综合评分")
@@ -7414,11 +7414,11 @@ def main():
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="S:高级 A:优质 B:良好 C:合格",
+                                            help="S:优秀 A:良好 B:中性 C:谨慎",
                                             width="small"
                                         ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
+                                        "筛选理由": st.column_config.TextColumn(
+                                            "筛选理由",
                                             help="智能分析推荐原因",
                                             width="large"
                                         )
@@ -7460,7 +7460,7 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
-                                    label=" 导出完整结果（CSV）",
+                                    label=" 导出结果（CSV）",
                                     data=csv,
                                     file_name=f"核心策略_V4_潜伏策略_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
@@ -7761,7 +7761,7 @@ def main():
                                                 '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
                                                 '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
                                                 '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '推荐理由': score_result.get('description', ''),
+                                                '筛选理由': score_result.get('description', ''),
                                                 '原始数据': score_result
                                             })
                                 
@@ -7786,7 +7786,7 @@ def main():
                                 # 显示统计
                                 col1, col2, col3, col4 = st.columns(4)
                                 with col1:
-                                    st.metric("推荐股票", f"{len(results)}只")
+                                    st.metric("标的数量", f"{len(results)}只")
                                 with col2:
                                     avg_score = results_df['综合评分'].astype(float).mean()
                                     st.metric("平均评分", f"{avg_score:.1f}分")
@@ -7799,7 +7799,7 @@ def main():
                                     st.metric("S+A级", f"{grade_s+grade_a}只")
                                 
                                 st.markdown("---")
-                                st.subheader("推荐股票列表（v5.0启动确认·8维评分）")
+                                st.subheader("结果列表（v5.0启动确认·8维评分）")
                                 
                                 # 选择显示模式
                                 _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
@@ -7815,13 +7815,13 @@ def main():
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '启动确认', '主力行为', '涨停基因', 'MACD趋势', 
                                                    '量价配合', '均线多头', '潜伏价值', '底部特征',
-                                                   '最新价格', '止损价', '止盈价', '推荐理由']
+                                                   '最新价格', '止损价', '止盈价', '筛选理由']
                                 elif view_mode == "核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '启动确认', '主力行为', '最新价格', '止损价', '止盈价', '推荐理由']
+                                                   '资金加分', '启动确认', '主力行为', '最新价格', '止损价', '止盈价', '筛选理由']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '资金加分', '评级', '最新价格', '推荐理由']
+                                                   '资金加分', '评级', '最新价格', '筛选理由']
                                 
                                 display_df = results_df[display_cols]
                                 display_df = _standardize_result_df(display_df, score_col="综合评分")
@@ -7839,11 +7839,11 @@ def main():
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="S:高级 A:优质 B:良好 C:合格",
+                                            help="S:优秀 A:良好 B:中性 C:谨慎",
                                             width="small"
                                         ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
+                                        "筛选理由": st.column_config.TextColumn(
+                                            "筛选理由",
                                             help="智能分析推荐原因",
                                             width="large"
                                         )
@@ -7855,7 +7855,7 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
-                                    label=" 导出完整结果（CSV）",
+                                    label=" 导出结果（CSV）",
                                     data=csv,
                                     file_name=f"核心策略_V5_启动确认_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
@@ -8130,7 +8130,7 @@ def main():
                                                 '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
                                                 '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
                                                 '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '推荐理由': score_result.get('description', ''),
+                                                '筛选理由': score_result.get('description', ''),
                                                 '协同组合': score_result.get('synergy_combo', '无'),
                                                 '原始数据': score_result
                                             })
@@ -8175,7 +8175,7 @@ def main():
                                 st.markdown("---")
                                 col1, col2, col3, col4 = st.columns(4)
                                 with col1:
-                                    st.metric("推荐股票", f"{len(results)}只")
+                                    st.metric("标的数量", f"{len(results)}只")
                                 with col2:
                                     avg_score = results_df['综合评分'].astype(float).mean()
                                     st.metric("平均评分", f"{avg_score:.1f}分")
@@ -8188,7 +8188,7 @@ def main():
                                     st.metric("S+A级", f"{grade_s+grade_a}只")
                                 
                                 st.markdown("---")
-                                st.subheader("推荐股票列表（v6.0专业版·七维评分）")
+                                st.subheader("结果列表（v6.0专业版·七维评分）")
                                 
                                 # 选择显示模式
                                 _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
@@ -8202,13 +8202,13 @@ def main():
                                 if view_mode == "完整评分":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '资金流向', '板块热度', '短期动量', '龙头属性', '相对强度', '技术突破', '安全边际',
-                                                   '最新价格', '止损价', '止盈价', '推荐理由', '协同组合']
+                                                   '最新价格', '止损价', '止盈价', '筛选理由', '协同组合']
                                 elif view_mode == "核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '资金流向', '板块热度', '龙头属性', '最新价格', '止损价', '止盈价', '推荐理由']
+                                                   '资金加分', '资金流向', '板块热度', '龙头属性', '最新价格', '止损价', '止盈价', '筛选理由']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '资金加分', '评级', '最新价格', '推荐理由', '协同组合']
+                                                   '资金加分', '评级', '最新价格', '筛选理由', '协同组合']
                                 
                                 display_df = results_df[display_cols]
                                 display_df = _standardize_result_df(display_df, score_col="综合评分")
@@ -8226,11 +8226,11 @@ def main():
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="S:高级 A:优质 B:良好 C:合格",
+                                            help="S:优秀 A:良好 B:中性 C:谨慎",
                                             width="small"
                                         ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
+                                        "筛选理由": st.column_config.TextColumn(
+                                            "筛选理由",
                                             help="智能分析推荐原因",
                                             width="large"
                                         )
@@ -8242,7 +8242,7 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = export_df.to_csv(index=False, encoding='utf-8-sig')
                                 st.download_button(
-                                    label=" 导出完整结果（CSV）",
+                                    label=" 导出结果（CSV）",
                                     data=csv,
                                     file_name=f"v6.0_专业版_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv"
@@ -8549,7 +8549,7 @@ def main():
                                                 '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
                                                 '智能止损': f"{score_result.get('stop_loss', 0):.2f}元",
                                                 '智能止盈': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '推荐理由': score_result.get('signal_reasons', ''),
+                                                '筛选理由': score_result.get('signal_reasons', ''),
                                                 '原始数据': score_result
                                             })
                                 
@@ -8603,7 +8603,7 @@ def main():
                                     st.metric("热门行业", f"{hot_count}只")
                                 
                                 st.markdown("---")
-                                st.subheader("智能推荐股票列表（v7.0·动态权重）")
+                                st.subheader("智能结果列表（v7.0·动态权重）")
                                 
                                 # 选择显示模式
                                 _view_modes = [" 完整信息", " 核心指标", " 简洁模式"]
@@ -8617,13 +8617,13 @@ def main():
                                 if view_mode == "完整信息":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '市场环境', '行业热度', '行业排名', '行业加分',
-                                                   '最新价格', '智能止损', '智能止盈', '推荐理由']
+                                                   '最新价格', '智能止损', '智能止盈', '筛选理由']
                                 elif view_mode == "核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '行业热度', '行业排名', '最新价格', '智能止损', '智能止盈']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '资金加分', '评级', '最新价格', '推荐理由']
+                                                   '资金加分', '评级', '最新价格', '筛选理由']
                                 
                                 display_df = results_df[display_cols]
                                 display_df = _standardize_result_df(display_df, score_col="综合评分")
@@ -8641,11 +8641,11 @@ def main():
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="评级：S/A/B/C",
+                                            help="评级：S/A/B/C（优秀/良好/中性/谨慎)",
                                             width="medium"
                                         ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
+                                        "筛选理由": st.column_config.TextColumn(
+                                            "筛选理由",
                                             help="智能分析推荐原因",
                                             width="large"
                                         )
@@ -8657,7 +8657,7 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
-                                    label=" 导出完整结果（CSV）",
+                                    label=" 导出结果（CSV）",
                                     data=csv,
                                     file_name=f"核心策略_V7_智能选股_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
@@ -9101,7 +9101,7 @@ def main():
                                                     if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit_pct') is not None
                                                     else "-"
                                                 ),
-                                                '推荐理由': score_result.get('description', ''),
+                                                '筛选理由': score_result.get('description', ''),
                                                 '原始数据': score_result
                                             })
                                 
@@ -9187,7 +9187,7 @@ def main():
                                         st.metric("平均凯利仓位", "-")
                                 
                                 st.markdown("---")
-                                st.subheader("推荐股票列表（v8.0·18维度）")
+                                st.subheader("结果列表（v8.0·18维度）")
                                 
                                 # 选择显示模式
                                 _view_modes = [" 完整信息", " 核心指标", " 简洁模式"]
@@ -9202,14 +9202,14 @@ def main():
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '星级', '建议仓位', '预期胜率', '盈亏比', '凯利仓位',
                                                    '最新价格', 'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损', '止损幅度%', '止盈幅度%',
-                                                   '推荐理由']
+                                                   '筛选理由']
                                 elif view_mode == "核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '综合评分', '评级', '资金加分', '星级',
                                                    '建议仓位', '预期胜率', '凯利仓位', '最新价格',
                                                    'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '综合评分', 
-                                                   '资金加分', '评级', '星级', '建议仓位', '最新价格', '推荐理由']
+                                                   '资金加分', '评级', '星级', '建议仓位', '最新价格', '筛选理由']
                                 
                                 display_df = results_df[display_cols]
                                 display_df = _standardize_result_df(display_df, score_col="综合评分")
@@ -9227,7 +9227,7 @@ def main():
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="评级：S/A/B/C",
+                                            help="评级：S/A/B/C（优秀/良好/中性/谨慎)",
                                             width="medium"
                                         ),
                                         "星级": st.column_config.TextColumn(
@@ -9245,8 +9245,8 @@ def main():
                                             help="凯利公式计算的最优仓位比例",
                                             width="small"
                                         ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
+                                        "筛选理由": st.column_config.TextColumn(
+                                            "筛选理由",
                                             help="v8.0智能分析推荐原因",
                                             width="large"
                                         )
@@ -9258,7 +9258,7 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
-                                    label=" 导出完整结果（CSV）",
+                                    label=" 导出结果（CSV）",
                                     data=csv,
                                     file_name=f"核心策略_V8_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
@@ -9531,7 +9531,7 @@ def main():
                             results_df = _standardize_result_df(results_df, score_col="综合评分")
                             st.dataframe(results_df, use_container_width=True, hide_index=True)
                             st.download_button(
-                                " 导出完整结果（CSV）",
+                                " 导出结果（CSV）",
                                 data=_df_to_csv_bytes(results_df),
                                 file_name=f"核心策略_V9_中线均衡_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                 mime="text/csv; charset=utf-8"
@@ -9909,7 +9909,7 @@ def main():
                                 show_cols = [c for c in cols if c in results_df.columns]
                                 st.dataframe(results_df[show_cols], use_container_width=True, hide_index=True)
                             st.download_button(
-                                " 导出完整结果（CSV）",
+                                " 导出结果（CSV）",
                                 data=_df_to_csv_bytes(results_df),
                                 file_name=f"组合策略_共识评分_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                 mime="text/csv; charset=utf-8"
@@ -10081,7 +10081,7 @@ def main():
                                                 '最新价格': f"{stock_data['close_price'].iloc[0]:.2f}元",
                                                 '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
                                                 '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '推荐理由': score_result.get('description', ''),
+                                                '筛选理由': score_result.get('description', ''),
                                                 '原始数据': score_result
                                             })
                                 
@@ -10106,7 +10106,7 @@ def main():
                                 # 显示统计
                                 col1, col2, col3, col4 = st.columns(4)
                                 with col1:
-                                    st.metric("推荐股票", f"{len(results)}只")
+                                    st.metric("标的数量", f"{len(results)}只")
                                 with col2:
                                     avg_score = results_df['综合评分'].astype(float).mean()
                                     st.metric("平均评分", f"{avg_score:.1f}分")
@@ -10119,7 +10119,7 @@ def main():
                                     st.metric("S+A级", f"{grade_s+grade_a}只")
                                 
                                 st.markdown("---")
-                                st.subheader("推荐股票列表（v6.0超短线·8维评分）")
+                                st.subheader("结果列表（v6.0超短线·8维评分）")
                                 
                                 # 选择显示模式
                                 view_mode = st.radio(
@@ -10134,13 +10134,13 @@ def main():
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
                                                    '资金加分', '板块热度', '资金流向', '技术突破', '短期动量', 
                                                    '相对强度', '量能配合', '筹码结构', '安全边际',
-                                                   '最新价格', '止损价', '止盈价', '推荐理由']
+                                                   '最新价格', '止损价', '止盈价', '筛选理由']
                                 elif view_mode == " 核心指标":
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '板块热度', '资金流向', '最新价格', '止损价', '止盈价', '推荐理由']
+                                                   '资金加分', '板块热度', '资金流向', '最新价格', '止损价', '止盈价', '筛选理由']
                                 else:  # 简洁模式
                                     display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '资金加分', '评级', '最新价格', '推荐理由']
+                                                   '资金加分', '评级', '最新价格', '筛选理由']
                                 
                                 display_df = results_df[display_cols]
                                 
@@ -10157,11 +10157,11 @@ def main():
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="S:高级 A:优质 B:良好 C:合格",
+                                            help="S:优秀 A:良好 B:中性 C:谨慎",
                                             width="small"
                                         ),
-                                        "推荐理由": st.column_config.TextColumn(
-                                            "推荐理由",
+                                        "筛选理由": st.column_config.TextColumn(
+                                            "筛选理由",
                                             help="智能分析推荐原因",
                                             width="large"
                                         )
@@ -10173,7 +10173,7 @@ def main():
                                 export_df = results_df.drop('原始数据', axis=1)
                                 csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
-                                    label=" 导出完整结果（CSV）",
+                                    label=" 导出结果（CSV）",
                                     data=csv,
                                     file_name=f"核心策略_V6_超短线_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
@@ -11409,7 +11409,7 @@ def main():
 
 **综合评分最高！**
 
-#### 推荐理由
+#### 筛选理由
 -  **胜率**: {best_strategy[1].get('win_rate', 0):.1f}% - {"超过50%，表现优秀" if best_strategy[1].get('win_rate', 0) > 50 else "有提升空间"}
 -  **平均收益**: {best_strategy[1].get('avg_return', 0):.2f}% - {"收益可观" if best_strategy[1].get('avg_return', 0) > 3 else "稳健增长"}
 -  **夏普比率**: {best_strategy[1].get('sharpe_ratio', 0):.2f} - {"风险收益比优秀" if best_strategy[1].get('sharpe_ratio', 0) > 1 else "风险适中"}
@@ -12302,7 +12302,7 @@ def main():
             # 统计汇总
             col_m1, col_m2, col_m3, col_m4 = st.columns(4)
             with col_m1:
-                st.metric("推荐标的", f"{len(stocks)} 只")
+                st.metric("标的数量", f"{len(stocks)} 只")
             with col_m2:
                 avg_ret20 = pd.to_numeric(stocks['20日涨幅%'], errors='coerce').mean()
                 avg_ret5 = pd.to_numeric(stocks['5日涨幅%'], errors='coerce').mean() if '5日涨幅%' in stocks.columns else 0
@@ -12328,7 +12328,7 @@ def main():
                 hide_index=True,
                 column_config={
                     "评分": st.column_config.NumberColumn(format="%.1f "),
-                    "推荐理由": st.column_config.TextColumn(width="large")
+                    "筛选理由": st.column_config.TextColumn(width="large")
                 }
             )
             
@@ -12683,7 +12683,7 @@ def main():
                             recommendations = assistant.daily_stock_scan(top_n=top_n)
                             st.session_state['daily_recommendations'] = recommendations
                             if recommendations:
-                                st.success(f"选股完成！找到{len(recommendations)}只推荐股票")
+                                st.success(f"选股完成！找到{len(recommendations)}只标的数量")
                             else:
                                 st.warning("本次未选出股票，已记录诊断信息")
                             st.rerun()
@@ -12710,7 +12710,7 @@ def main():
                                 st.metric("市值", f"{rec['market_cap']/100000000:.1f}亿")
                             
                             st.markdown(f"** 行业**: {rec['industry']}")
-                            st.markdown(f"** 推荐理由**: {rec['reason'][:150]}...")
+                            st.markdown(f"** 筛选理由**: {rec['reason'][:150]}...")
                             
                             # 快速添加到持仓
                             st.markdown("---")
