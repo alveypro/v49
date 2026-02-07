@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 
 """
- 终极量价暴涨系统 v49.0 - 长期稳健版
+ 量价策略系统 v49.0 - 长期稳健版
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    真实数据验证·56.6%胜率·5天黄金周期·年化10-15%
+    真实数据验证·56.6%胜率·5天平均持仓约5天·年化10-15%
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
  v49.0 核心突破（基于2000只股票、274个真实信号验证）：
@@ -13,12 +13,12 @@
  样本量：2000只股票
  信号数：274个（充足）
  胜率：56.6%（超过目标52%）⭐⭐⭐
- 平均持仓：4.9天（接近5天黄金周期）
+ 平均持仓：4.9天（接近5天平均持仓约5天）
  最大回撤：-3.27%（风险极小）
  夏普比率：0.59（稳健）
 
 【 黄金策略参数（已验证）】
- 评分器：v4.0潜伏为王版
+ 评分器：v4.0潜伏策略版
  评分阈值：60分起（平衡点）
  持仓周期：5天（数据验证最优）
  止损：-3%（严格控制）
@@ -26,11 +26,11 @@
  单只仓位：18-20%（最多5只）
 
 【 核心发现（数据揭示）】
-1. ⏰ 5天持仓胜率最高53.3%！
+1.  5天持仓胜率最高53.3%！
 2.  止盈的100%赢（+7.90%）！
 3.  胜率>评分（持仓时间更重要）
 
-【 8维100分评分体系（v4.0潜伏为王）】
+【 8维100分评分体系（v4.0潜伏策略）】
 1.  潜伏价值（20分）- 即将启动但未启动
 2.  底部特征（20分）- 价格低位+超跌反弹
 3.  量价配合（15分）- 温和放量+价升
@@ -38,12 +38,12 @@
 5.  均线多头（10分）- 均线粘合+即将发散
 6.  主力行为（10分）- 大单流入+筹码集中
 7.  启动确认（5分）- 刚开始启动
-8.  涨停基因（5分）- 历史爆发力
+8.  涨停基因（5分）- 历史趋势延续能力
 
 【 功能模块（整合为6个Tab）】
  Tab1: 核心策略中心（v4.0/v5.0/v6.0/v7.0四大实战策略）
  Tab2: 板块热点分析（实时热点追踪）
- Tab3: 超级回测系统（已验证56.6%胜率）
+ Tab3: 回测系统（已验证56.6%胜率）
  Tab4: AI智能选股（智能推荐系统）
  Tab5: 数据与参数管理（全自动数据中心）
  Tab6: 实战指南（策略使用说明）
@@ -51,7 +51,7 @@
 【 版本信息】
 版本号：v49.0 长期稳健版
 发布日期：2025-12-19
-核心升级：集成v4.0评分器+5天黄金周期+真实数据验证
+核心升级：集成v4.0评分器+5天平均持仓约5天+真实数据验证
 真实效果：胜率56.6%·年化10-15%·最大回撤<5%
 作者：AI量化专家
 状态： 2000只股票验证·274个真实信号·策略界面完全同步
@@ -211,11 +211,11 @@ def _calc_external_bonus(
         extra -= 1.0
     return extra
 
-#  导入v4.0综合优选评分器（潜伏为王·长期稳健版）
+#  导入v4.0综合优选评分器（潜伏策略·长期稳健版）
 try:
     from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
     V4_EVALUATOR_AVAILABLE = True
-    logger.info("v4.0综合优选评分器（潜伏为王版）加载成功！")
+    logger.info("v4.0综合优选评分器（潜伏策略版）加载成功！")
 except ImportError as e:
     V4_EVALUATOR_AVAILABLE = False
     logger.warning(f"v4.0评分器未找到，将使用v3.0版本: {e}")
@@ -238,31 +238,31 @@ except ImportError as e:
     V5_EVALUATOR_AVAILABLE = False
     logger.warning(f"v5.0评分器未找到: {e}")
 
-#  导入v6.0超短线狙击评分器·巅峰版（胜率80-90%，单次8-15%，只选市场最强1-3%）
+#  导入v6.0超短线狙击评分器·专业版（胜率80-90%，单次8-15%，只选市场高质量1-3%）
 try:
     from comprehensive_stock_evaluator_v6_ultimate import ComprehensiveStockEvaluatorV6Ultimate as ComprehensiveStockEvaluatorV6
     V6_EVALUATOR_AVAILABLE = True
-    logger.info("v6.0超短线狙击评分器·巅峰版加载成功！")
+    logger.info("v6.0超短线狙击评分器·专业版加载成功！")
 except ImportError as e:
     V6_EVALUATOR_AVAILABLE = False
     logger.warning(f"v6.0评分器未找到: {e}")
 
-#  导入v7.0终极智能选股系统（全球顶级标准）
+#  导入v7.0智能选股系统（专业标准）
 try:
     from comprehensive_stock_evaluator_v7_ultimate import ComprehensiveStockEvaluatorV7Ultimate
     V7_EVALUATOR_AVAILABLE = True
-    logger.info("v7.0终极智能选股系统加载成功！")
+    logger.info("v7.0智能选股系统加载成功！")
 except ImportError as e:
     V7_EVALUATOR_AVAILABLE = False
     logger.warning(f"v7.0评分器未找到: {e}")
 
-#  导入v8.0终极进化版（世界级量化策略）
+#  导入v8.0进阶版（量化策略）
 try:
     from comprehensive_stock_evaluator_v8_ultimate import ComprehensiveStockEvaluatorV8Ultimate
     from kelly_position_manager import KellyPositionManager
     from dynamic_rebalance_manager import DynamicRebalanceManager
     V8_EVALUATOR_AVAILABLE = True
-    logger.info("v8.0终极进化版加载成功！ATR风控+市场过滤+凯利仓位+动态再平衡")
+    logger.info("v8.0进阶版加载成功！ATR风控+市场过滤+凯利仓位+动态再平衡")
 except ImportError as e:
     V8_EVALUATOR_AVAILABLE = False
     logger.warning(f"v8.0评分器未找到: {e}")
@@ -762,7 +762,7 @@ def _auto_buy_ai_stocks(stocks: pd.DataFrame, per_buy_amount: float, top_n: int)
 
 
 st.set_page_config(
-    page_title="终极量价暴涨系统 v49.0 - 长期稳健版",
+    page_title="量价策略系统 v49.0 - 长期稳健版",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -955,12 +955,12 @@ class CompleteVolumePriceAnalyzer:
         #  初始化缓存数据库表
         self._init_cache_tables()
         
-        #  初始化v4.0评分器（潜伏为王·长期稳健版）
+        #  初始化v4.0评分器（潜伏策略·长期稳健版）
         if V4_EVALUATOR_AVAILABLE:
             self.evaluator_v4 = ComprehensiveStockEvaluatorV4()
             self.use_v4 = True  # 默认使用v4.0
             self.use_v3 = False  # 不使用v3
-            logger.info("v4.0评分器（潜伏为王·长期稳健版）已初始化")
+            logger.info("v4.0评分器（潜伏策略·长期稳健版）已初始化")
         elif V3_EVALUATOR_AVAILABLE:
             self.evaluator_v3 = ComprehensiveStockEvaluatorV3()
             self.use_v4 = False
@@ -980,26 +980,26 @@ class CompleteVolumePriceAnalyzer:
         else:
             self.evaluator_v5 = None
         
-        #  初始化v6.0评分器（顶级高回报版）
+        #  初始化v6.0评分器（高级高回报版）
         if V6_EVALUATOR_AVAILABLE:
             self.evaluator_v6 = ComprehensiveStockEvaluatorV6()
-            logger.info("v6.0评分器·巅峰版已初始化")
+            logger.info("v6.0评分器·专业版已初始化")
         else:
             self.evaluator_v6 = None
         
-        #  初始化v7.0评分器（终极智能选股系统 - 全球顶级标准）
+        #  初始化v7.0评分器（智能选股系统 - 专业标准）
         if V7_EVALUATOR_AVAILABLE:
             self.evaluator_v7 = ComprehensiveStockEvaluatorV7Ultimate(self.db_path)
-            logger.info("v7.0终极智能选股系统已初始化")
+            logger.info("v7.0智能选股系统已初始化")
         else:
             self.evaluator_v7 = None
         
-        #  初始化v8.0评分器（终极进化版 - 世界级量化策略）
+        #  初始化v8.0评分器（进阶版 - 量化策略）
         if V8_EVALUATOR_AVAILABLE:
             self.evaluator_v8 = ComprehensiveStockEvaluatorV8Ultimate(self.db_path)
             self.kelly_manager = KellyPositionManager()
             self.rebalance_manager = DynamicRebalanceManager()
-            logger.info("v8.0终极进化版已初始化: ATR风控+市场过滤+凯利仓位+动态再平衡")
+            logger.info("v8.0进阶版已初始化: ATR风控+市场过滤+凯利仓位+动态再平衡")
         else:
             self.evaluator_v8 = None
             self.kelly_manager = None
@@ -1468,7 +1468,7 @@ class CompleteVolumePriceAnalyzer:
                     
                     #  根据投资周期设置权重（ 大幅提高底部位置权重）
                     if investment_cycle == 'short':
-                        # 短期（1-5天）：爆发力、突破信号
+                        # 短期（1-5天）：趋势延续能力、突破信号
                         vol_weight, price_weight, ma_weight, pos_weight, momentum_weight = 30, 25, 15, 20, 10
                         min_threshold = 60  # 短期要求60分
                     elif investment_cycle == 'medium':
@@ -1822,7 +1822,7 @@ class CompleteVolumePriceAnalyzer:
         if scores['accumulation'] >= 8 and scores['ma'] >= 16 and scores['bottom'] >= 10:
             bonus += 8  # +8分协同加成
         
-        # 【黄金组合3】放量+MACD三向上+涨停（加速爆发）
+        # 【黄金组合3】放量+MACD三向上+涨停（加速趋势）
         if scores['volume_price'] >= 20 and scores['macd'] >= 25 and scores['limit'] >= 3:
             bonus += 7  # +7分协同加成
         
@@ -1830,7 +1830,7 @@ class CompleteVolumePriceAnalyzer:
         if (scores['volume_price'] >= 20 and scores['ma'] >= 16 and 
             scores['macd'] >= 20 and scores['bottom'] >= 10 and 
             scores['accumulation'] >= 6 and scores['limit'] >= 3):
-            bonus += 15  # +15分终极加成
+            bonus += 15  # +15分额外加成
         
         return min(bonus, 20)  # 协同加成最高20分
     
@@ -1892,7 +1892,7 @@ class CompleteVolumePriceAnalyzer:
             
             # 确定热度等级
             if heat_score >= 15:
-                heat_level = ' 超级热门'
+                heat_level = ' 高热'
             elif heat_score >= 10:
                 heat_level = '⭐ 热门'
             elif heat_score >= 5:
@@ -2099,7 +2099,7 @@ class CompleteVolumePriceAnalyzer:
     
     def evaluate_stock_ultimate_fusion(self, stock_data: pd.DataFrame) -> Dict:
         """
-         综合优选终极优化版：6维100分评分体系 + 7大优化
+         综合优选优化版：6维100分评分体系 + 7大优化
         
          7大优化已全部集成：
         1.  动态权重系统：根据市场环境（牛/熊/震荡）自动调整权重
@@ -2266,7 +2266,7 @@ class CompleteVolumePriceAnalyzer:
                 dea_up = dea[-1] > dea[-2]  # DEA向上
                 macd_up = macd_bar[-1] > macd_bar[-2]  # MACD柱向上
                 
-                # 完美三向上（25分）- 最强信号
+                # 完美三向上（25分）- 高质量信号
                 if dif_up and dea_up and macd_up:
                     score_macd = 25
                     details['macd'] = '完美三向上'
@@ -2544,7 +2544,7 @@ class CompleteVolumePriceAnalyzer:
     
     def evaluate_stock_comprehensive(self, stock_data: pd.DataFrame) -> Dict:
         """
-         综合优选终极版：真正的6维100分评分体系 + 7大AI优化
+         综合优选优化版：真正的6维100分评分体系 + 7大AI优化
         
         【6维100分评分体系】
         1. 量价配合（25分）：放量上涨vs放量下跌，主力行为识别
@@ -3108,8 +3108,8 @@ class CompleteVolumePriceAnalyzer:
         try:
             version_map = {
                 'v4': ('evaluator_v4', 'evaluate_stock_v4', 'v4.0 长期稳健版（真实评分器）'),
-                'v5': ('evaluator_v5', 'evaluate_stock_v4', 'v5.0 趋势爆发版（真实评分器）'),  # v5使用v4的方法
-                'v6': ('evaluator_v6', 'evaluate_stock_v6', 'v6.0 顶级超短线（真实评分器）')
+                'v5': ('evaluator_v5', 'evaluate_stock_v4', 'v5.0 趋势趋势版（真实评分器）'),  # v5使用v4的方法
+                'v6': ('evaluator_v6', 'evaluate_stock_v6', 'v6.0 高级超短线（真实评分器）')
             }
             
             evaluator_attr, eval_method, strategy_name = version_map[version]
@@ -3899,7 +3899,7 @@ class CompleteVolumePriceAnalyzer:
     def backtest_explosive_hunter(self, df: pd.DataFrame, sample_size: int = 800, holding_days: int = 5,
                                   min_score: float = 60, max_score: float = 85) -> dict:
         """
-         v4.0策略回测（长期稳健版 - 潜伏为王）使用真实评分器
+         v4.0策略回测（长期稳健版 - 潜伏策略）使用真实评分器
         
         八维评分体系：
         1. 潜伏价值（20分）- 即将启动但未启动
@@ -3909,7 +3909,7 @@ class CompleteVolumePriceAnalyzer:
         5. 均线多头（10分）- 均线粘合，即将发散
         6. 主力行为（10分）- 大单流入，筹码集中
         7. 启动确认（5分）- 刚开始启动
-        8. 涨停基因（5分）- 历史爆发力
+        8. 涨停基因（5分）- 历史趋势延续能力
         
         阈值：可自定义（默认60-85分，潜伏期特征，不追高）
         """
@@ -3929,16 +3929,16 @@ class CompleteVolumePriceAnalyzer:
     
     def backtest_bottom_breakthrough(self, df: pd.DataFrame, sample_size: int = 800, holding_days: int = 5) -> dict:
         """
-         v5.0策略回测（趋势爆发版 - 启动确认）
+         v5.0策略回测（趋势趋势版 - 启动确认）
         
-        核心逻辑：趋势确认后介入，追求爆发力
+        核心逻辑：趋势确认后介入，追求趋势延续能力
         - 启动确认：已经开始启动，趋势明确
         - 放量突破：成交量显著放大
         - 动量强化：价格动量加速
         
         阈值：65-75分（已启动但未过热）
         """
-        logger.info("开始 v5.0 趋势爆发版策略回测...")
+        logger.info("开始 v5.0 趋势趋势版策略回测...")
         
         # 检查是否有真实的v5.0评分器
         if hasattr(self, 'evaluator_v5') and self.evaluator_v5 is not None:
@@ -3948,22 +3948,22 @@ class CompleteVolumePriceAnalyzer:
         else:
             logger.warning("v5.0评分器未加载，使用简化评分逻辑")
             result = self.backtest_strategy_complete(df, sample_size, 0.65, holding_days)
-            result['strategy'] = 'v5.0 趋势爆发版'
+            result['strategy'] = 'v5.0 趋势趋势版'
         return result
     
     def backtest_ultimate_hunter(self, df: pd.DataFrame, sample_size: int = 800, holding_days: int = 5) -> dict:
         """
-         终极猎手策略回测（完全对齐Tab11逻辑）
+         高级猎手策略回测（完全对齐Tab11逻辑）
         
         双类型评分：A型(底部突破型)+B型(高位反弹型)，自动选择最高分
         阈值：80分（对标Tab11的S级和A级股票，实盘推荐标准）
         """
-        logger.info("开始终极猎手策略回测...")
+        logger.info("开始高级猎手策略回测...")
         # 使用80分阈值，对齐实盘使用标准（S级≥90分，A级80-89分）
         result = self.backtest_strategy_complete(df, sample_size, 0.80, holding_days)
         
         # 设置策略名称
-        result['strategy'] = '终极猎手'
+        result['strategy'] = '高级猎手'
         
         # 添加类型统计（A型：底部突破，B型：高位反弹）
         if result.get('success') and 'backtest_data' in result:
@@ -4010,7 +4010,7 @@ class CompleteVolumePriceAnalyzer:
         
         ⭐ v4.0八维100分评分体系 + AI深度优化 + 真实数据验证
         
-         v4.0八维评分（潜伏为王）：
+         v4.0八维评分（潜伏策略）：
         - 潜伏价值（20分）：即将启动但未启动的潜伏期特征
         - 底部特征（20分）：价格位置、超跌反弹、底部形态
         - 量价配合（15分）：放量倍数、量价关系、持续性
@@ -4032,7 +4032,7 @@ class CompleteVolumePriceAnalyzer:
         
          真实验证效果（2000只股票·274个信号）：
         - 胜率：56.6%（超过目标52%）
-        - 平均持仓：4.9天（接近5天黄金周期）
+        - 平均持仓：4.9天（接近5天平均持仓约5天）
         - 最大回撤：-3.27%（风险极小）
         - 夏普比率：0.59（稳健）
         
@@ -4085,9 +4085,9 @@ class CompleteVolumePriceAnalyzer:
                     # 获取截止到该点的历史数据
                     historical_data = stock_data.iloc[:last_valid_idx + 1].copy()
                     
-                    #  使用v4.0全新8维100分评分体系（潜伏为王·长期稳健版）- 与Tab12完全对齐
+                    #  使用v4.0全新8维100分评分体系（潜伏策略·长期稳健版）- 与Tab12完全对齐
                     if self.use_v4 and self.evaluator_v4:
-                        # 使用v4.0评分器（潜伏为王·长期稳健版）
+                        # 使用v4.0评分器（潜伏策略·长期稳健版）
                         score_result = self.evaluator_v4.evaluate_stock_v4(historical_data)
                         final_score = score_result.get('comprehensive_score', 0) or score_result.get('final_score', 0)
                     elif hasattr(self, 'use_v3') and self.use_v3 and hasattr(self, 'evaluator_v3'):
@@ -4308,12 +4308,12 @@ class CompleteVolumePriceAnalyzer:
     def backtest_v6_ultra_short(self, df: pd.DataFrame, sample_size: int = 500, 
                                holding_days: int = 3, score_threshold: float = 80.0) -> dict:
         """
-         v6.0顶级超短线策略回测（快进快出 - 热点狙击）
+         v6.0高级超短线策略回测（快进快出 - 热点狙击）
         
         核心逻辑：
         - 超短线操作：2-3天快进快出
         - 热点共振：板块热度+资金流向+技术突破
-        - 快速反应：捕捉市场最强势品种
+        - 快速反应：捕捉市场高质量势品种
         
         八维评分体系：
         1. 板块热度（25分）- 热点板块优先
@@ -4325,9 +4325,9 @@ class CompleteVolumePriceAnalyzer:
         7. 情绪指标（3分）- 市场情绪好
         8. 龙头效应（2分）- 板块龙头
         
-        阈值：70-80分（已爆发的强势股）
+        阈值：70-80分（已趋势的强势股）
         """
-        logger.info("开始 v6.0 顶级超短线策略回测...")
+        logger.info("开始 v6.0 高级超短线策略回测...")
         
         # 检查是否有真实的v6.0评分器
         if hasattr(self, 'evaluator_v6') and self.evaluator_v6 is not None:
@@ -4337,13 +4337,13 @@ class CompleteVolumePriceAnalyzer:
         else:
             logger.warning("v6.0评分器未加载，使用简化评分逻辑")
             result = self.backtest_strategy_complete(df, sample_size, score_threshold/100, holding_days)
-            result['strategy'] = 'v6.0 顶级超短线'
+            result['strategy'] = 'v6.0 高级超短线'
             return result
     
     def backtest_v7_intelligent(self, df: pd.DataFrame, sample_size: int = 500, 
                                 holding_days: int = 5, score_threshold: float = 60.0) -> dict:
         """
-         v7.0终极智能版策略回测（动态自适应 - 全球顶级标准）
+         v7.0智能版策略回测（动态自适应 - 专业标准）
         
         核心创新：
         - 市场环境识别：自动识别5种市场环境，动态调整策略
@@ -4366,11 +4366,11 @@ class CompleteVolumePriceAnalyzer:
         
         阈值：70分（动态调整，市场差时自动提高门槛）
         """
-        logger.info("开始 v7.0 终极智能版策略回测...")
+        logger.info("开始 v7.0 智能版策略回测...")
         
         # 检查是否有真实的v7.0评分器
         if hasattr(self, 'evaluator_v7') and self.evaluator_v7 is not None:
-            logger.info("使用真实的v7.0终极智能评分器进行回测")
+            logger.info("使用真实的v7.0智能评分器进行回测")
             
             try:
                 # v7.0需要特殊的回测逻辑，因为它需要ts_code和industry
@@ -4380,14 +4380,14 @@ class CompleteVolumePriceAnalyzer:
                 return {
                     'success': False,
                     'error': str(e),
-                    'strategy': 'v7.0 终极智能版'
+                    'strategy': 'v7.0 智能版'
                 }
         else:
             logger.warning("v7.0评分器未加载，无法进行v7.0回测")
             return {
                 'success': False,
                 'error': 'v7.0评分器未加载',
-                'strategy': 'v7.0 终极智能版'
+                'strategy': 'v7.0 智能版'
             }
     
     def _backtest_v7_with_adaptive_system(self, df: pd.DataFrame, sample_size: int, 
@@ -4487,7 +4487,7 @@ class CompleteVolumePriceAnalyzer:
             return {
                 'success': False,
                 'error': '未找到符合条件的信号',
-                'strategy': 'v7.0 终极智能版',
+                'strategy': 'v7.0 智能版',
                 'stats': {}
             }
         
@@ -4597,7 +4597,7 @@ class CompleteVolumePriceAnalyzer:
         
         return {
             'success': True,
-            'strategy': 'v7.0 终极智能版',
+            'strategy': 'v7.0 智能版',
             'stats': stats,
             'backtest_data': backtest_df,  # 保留DataFrame供内部使用
             'details': details  # 返回字典列表供UI显示
@@ -4606,7 +4606,7 @@ class CompleteVolumePriceAnalyzer:
     def backtest_v8_ultimate(self, df: pd.DataFrame, sample_size: int = 500,
                             holding_days: int = 5, score_threshold: float = 50.0) -> dict:
         """
-         v8.0终极进化版回测（世界级量化策略）
+         v8.0进阶版回测（量化策略）
         
         革命性升级：
         1. ATR动态止损止盈（不再固定-4%/+6%）
@@ -4624,7 +4624,7 @@ class CompleteVolumePriceAnalyzer:
         阈值：50分起（v8采用软过滤，市场不好时评分会自动降低）
         推荐：50-55分（平衡信号数量和质量）
         """
-        logger.info("开始 v8.0 终极进化版策略回测...")
+        logger.info("开始 v8.0 进阶版策略回测...")
         
         # 检查v8评分器
         if not hasattr(self, 'evaluator_v8') or self.evaluator_v8 is None:
@@ -4632,7 +4632,7 @@ class CompleteVolumePriceAnalyzer:
             return {
                 'success': False,
                 'error': 'v8.0评分器未加载',
-                'strategy': 'v8.0 终极进化版'
+                'strategy': 'v8.0 进阶版'
             }
         
         try:
@@ -4644,7 +4644,7 @@ class CompleteVolumePriceAnalyzer:
             return {
                 'success': False,
                 'error': str(e),
-                'strategy': 'v8.0 终极进化版'
+                'strategy': 'v8.0 进阶版'
             }
     
     def _backtest_v8_with_atr_stops(self, df: pd.DataFrame, sample_size: int,
@@ -4786,7 +4786,7 @@ class CompleteVolumePriceAnalyzer:
             return {
                 'success': False,
                 'error': '未找到符合条件的信号',
-                'strategy': 'v8.0 终极进化版',
+                'strategy': 'v8.0 进阶版',
                 'stats': {}
             }
         
@@ -4908,7 +4908,7 @@ class CompleteVolumePriceAnalyzer:
         
         return {
             'success': True,
-            'strategy': 'v8.0 终极进化版',
+            'strategy': 'v8.0 进阶版',
             'stats': stats,
             'backtest_data': backtest_df,
             'details': details
@@ -5084,14 +5084,14 @@ class CompleteVolumePriceAnalyzer:
          三周期AI智能选股 
         
         investment_cycle参数：
-        - 'short': 短期（1-5天）- 60分起，追求爆发力
+        - 'short': 短期（1-5天）- 60分起，追求趋势延续能力
         - 'medium': 中期（5-20天）- 55分起，追求趋势确定性
         - 'long': 长期（20天+）- 50分起，追求底部价值
         - 'balanced': 平衡模式（默认）- 55分起，综合三周期
         """
         try:
             cycle_names = {
-                'short': '短期（1-5天）爆发型',
+                'short': '短期（1-5天）趋势型',
                 'medium': '中期（5-20天）趋势型',
                 'long': '长期（20天+）价值型',
                 'balanced': '平衡模式'
@@ -5169,7 +5169,7 @@ class CompleteVolumePriceAnalyzer:
         max_market_cap: float = 5000.0
     ) -> pd.DataFrame:
         """
-         AI 高收益捕获者 V5.0 - 稳健月度目标版
+         AI 选股 V5.0 - 稳健月度目标版
         
         核心目标：在控制回撤的前提下，争取月度目标收益
         
@@ -5727,7 +5727,7 @@ class CompleteVolumePriceAnalyzer:
             return result_df
 
         except Exception as e:
-            logger.error(f"高收益捕获者V5.0执行失败: {e}")
+            logger.error(f"AI选股V5.0执行失败: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return pd.DataFrame()
@@ -5740,7 +5740,7 @@ class CompleteVolumePriceAnalyzer:
         max_volatility: float = 0.12
     ) -> pd.DataFrame:
         """
-         AI 高收益捕获者 V2.0 - 顶级重构版
+         AI 选股 V2.0 - 高级重构版
         目标：月收益率 20%+ 的稳健捕获
         
         新增核心逻辑：
@@ -5860,7 +5860,7 @@ class CompleteVolumePriceAnalyzer:
                 # 推荐理由构建
                 reasons = [f"20日收益率达{ret_20*100:.1f}%"]
                 if sector_counts.get(industry, 0) > 3:
-                    reasons.append(f"所属{industry}板块爆发")
+                    reasons.append(f"所属{industry}板块趋势")
                 if bias < 0.15:
                     reasons.append("回踩支撑位")
                 elif recent_vol_inc:
@@ -5890,7 +5890,7 @@ class CompleteVolumePriceAnalyzer:
             return result_df
 
         except Exception as e:
-            logger.error(f"高收益捕获者V2.0执行失败: {e}")
+            logger.error(f"AI选股V2.0执行失败: {e}")
             return pd.DataFrame()
 
 
@@ -5979,11 +5979,11 @@ class StrategyOptimizer:
                 
                 try:
                     # 根据策略选择对应的回测方法
-                    if "暴涨猎手" in strategy_name:
+                    if "强势猎手" in strategy_name:
                         result = self.analyzer.backtest_explosive_hunter(df, sample_size, holding_days)
                     elif "底部突破" in strategy_name:
                         result = self.analyzer.backtest_bottom_breakthrough(df, sample_size, holding_days)
-                    elif "终极猎手" in strategy_name:
+                    elif "高级猎手" in strategy_name:
                         result = self.analyzer.backtest_ultimate_hunter(df, sample_size, holding_days)
                     else:
                         logger.warning(f"未知策略: {strategy_name}")
@@ -6065,7 +6065,7 @@ class StrategyOptimizer:
         logger.info("开始全策略参数优化...")
         
         try:
-            strategies = ["暴涨猎手", "底部突破猎手", "终极猎手"]
+            strategies = ["强势猎手", "底部突破猎手", "高级猎手"]
             best_strategies = []
             
             for strategy in strategies:
@@ -6151,7 +6151,7 @@ class MarketScanner:
                         stage = '萌芽期'
                         category = 'emerging'
                     elif vol_ratio > 2.0 and price_change > 5:
-                        stage = '爆发期'
+                        stage = '加速期'
                         category = 'exploding'
                     elif 1.3 < vol_ratio <= 2.0 and 2 < price_change <= 5:
                         stage = '启动期'
@@ -6878,19 +6878,19 @@ def _run_funding_repair(db_path: str) -> Dict[str, Dict]:
 def main():
     """主界面"""
     
-    st.title("终极量价暴涨系统 v49.0 - 长期稳健版")
-    st.markdown("**真实数据验证·56.6%胜率·5天黄金周期·年化10-15%·v4.0潜伏为王评分器**")
+    st.title("量价策略系统 v49.0 - 长期稳健版")
+    st.markdown("**真实数据验证·胜率56.6%·平均持仓约5天·年化10-15%·v4.0评分器**")
     st.markdown("---")
     
     # 初始化
     if 'vp_analyzer' not in st.session_state:
-        with st.spinner("正在初始化完整系统..."):
+        with st.spinner("正在初始化系统..."):
             try:
                 st.session_state.vp_analyzer = CompleteVolumePriceAnalyzer()
                 st.session_state.optimizer = StrategyOptimizer(st.session_state.vp_analyzer)
                 st.session_state.db_manager = DatabaseManager()
                 st.session_state.scanner = MarketScanner()
-                st.success("系统初始化成功！")
+                st.success("系统初始化成功")
             except Exception as e:
                 st.error(f"系统初始化失败: {e}")
                 return
@@ -6942,7 +6942,7 @@ def main():
         
         st.divider()
         
-        st.markdown("###  v46.5暴涨猎手优化版")
+        st.markdown("###  v46.5强势猎手优化版")
         st.markdown("""
         **核心升级：**
         -  区分放量上涨vs放量下跌
@@ -6960,12 +6960,12 @@ def main():
         
         **评分标准：**
         - 精选级：≥70分（更严格！）
-        - 超级潜力：≥85分
+        - 高潜力：≥85分
         - 高潜力：75-85分
         - 稳健型：70-75分
         
         **使用方法：**
-        1. Tab1: 暴涨猎手（十维专业分析）
+        1. Tab1: 强势猎手（十维专业分析）
         2. Tab2: 一键智能推荐（v46.1）
         3. 其他模块：回测/优化/板块扫描
         """)
@@ -6974,7 +6974,7 @@ def main():
     _tabs = [
         " 核心策略中心 (v4/v5/v6/v7)",
         " 板块热点分析",
-        " 超级回测系统",
+        " 回测系统",
         " AI智能选股",
         " 智能交易助手",
         " 数据与参数管理",
@@ -6988,9 +6988,9 @@ def main():
             st.markdown("""
             <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                         padding: 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
-                <h1 style='margin:0; color: white;'> 核心策略中心 - 四维一体顶级系统</h1>
+                <h1 style='margin:0; color: white;'> 核心策略中心 - 四维一体策略框架</h1>
                 <p style='margin:10px 0 0 0; font-size:1.2em; opacity:0.9;'>
-                    v4.0 潜伏型 | v5.0 爆发型 | v6.0 超短型 | v7.0 终极智能型 · 全球顶级标准
+                    v4.0 潜伏型 | v5.0 趋势型 | v6.0 超短型 | v7.0 智能型 · 专业标准
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -7008,12 +7008,12 @@ def main():
         """, unsafe_allow_html=True)
         
         _modes = [
-            " v4.0 长期稳健版 (潜伏为王·56.6%胜率)",
+            " v4.0 长期稳健版 (潜伏策略·胜率56.6%)",
             " 稳定上涨策略 (底部启动/回撤企稳/二次启动)",
-            " v5.0 趋势爆发版 (启动确认·高爆发)",
-            " v6.0 超短线·巅峰版 (只选市场最强1-3%·胜率80-90%)",
-            " v7.0 终极智能版 (全球顶级标准·动态自适应·预期62-70%胜率)",
-            " v8.0 终极进化版 (ATR动态风控·凯利公式·预期70-78%胜率)",
+            " v5.0 趋势版 (启动确认·趋势延续)",
+            " v6.0 超短线版 (精选市场1-3%·胜率80-90%)",
+            " v7.0 智能版 (动态自适应·预期62-70%胜率)",
+            " v8.0 进阶版 (ATR动态风控·凯利公式·预期70-78%胜率)",
             " v9.0 中线均衡版 (资金流·动量·趋势·波动·板块强度)",
             " 组合策略 共识评分 (v4/v5/v7/v8/v9)",
         ]
@@ -7021,13 +7021,13 @@ def main():
             "选择实战模式",
             [m.strip() for m in _modes],
             horizontal=True,
-            help="v4.0: 适合稳健投资者，持仓5天 | v5.0: 适合进取投资者，追求短期爆发 | v6.0: 适合超短线高手，三级过滤只选板块龙头 | v7.0: 市场环境识别+行业轮动+动态权重 | v8.0: ATR动态风控+凯利公式+18维度+五星评级",
+            help="v4.0: 稳健型，持仓约5天 | v5.0: 趋势确认 | v6.0: 超短线精选 | v7.0: 环境识别+行业轮动 | v8.0: ATR风控+凯利+多维评分",
         )
         
         st.markdown("---")
         
         if "v4.0" in strategy_mode:
-            # ---  v4.0 潜伏为王 核心逻辑 ---
+            # ---  v4.0 潜伏策略 核心逻辑 ---
             
             #  v4.0版本说明
             exp_v4 = st.expander("v4.0 策略说明", expanded=False)
@@ -7036,10 +7036,10 @@ def main():
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     v4.0 长期稳健版 - 潜伏为王策略
+                     v4.0 长期稳健版 - 潜伏策略策略
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
-                    真实验证·56.6%胜率·5天黄金周期·年化10-15%·在启动前潜伏
+                    真实验证·56.6%胜率·5天平均持仓约5天·年化10-15%·在启动前潜伏
                 </p>
                 <div style='display: flex; justify-content: center; gap: 30px; margin-top: 25px; flex-wrap: wrap;'>
                     <div style='text-align: center;'>
@@ -7048,7 +7048,7 @@ def main():
                     </div>
                     <div style='text-align: center;'>
                         <div style='font-size: 2em; font-weight: 700;'>5天</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>黄金周期</div>
+                        <div style='font-size: 0.9em; opacity: 0.9;'>平均持仓约5天</div>
                     </div>
                     <div style='text-align: center;'>
                         <div style='font-size: 2em; font-weight: 700;'>274个</div>
@@ -7065,7 +7065,7 @@ def main():
             #  v4.0版本特别提示
             if V4_EVALUATOR_AVAILABLE:
                 exp_v4.success("""
-                 **当前使用v4.0潜伏为王版（已验证56.6%胜率）**
+                 **当前使用v4.0潜伏策略版（已验证56.6%胜率）**
                 
                 ** 核心理念：在启动前潜伏，而不是启动后追高！**
                 
@@ -7077,7 +7077,7 @@ def main():
                 -  **均线多头**：10分（均线粘合+即将发散）
                 -  **主力行为**：10分（大单流入+筹码集中）
                 -  **启动确认**：5分（刚开始启动，不追高）
-                -  **涨停基因**：5分（历史爆发力）
+                -  **涨停基因**：5分（历史趋势延续能力）
                 
                 ** 适用场景：**
                 -  追求稳健收益的投资者
@@ -7087,13 +7087,13 @@ def main():
                 
                 ** 真实回测数据（2000只股票）：**
                 - 胜率：56.6%（超过目标52%）⭐⭐⭐
-                - 平均持仓：4.9天（接近5天黄金周期）
+                - 平均持仓：4.9天（接近5天平均持仓约5天）
                 - 最大回撤：-3.27%（风险极小）
                 - 夏普比率：0.59（稳健）
                 """)
             else:
                 exp_v4.error("""
-                 **v4.0潜伏为王版评分器未找到**
+                 **v4.0潜伏策略版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v4.py` 文件存在
                 - 建议重启应用后重试
                 """)
@@ -7118,7 +7118,7 @@ def main():
             st.info("""
             ** v4.0策略说明：**
             
-            根据2000只股票真实回测，v4.0"潜伏为王"版本：
+            根据2000只股票真实回测，v4.0"潜伏策略"版本：
             - **60分起**：平衡点，信号数量充足（274个），胜率56.6%
             - **65分起**：更严格筛选，胜率会更高但信号数量减少
             - **70分起**：精选标准，适合保守投资者
@@ -7179,7 +7179,7 @@ def main():
             #  开始扫描按钮
             st.markdown("---")
             
-            if st.button("开始扫描（v4.0潜伏为王）", type="primary", use_container_width=True, key="scan_btn_v4"):
+            if st.button("开始扫描（v4.0潜伏策略）", type="primary", use_container_width=True, key="scan_btn_v4"):
                 with st.spinner(f"正在扫描全市场股票..."):
                     try:
                         # 获取数据
@@ -7356,7 +7356,7 @@ def main():
                                     st.metric("S+A级", f"{grade_s+grade_a}只")
                                 
                                 st.markdown("---")
-                                st.subheader("推荐股票列表（v4.0潜伏为王·8维评分）")
+                                st.subheader("推荐股票列表（v4.0潜伏策略·8维评分）")
                                 
                                 # 选择显示模式
                                 _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
@@ -7391,12 +7391,12 @@ def main():
                                     column_config={
                                         "综合评分": st.column_config.NumberColumn(
                                             "综合评分",
-                                            help="v4.0潜伏为王评分（100分制）",
+                                            help="v4.0潜伏策略评分（100分制）",
                                             format="%.1f分"
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="S:顶级 A:优质 B:良好 C:合格",
+                                            help="S:高级 A:优质 B:良好 C:合格",
                                             width="small"
                                         ),
                                         "推荐理由": st.column_config.TextColumn(
@@ -7410,7 +7410,7 @@ def main():
                                 # 操作建议
                                 st.markdown("---")
                                 st.info("""
-                                ###  v4.0策略操作建议（潜伏为王）
+                                ###  v4.0策略操作建议（潜伏策略）
                                 
                                 ** 核心理念**: 在启动前潜伏，而不是启动后追高
                                 
@@ -7420,7 +7420,7 @@ def main():
                                 - **B级(60-69分)**:  良好机会，谨慎关注，建议仓位10-15%
                                 - **C级(50-59分)**:  合格标的，保持观察，建议仓位5-10%
                                 
-                                **⏰ 持仓周期**: 5天（数据验证的黄金周期）
+                                ** 持仓周期**: 5天（数据验证的平均持仓约5天）
                                 
                                 ** 止盈止损**:
                                 - 止损：严格执行-3%止损，或跌破止损价
@@ -7444,7 +7444,7 @@ def main():
                                 st.download_button(
                                     label=" 导出完整结果（CSV）",
                                     data=csv,
-                                    file_name=f"核心策略_V4_潜伏为王_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                    file_name=f"核心策略_V4_潜伏策略_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
                                 )
                                 
@@ -7485,17 +7485,17 @@ def main():
 
         elif "v5.0" in strategy_mode:
             evolve_v5_core = _load_evolve_params("v5_best.json")
-            #  全新顶级UI设计 - Hero Section
+            #  全新高级UI设计 - Hero Section
             exp_v5 = st.expander("v5.0 策略说明", expanded=False)
             exp_v5.markdown("""
             <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     启动确认型选股 - 趋势爆发捕手 v5.0
+                     启动确认型选股 - 趋势趋势捕手 v5.0
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
-                    启动确认版 · 8维度100分评分体系 · 重视趋势确认 · 追求爆发力
+                    启动确认版 · 8维度100分评分体系 · 重视趋势确认 · 追求趋势延续能力
                 </p>
                 <div style='display: flex; justify-content: center; gap: 30px; margin-top: 25px; flex-wrap: wrap;'>
                     <div style='text-align: center;'>
@@ -7523,7 +7523,7 @@ def main():
                 exp_v5.success("""
                  **当前使用v5.0启动确认版**
                 
-                ** 核心差异（对比v4.0潜伏为王版）：**
+                ** 核心差异（对比v4.0潜伏策略版）：**
                 -  **启动确认**：10分 → 20分（翻倍！）
                 -  **主力行为**：15分 → 18分（提权！）
                 -  **涨停基因**：5分 → 8分（提权！）
@@ -7532,7 +7532,7 @@ def main():
                 
                 ** 适用场景：**
                 -  想要确认趋势后买入
-                -  追求短期爆发力
+                -  追求短期趋势延续能力
                 -  不想等待潜伏期
                 -  愿意承担适度追高风险
                 
@@ -7561,16 +7561,16 @@ def main():
             
             ** 建议：**
             - 当前市场环境下，建议使用**50-60分**作为筛选标准
-            - 如果想要更保守的潜伏策略，建议使用**v4.0"潜伏为王"**
+            - 如果想要更保守的潜伏策略，建议使用**v4.0"潜伏策略"**
             - v5.0适合追求"确认趋势后买入"的投资者
             """)
             
             scan_mode_v5 = st.radio(
                 "选择模式（v5.0）",
                 [" 强势启动（≥60分）- 趋势明确", 
-                 " 即将爆发（55-59分）- 蓄势待发",
+                 " 即将趋势（55-59分）- 蓄势待发",
                  " 潜在机会（50-54分）- 提前关注"],
-                help=" 强势启动：60分起，趋势已确认 | 即将爆发：准备启动 | 潜在机会：提前布局",
+                help=" 强势启动：60分起，趋势已确认 | 即将趋势：准备启动 | 潜在机会：提前布局",
                 horizontal=True,
                 key="scan_mode_v5"
             )
@@ -7586,7 +7586,7 @@ def main():
                 if "强势启动" in scan_mode_v5:
                     default_threshold_v5 = 60
                     min_threshold_v5 = 55
-                elif "即将爆发" in scan_mode_v5:
+                elif "即将趋势" in scan_mode_v5:
                     default_threshold_v5 = 55
                     min_threshold_v5 = 50
                 else:  # 潜在机会
@@ -7607,7 +7607,7 @@ def main():
                     max_value=90,
                     value=default_threshold_v5,
                     step=1,
-                    help="建议：强势启动60+，即将爆发55+，潜在机会50+",
+                    help="建议：强势启动60+，即将趋势55+，潜在机会50+",
                     key="score_threshold_v5"
                 )
             
@@ -7629,7 +7629,7 @@ def main():
                     max_value=10000,
                     value=max(1500, cap_min_v5),  # 确保value >= min_value
                     step=50,
-                    help="建议100-1500亿，中等市值爆发力强",
+                    help="建议100-1500亿，中等市值趋势延续能力强",
                     key="cap_max_v5"
                 )
             
@@ -7821,7 +7821,7 @@ def main():
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="S:顶级 A:优质 B:良好 C:合格",
+                                            help="S:高级 A:优质 B:良好 C:合格",
                                             width="small"
                                         ),
                                         "推荐理由": st.column_config.TextColumn(
@@ -7862,7 +7862,7 @@ def main():
         
         elif "v6.0" in strategy_mode:
             evolve_v6_core = _load_evolve_params("v6_best.json")
-            # ---  v6.0 超短线·巅峰版 核心逻辑 ---
+            # ---  v6.0 超短线·专业版 核心逻辑 ---
             
             #  v6.0版本说明
             exp_v6 = st.expander("v6.0 策略说明", expanded=False)
@@ -7871,7 +7871,7 @@ def main():
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     v6.0 超短线狙击·巅峰版 - 只选市场最强1-3%
+                     v6.0 超短线狙击·专业版 - 只选市场高质量1-3%
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
                     三级过滤·七维严格评分·精英筛选·胜率80-90%·单次8-15%
@@ -7900,9 +7900,9 @@ def main():
             #  v6.0版本特别提示
             if V6_EVALUATOR_AVAILABLE:
                 exp_v6.success("""
-                 **当前使用v6.0超短线狙击·巅峰版**
+                 **当前使用v6.0超短线狙击·专业版**
                 
-                ** 核心理念：三级过滤，只选市场最强的1-3%！**
+                ** 核心理念：三级过滤，只选市场高质量的1-3%！**
                 
                 **【第一级】必要条件过滤（硬性淘汰）：**
                 -  板块3日涨幅 > 1%（板块必须走强）
@@ -7922,8 +7922,8 @@ def main():
                 -  **安全边际**：2分
                 
                 **【第三级】精英筛选：**
-                - 协同加分（0-30分）：板块总龙头+15分，资金爆发+12分
-                - 风险扣分（0-60分）：追高-25分，暴涨-20分，连续涨停-15分
+                - 协同加分（0-30分）：板块总龙头+15分，资金趋势+12分
+                - 风险扣分（0-60分）：追高-25分，强势-20分，连续涨停-15分
                 
                 ** 适用场景：**
                 -  超短线高手
@@ -7933,12 +7933,12 @@ def main():
                 
                 ** 预期效果：**
                 - 85分门槛：10-50只精选标的，胜率80-85%
-                - 90分门槛：3-10只极品标的，胜率85-90%
-                - 95分门槛：1-3只顶级标的，胜率90%+
+                - 90分门槛：3-10只精选标的，胜率85-90%
+                - 95分门槛：1-3只高级标的，胜率90%+
                 """)
             else:
                 exp_v6.error("""
-                 **v6.0超短线狙击·巅峰版评分器未找到**
+                 **v6.0超短线狙击·专业版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v6_ultimate.py` 文件存在
                 - 建议重启应用后重试
                 """)
@@ -7948,12 +7948,12 @@ def main():
             st.markdown("###  选择扫描模式")
             
             scan_mode_v6 = st.radio(
-                "选择模式（v6.0巅峰版）",
-                [" 顶级龙头（≥90分）- 极品标的3-10只", 
+                "选择模式（v6.0专业版）",
+                [" 核心龙头（≥90分）- 精选标的3-10只", 
                  " 精选龙头（≥85分）- 精选标的10-50只",
                  " 候选池（≥80分）- 候选标的50-100只"],
                 horizontal=True,
-                help=" 90分：极品，胜率85-90% |  85分：精选，胜率80-85% |  80分：候选，胜率75-80%",
+                help=" 90分：精选，胜率85-90% |  85分：精选，胜率80-85% |  80分：候选，胜率75-80%",
                 key="scan_mode_v6_tab1"
             )
             
@@ -8001,8 +8001,8 @@ def main():
                     )
             
             # 扫描按钮
-            if st.button("开始扫描（v6.0巅峰版）", type="primary", use_container_width=True, key="scan_v6_tab1"):
-                with st.spinner("v6.0巅峰版全市场扫描中...（三级过滤+严格评分）"):
+            if st.button("开始扫描（v6.0专业版）", type="primary", use_container_width=True, key="scan_v6_tab1"):
+                with st.spinner("v6.0专业版全市场扫描中...（三级过滤+严格评分）"):
                     try:
                         # 获取股票列表
                         conn = sqlite3.connect(PERMANENT_DB_PATH)
@@ -8069,7 +8069,7 @@ def main():
                                         # 添加name列用于ST检查
                                         stock_data['name'] = stock_name
                                         
-                                        # 使用v6.0巅峰版评分器
+                                        # 使用v6.0专业版评分器
                                         score_result = vp_analyzer.evaluator_v6.evaluate_stock_v6(stock_data, ts_code)
                                         
                                         # 检查是否通过必要条件
@@ -8170,7 +8170,7 @@ def main():
                                     st.metric("S+A级", f"{grade_s+grade_a}只")
                                 
                                 st.markdown("---")
-                                st.subheader("推荐股票列表（v6.0巅峰版·七维评分）")
+                                st.subheader("推荐股票列表（v6.0专业版·七维评分）")
                                 
                                 # 选择显示模式
                                 _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
@@ -8203,12 +8203,12 @@ def main():
                                     column_config={
                                         "综合评分": st.column_config.NumberColumn(
                                             "综合评分",
-                                            help="v6.0巅峰版评分（100分制）",
+                                            help="v6.0专业版评分（100分制）",
                                             format="%.1f分"
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="S:顶级 A:优质 B:良好 C:合格",
+                                            help="S:高级 A:优质 B:良好 C:合格",
                                             width="small"
                                         ),
                                         "推荐理由": st.column_config.TextColumn(
@@ -8226,12 +8226,12 @@ def main():
                                 st.download_button(
                                     label=" 导出完整结果（CSV）",
                                     data=csv,
-                                    file_name=f"v6.0_巅峰版_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                    file_name=f"v6.0_专业版_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv"
                                 )
                                 
                             else:
-                                st.warning(f"未找到≥{score_threshold_v6_tab1}分的股票\n\n**说明：**\nv6.0巅峰版使用极度严格的三级过滤标准，只选市场最强的1-3%。\n\n**建议：**\n1. 降低评分阈值到80分\n2. 扩大市值范围到50-2000亿\n3. 这是正常现象，说明当前市场没有符合顶级标准的股票")
+                                st.warning(f"未找到≥{score_threshold_v6_tab1}分的股票\n\n**说明：**\nv6.0专业版使用极度严格的三级过滤标准，只选市场高质量的1-3%。\n\n**建议：**\n1. 降低评分阈值到80分\n2. 扩大市值范围到50-2000亿\n3. 这是正常现象，说明当前市场没有符合高级标准的股票")
                     
                     except Exception as e:
                         st.error(f"扫描失败: {e}")
@@ -8248,7 +8248,7 @@ def main():
         
         elif "v7.0" in strategy_mode:
             evolve_v7_core = _load_evolve_params("v7_best.json")
-            # ---  v7.0 终极智能选股系统 核心逻辑 ---
+            # ---  v7.0 智能选股系统 核心逻辑 ---
             
             #  v7.0版本说明
             exp_v7 = st.expander("v7.0 策略说明", expanded=False)
@@ -8257,7 +8257,7 @@ def main():
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     v7.0 终极智能选股系统 - 全球顶级标准
+                     v7.0 智能选股系统 - 专业标准
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
                     市场环境识别·行业轮动·动态权重·三层过滤·预期胜率62-70%
@@ -8286,7 +8286,7 @@ def main():
             #  v7.0版本特别提示
             if V7_EVALUATOR_AVAILABLE:
                 exp_v7.success("""
-                 **当前使用v7.0终极智能选股系统（全球顶级标准）**
+                 **当前使用v7.0智能选股系统（专业标准）**
                 
                 ** 核心创新：五大智能系统协同工作！**
                 
@@ -8295,7 +8295,7 @@ def main():
                 -  波动牛市：波段操作，注意回调
                 -  熊市：安全第一，超跌反弹
                 -  急跌恐慌：空仓观望
-                -  震荡市：潜伏为王，等待突破
+                -  震荡市：潜伏策略，等待突破
                 
                 **【系统2】市场情绪计算器 **
                 - 涨跌比分析（权重50%）
@@ -8332,7 +8332,7 @@ def main():
                 """)
             else:
                 exp_v7.error("""
-                 **v7.0终极智能选股系统评分器未找到**
+                 **v7.0智能选股系统评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v7_ultimate.py` 文件存在
                 - 建议重启应用后重试
                 """)
@@ -8401,7 +8401,7 @@ def main():
             
             # 扫描按钮
             if st.button("开始智能扫描（v7.0）", type="primary", use_container_width=True, key="scan_v7_tab1"):
-                with st.spinner("v7.0终极智能系统扫描中...（识别环境→计算情绪→分析行业→动态评分→三层过滤）"):
+                with st.spinner("v7.0智能系统扫描中...（识别环境→计算情绪→分析行业→动态评分→三层过滤）"):
                     try:
                         # 重置v7.0缓存
                         if hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
@@ -8663,7 +8663,7 @@ def main():
 
         elif "v8.0" in strategy_mode:
             evolve_v8_core = _load_evolve_params("v8_best.json")
-            # ---  v8.0 终极进化版 核心逻辑 ---
+            # ---  v8.0 进阶版 核心逻辑 ---
             
             #  v8.0版本说明
             exp_v8 = st.expander("v8.0 策略说明", expanded=False)
@@ -8672,7 +8672,7 @@ def main():
                         padding: 40px 30px; border-radius: 15px; color: white; 
                         margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
                 <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     v8.0 终极进化版 - 全球最强量化系统
+                     v8.0 进阶版 - 量化策略系统
                 </h1>
                 <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
                     ATR动态风控·凯利公式·18维度评分·五星评级·预期胜率70-78%
@@ -8701,7 +8701,7 @@ def main():
             #  v8.0版本特别提示
             if V8_EVALUATOR_AVAILABLE:
                 exp_v8.success("""
-                 **当前使用v8.0终极进化版（全球最强量化系统）**
+                 **当前使用v8.0进阶版（量化策略系统）**
                 
                 ** 六大革命性创新！**
                 
@@ -8757,11 +8757,11 @@ def main():
                 ** 预期效果：**
                 - 短期（1-3个月）：胜率62-68%
                 - 中期（6-12个月）：胜率68-74%
-                - 长期（2-3年）：胜率70-78%，达到顶级私募水平
+                - 长期（2-3年）：胜率70-78%，达到高级私募水平
                 """)
             else:
                 exp_v8.error("""
-                 **v8.0终极进化版评分器未找到**
+                 **v8.0进阶版评分器未找到**
                 - 请确保 `comprehensive_stock_evaluator_v8_ultimate.py` 文件存在
                 - 建议重启应用后重试
                 """)
@@ -8832,8 +8832,8 @@ def main():
                     )
             
             # 扫描按钮
-            if st.button("开始终极扫描（v8.0）", type="primary", use_container_width=True, key="scan_v8_tab1"):
-                with st.spinner("v8.0终极进化版扫描中...（三级市场过滤→18维度评分→ATR风控→凯利仓位）"):
+            if st.button("开始扫描（v8.0）", type="primary", use_container_width=True, key="scan_v8_tab1"):
+                with st.spinner("v8.0进阶版扫描中...（三级市场过滤→18维度评分→ATR风控→凯利仓位）"):
                     try:
                         # 重置v8.0缓存
                         if hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
@@ -9097,7 +9097,7 @@ def main():
                             
                             # 显示结果
                             st.markdown("---")
-                            st.markdown(f"###  终极扫描结果（v8.0）")
+                            st.markdown(f"###  扫描结果（v8.0）")
                             
                             col1, col2, col3 = st.columns(3)
                             with col1:
@@ -9169,7 +9169,7 @@ def main():
                                         st.metric("平均凯利仓位", "-")
                                 
                                 st.markdown("---")
-                                st.subheader("终极推荐股票列表（v8.0·18维度）")
+                                st.subheader("推荐股票列表（v8.0·18维度）")
                                 
                                 # 选择显示模式
                                 _view_modes = [" 完整信息", " 核心指标", " 简洁模式"]
@@ -9204,7 +9204,7 @@ def main():
                                     column_config={
                                         "综合评分": st.column_config.NumberColumn(
                                             "综合评分",
-                                            help="v8.0终极评分（18维度·100分制）",
+                                            help="v8.0评分（18维度·100分制）",
                                             format="%.1f分"
                                         ),
                                         "评级": st.column_config.TextColumn(
@@ -9242,7 +9242,7 @@ def main():
                                 st.download_button(
                                     label=" 导出完整结果（CSV）",
                                     data=csv,
-                                    file_name=f"核心策略_V8_终极选股_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                    file_name=f"核心策略_V8_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv; charset=utf-8"
                                 )
                                 
@@ -9911,7 +9911,7 @@ def main():
                 st.dataframe(results_df, use_container_width=True, hide_index=True)
 
         else:  # v6.0
-            st.header("v6.0超短线狙击·巅峰版 - 只选市场最强1-3%")
+            st.header("v6.0超短线狙击·专业版 - 只选市场高质量1-3%")
             st.caption("三级过滤+七维严格评分：必要条件淘汰→极度严格评分→精英筛选，胜率80-90%，单次8-15%")
             
             if not V6_EVALUATOR_AVAILABLE or not hasattr(vp_analyzer, "evaluator_v6") or vp_analyzer.evaluator_v6 is None:
@@ -9928,8 +9928,8 @@ def main():
             col_v6_a, col_v6_b, col_v6_c = st.columns(3)
             with col_v6_a:
                 score_threshold_v6 = st.slider(
-                    "评分阈值（v6.0巅峰版）", 50, 100, 85, 5,
-                    help="巅峰版：85分（精选10-50只），90分（极品3-10只），95分（顶级1-3只）",
+                    "评分阈值（v6.0专业版）", 50, 100, 85, 5,
+                    help="专业版：85分（精选10-50只），90分（精选3-10只），95分（高级1-3只）",
                     key="score_threshold_v6"
                 )
             with col_v6_b:
@@ -10139,7 +10139,7 @@ def main():
                                         ),
                                         "评级": st.column_config.TextColumn(
                                             "评级",
-                                            help="S:顶级 A:优质 B:良好 C:合格",
+                                            help="S:高级 A:优质 B:良好 C:合格",
                                             width="small"
                                         ),
                                         "推荐理由": st.column_config.TextColumn(
@@ -10227,8 +10227,8 @@ def main():
                 st.metric("启动期", f"{len(results['launching'])}个",
                          help="量价齐升，板块开始启动")
             with col3:
-                st.metric("爆发期", f"{len(results['exploding'])}个",
-                         help="成交量爆发，价格大涨")
+                st.metric("加速期", f"{len(results['exploding'])}个",
+                         help="成交量趋势，价格大涨")
             with col4:
                 st.metric("衰退期", f"{len(results['declining'])}个",
                          help="量价齐跌，板块进入衰退")
@@ -10269,10 +10269,10 @@ def main():
                         
                         st.warning("建议：关注龙头股突破，可考虑介入")
             
-            # 爆发期板块
+            # 加速期板块
             if results['exploding']:
                 st.markdown("---")
-                st.markdown("###  爆发期板块（谨慎 - 短线为主）")
+                st.markdown("###  加速期板块（谨慎 - 短线为主）")
                 
                 for i, sector in enumerate(results['exploding'][:5], 1):
                     with st.expander(f"{i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
@@ -10303,7 +10303,7 @@ def main():
                 -  风险：中等，需要及时止盈止损
                 -  建议：择机介入，设置止损
                 
-                **3. 爆发期板块（高风险期）**
+                **3. 加速期板块（高风险期）**
                 -  特征：成交量暴增、价格大涨
                 -  策略：短线操作，快进快出
                 -  风险：高，随时可能回调
@@ -10325,10 +10325,10 @@ def main():
         else:
             st.info("点击「开始扫描」按钮，系统将自动分析全市场板块，识别最佳投资机会！")
 
-    # ==================== Tab 3:  超级回测系统 ====================
+    # ==================== Tab 3:  回测系统 ====================
     with tab_backtest:
         _render_page_header(
-            " 超级回测与策略对比",
+            " 回测与策略对比",
             "历史数据验证 · 策略表现评估 · 胜率收益分析 · 最优策略推荐",
             tag="Backtest Lab",
         )
@@ -10351,32 +10351,32 @@ def main():
             exp_backtest.info("""
             ###  策略特点对比
             
-            **v4.0 长期稳健版（潜伏为王）**
+            **v4.0 长期稳健版（潜伏策略）**
             -  特点：提前布局，长期持有，注重价值底部
             -  适用：稳健投资者，中长线操作
             -  目标：56.6%胜率，平均收益10-15%
             
-            **v5.0 趋势爆发版（启动确认）**
-            -  特点：趋势确认后介入，追求爆发力
+            **v5.0 趋势趋势版（启动确认）**
+            -  特点：趋势确认后介入，追求趋势延续能力
             -  适用：进取投资者，波段操作
-            -  目标：高爆发力，短期快速获利
+            -  目标：高趋势延续能力，短期快速获利
             
-            **v6.0 顶级超短线（快进快出）**
+            **v6.0 高级超短线（快进快出）**
             -  特点：超短线操作，2-5天快速获利
             -  适用：短线高手，日内或短线
             -  目标：极速进出，捕捉热点
             
-            **v7.0 终极智能版（动态自适应）**
+            **v7.0 智能版（动态自适应）**
             -  特点：市场环境识别+行业轮动+动态权重+三层过滤
             -  适用：追求稳定高胜率的投资者
             -  目标：62-70%胜率，年化28-38%，夏普比率1.5-2.2
             
-            **v8.0 终极进化版（全球最强） NEW!**
+            **v8.0 进阶版（专业） **
             -  特点：ATR动态风控+凯利公式+18维度+五星评级+三级择时
             -  适用：追求极致性能的专业投资者
             -  目标：70-78%胜率，年化35-52%，夏普比率2.5-3.2
 
-            **v9.0 中线均衡版（算法优化） NEW!**
+            **v9.0 中线均衡版（算法优化） **
             -  特点：资金流+动量+趋势+波动+板块强度
             -  适用：中线平衡风格（2-6周）
             -  目标：稳健收益与可控回撤
@@ -10442,17 +10442,17 @@ def main():
                                 results['v4.0 长期稳健版'] = v4_result['stats']
                             
                             # v5.0 回测（使用底部突破策略作为代表）
-                            st.info("正在回测 v5.0 趋势爆发版...")
+                            st.info("正在回测 v5.0 趋势趋势版...")
                             v5_result = vp_analyzer.backtest_bottom_breakthrough(
                                 df,
                                 sample_size=backtest_sample_size,
                                 holding_days=5
                             )
                             if v5_result['success']:
-                                results['v5.0 趋势爆发版'] = v5_result['stats']
+                                results['v5.0 趋势趋势版'] = v5_result['stats']
                             
                             # v6.0 回测
-                            st.info("正在回测 v6.0 顶级超短线...")
+                            st.info("正在回测 v6.0 高级超短线...")
                             v6_result = vp_analyzer.backtest_v6_ultra_short(
                                 df,
                                 sample_size=backtest_sample_size,
@@ -10460,16 +10460,16 @@ def main():
                                 score_threshold=60.0  #  降低阈值从70到60
                             )
                             if v6_result['success']:
-                                results['v6.0 顶级超短线'] = v6_result['stats']
+                                results['v6.0 高级超短线'] = v6_result['stats']
                             else:
                                 #  显示v6失败原因
                                 st.warning(f"v6.0回测未产生有效结果: {v6_result.get('error', '未知原因')}")
                                 if 'stats' in v6_result:
                                     st.info(f"v6.0分析了 {v6_result['stats'].get('analyzed_stocks', 0)} 只股票，找到 {v6_result['stats'].get('total_signals', 0)} 个信号")
                             
-                            #  v7.0 回测（终极智能版）
+                            #  v7.0 回测（智能版）
                             if V7_EVALUATOR_AVAILABLE and hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
-                                st.info("正在回测 v7.0 终极智能版...")
+                                st.info("正在回测 v7.0 智能版...")
                                 v7_result = vp_analyzer.backtest_v7_intelligent(
                                     df,
                                     sample_size=backtest_sample_size,
@@ -10477,15 +10477,15 @@ def main():
                                     score_threshold=60.0
                                 )
                                 if v7_result['success']:
-                                    results['v7.0 终极智能版'] = v7_result['stats']
+                                    results['v7.0 智能版'] = v7_result['stats']
                                 else:
                                     st.warning(f"v7.0回测未产生有效结果: {v7_result.get('error', '未知原因')}")
                             else:
                                 st.warning("v7.0评分器未加载，跳过v7.0回测")
                             
-                            #  v8.0 回测（终极进化版）NEW!
+                            #  v8.0 回测（进阶版）
                             if V8_EVALUATOR_AVAILABLE and hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
-                                st.info("正在回测 v8.0 终极进化版...（ATR动态风控+凯利公式+软过滤）")
+                                st.info("正在回测 v8.0 进阶版...（ATR动态风控+凯利公式+软过滤）")
                                 v8_result = vp_analyzer.backtest_v8_ultimate(
                                     df,
                                     sample_size=backtest_sample_size,
@@ -10493,7 +10493,7 @@ def main():
                                     score_threshold=50.0  #  v8.1优化：采用软过滤，降低阈值到50
                                 )
                                 if v8_result['success']:
-                                    results['v8.0 终极进化版'] = v8_result['stats']
+                                    results['v8.0 进阶版'] = v8_result['stats']
                                 else:
                                     st.warning(f"v8.0回测未产生有效结果: {v8_result.get('error', '未知原因')}")
                                     if 'stats' in v8_result:
@@ -11316,10 +11316,10 @@ def main():
                     with col1:
                         if st.button("生成Markdown报告", use_container_width=True):
                             # 生成Markdown格式的详细报告
-                            report_md = f"""#  超级回测对比报告 v49.0
+                            report_md = f"""#  回测对比报告 v49.0
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    终极量价暴涨系统 · 策略回测分析报告
+    量价策略系统 · 策略回测分析报告
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                             
 ##  回测概况
@@ -11442,10 +11442,10 @@ def main():
 3. **市值均衡**: 大中小市值合理配置（建议3:5:2）
 4. **成交量确认**: 必须确认成交量配合，避免假突破
 
-### ⏰ 最佳操作时间
+###  最佳操作时间
 1. **买入时机**: 开盘后30分钟或尾盘最后30分钟
 2. **卖出时机**: 触发止盈止损立即执行，不要犹豫
-3. **持仓周期**: 建议 **5-10个交易日**（黄金周期）
+3. **持仓周期**: 建议 **5-10个交易日**（平均持仓约5天）
 4. **避开时段**: 重大会议、节假日前后减少操作
 
 ---
@@ -11473,7 +11473,7 @@ def main():
 
 ### 第二步：设置参数
 - 评分阈值：**60分**起（可根据市场调整）
-- 持仓周期：**5-10天**（黄金周期）
+- 持仓周期：**5-10天**（平均持仓约5天）
 - 单只仓位：**15-20%**（最多5只）
 
 ### 第三步：实盘验证
@@ -11493,7 +11493,7 @@ def main():
 - 系统版本：v49.0 长期稳健版
 - 更新日期：{datetime.now().strftime('%Y-%m-%d')}
 - 数据来源：Tushare Pro
-- 核心策略：八维评分体系（潜伏为王）
+- 核心策略：八维评分体系（潜伏策略）
 
 ---
 
@@ -11511,7 +11511,7 @@ def main():
 
 *报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
 *报告类型: 策略对比回测报告*
-*系统版本: 终极量价暴涨系统 v49.0*
+*系统版本: 量价策略系统 v49.0*
 """
                             
                             # 生成文件名
@@ -11520,7 +11520,7 @@ def main():
                             st.download_button(
                                 label=" 下载 Markdown 报告",
                                 data=report_md,
-                                file_name=f"超级回测报告_v49_{timestamp}.md",
+                                file_name=f"回测报告_v49_{timestamp}.md",
                                 mime="text/markdown",
                                 help="下载完整的Markdown格式回测报告，包含所有分析细节"
                             )
@@ -11600,9 +11600,9 @@ def main():
                     -  支持数据透视表和图表制作
                     
                     ####  Excel完整版（即将上线）
-                    - ⏳ 多工作表结构化报告
-                    - ⏳ 自动生成图表和分析
-                    - ⏳ 交互式数据筛选
+                    -  多工作表结构化报告
+                    -  自动生成图表和分析
+                    -  交互式数据筛选
                     
                     ####  建议
                     - 定期保存回测结果，建立策略表现档案
@@ -11618,7 +11618,7 @@ def main():
             with col1:
                 selected_strategy = st.selectbox(
                     "选择策略",
-                    ["v4.0 长期稳健版", "v5.0 趋势爆发版", "v6.0 顶级超短线", "v7.0 终极智能版", "v8.0 终极进化版 NEW!", "v9.0 中线均衡版 NEW!"],
+                    ["v4.0 长期稳健版", "v5.0 趋势趋势版", "v6.0 高级超短线", "v7.0 智能版", "v8.0 进阶版 ", "v9.0 中线均衡版 "],
                     help="选择要深度回测的策略。v8.0升级：ATR动态风控+市场过滤+凯利仓位；v9.0为中线均衡策略。"
                 )
             
@@ -11673,7 +11673,7 @@ def main():
                                     df, sample_size=sample_size, holding_days=holding_days
                                 )
                             elif "v8.0" in selected_strategy:
-                                #  v8.0 终极进化版回测
+                                #  v8.0 进阶版回测
                                 result = vp_analyzer.backtest_v8_ultimate(
                                     df, sample_size=sample_size, holding_days=holding_days,
                                     score_threshold=score_threshold
@@ -11684,7 +11684,7 @@ def main():
                                     score_threshold=score_threshold
                                 )
                             elif "v7.0" in selected_strategy:
-                                # v7.0 终极智能版回测
+                                # v7.0 智能版回测
                                 result = vp_analyzer.backtest_v7_intelligent(
                                     df, sample_size=sample_size, holding_days=holding_days,
                                     score_threshold=score_threshold  #  传入评分阈值
@@ -12058,7 +12058,7 @@ def main():
     with tab_ai:
         _render_page_header(
             " AI 智能选股",
-            "共识与量化结合 · 高收益捕获 · 稳健风控",
+            "共识与量化结合 · 高效选股 · 稳健风控",
             tag="AI Signal",
         )
 
@@ -12112,7 +12112,7 @@ def main():
             exp_ai.info("""
             ###  V2.0 策略特点
             - **大盘风控**：自动检测上证指数，空头市场自动预警并下调评分
-            - **板块共振**：挖掘"板块集体爆发"个股，提升板块领头羊权重
+            - **板块共振**：挖掘"板块集体趋势"个股，提升板块领头羊权重
             - **乖离率过滤**：自动过滤远离均线 35%+ 的标的，拒绝高位接盘
             - **量价健康度**：多维度校验成交量支撑，确保不是缩量诱多
             
@@ -12181,7 +12181,7 @@ def main():
             )
             min_market_cap, max_market_cap = market_cap_range
         
-        button_text = " 开启 AI 稳健月度目标 (V5.0)" if use_v3 else " 开启 AI 高收益捕获 (V2.0)"
+        button_text = " 开启 AI 稳健月度目标 (V5.0)" if use_v3 else " 开启 AI 高效选股 (V2.0)"
         if st.button(button_text, type="primary", use_container_width=True):
             with st.spinner(f"AI 正在全市场扫描 {'V5.0 稳健月度目标' if use_v3 else 'V2.0 高收益标的'}..."):
                 try:
