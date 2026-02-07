@@ -12576,6 +12576,29 @@ def main():
         # 自动进化状态
         with st.expander("自动进化状态", expanded=False):
             try:
+                # 运行状态与日志
+                status_cols = st.columns(3)
+                lock_path = "/tmp/auto_evolve.lock"
+                log_path = os.path.join(os.path.dirname(__file__), "auto_evolve.log")
+                is_running = os.path.exists(lock_path)
+                with status_cols[0]:
+                    st.metric("运行状态", "运行中" if is_running else "空闲")
+                with status_cols[1]:
+                    st.metric("锁文件", "存在" if os.path.exists(lock_path) else "无")
+                with status_cols[2]:
+                    st.metric("日志文件", "存在" if os.path.exists(log_path) else "无")
+
+                with st.expander("查看最新日志", expanded=False):
+                    if os.path.exists(log_path):
+                        try:
+                            with open(log_path, "r", encoding="utf-8") as f:
+                                lines = f.readlines()[-120:]
+                            st.code("".join(lines))
+                        except Exception as e:
+                            st.warning(f"无法读取日志: {e}")
+                    else:
+                        st.info("未找到自动进化日志文件。")
+
                 evolve_path = os.path.join(os.path.dirname(__file__), "evolution", "last_run.json")
                 if os.path.exists(evolve_path):
                     with open(evolve_path, "r", encoding="utf-8") as f:
