@@ -12588,7 +12588,8 @@ def main():
                 with status_cols[2]:
                     st.metric("日志文件", "存在" if os.path.exists(log_path) else "无")
 
-                with st.expander("查看最新日志", expanded=False):
+                show_logs = st.checkbox("显示最新日志", value=False, key="auto_evolve_show_logs")
+                if show_logs:
                     if os.path.exists(log_path):
                         try:
                             with open(log_path, "r", encoding="utf-8") as f:
