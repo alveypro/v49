@@ -9557,7 +9557,19 @@ def main():
                                 )
                                 
                             else:
-                                st.warning(f"未找到≥{score_threshold_v8}分的股票\n\n**说明：**\nv8.0使用18维度评分+三级市场过滤，标准极其严格。\n\n**建议：**\n1. 降低评分阈值到70分\n2. 检查三级市场过滤状态\n3. 当前可能不是最佳入场时机")
+                                min_thr, _ = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
+                                st.warning(
+                                    f"未找到≥{min_thr}分的股票\n\n**说明：**\n"
+                                    f"v8.0使用18维度评分+三级市场过滤，标准较严格。\n\n"
+                                    f"**建议：**\n1. 降低评分阈值到60-65分\n2. 放宽Top比例或关闭一致性过滤\n3. 当前可能不是最佳入场时机"
+                                )
+                                if 'filter_counts' in locals() and filter_counts:
+                                    st.info(
+                                        f"过滤分布：原始{filter_counts.get('raw', 0)} → "
+                                        f"阈值后{filter_counts.get('after_threshold', 0)} → "
+                                        f"Top后{filter_counts.get('after_top', 0)} → "
+                                        f"一致性后{filter_counts.get('after_consistency', 0)}"
+                                    )
                     
                     except Exception as e:
                         st.error(f"扫描失败: {e}")
