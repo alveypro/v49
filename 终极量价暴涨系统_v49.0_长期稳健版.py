@@ -960,6 +960,35 @@ def _standardize_result_df(df: pd.DataFrame, score_col: str = "综合评分") ->
     return out[cols]
 
 
+def _apply_filter_mode(
+    df: pd.DataFrame,
+    score_col: str,
+    mode: str,
+    threshold: float,
+    top_percent: int,
+) -> pd.DataFrame:
+    if df is None or df.empty or score_col not in df.columns:
+        return df
+    out = df.copy()
+    out["score_val"] = pd.to_numeric(out[score_col], errors="coerce")
+    out = out.dropna(subset=["score_val"])
+    if out.empty:
+        return out
+    if mode == "阈值筛选":
+        out = out[out["score_val"] >= threshold]
+    elif mode == "双重筛选(阈值+Top%)":
+        out = out[out["score_val"] >= threshold]
+        if not out.empty:
+            out = out.sort_values("score_val", ascending=False)
+            keep_n = max(1, int(len(out) * top_percent / 100))
+            out = out.head(keep_n)
+    else:
+        out = out.sort_values("score_val", ascending=False)
+        keep_n = max(1, int(len(out) * top_percent / 100))
+        out = out.head(keep_n)
+    return out.drop(columns=["score_val"])
+
+
 # ===================== 完整的量价分析器（集成v43+v44）=====================
 class CompleteVolumePriceAnalyzer:
     """完整的量价分析器 - 集成所有功能"""
@@ -7162,6 +7191,17 @@ def main():
                     help="扫描所有A股，不限制市值范围",
                     key="scan_all_v4"
                 )
+
+            filter_col1_v4, filter_col2_v4 = st.columns(2)
+            with filter_col1_v4:
+                select_mode_v4 = st.selectbox(
+                    "筛选模式",
+                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
+                    index=0,
+                    key="v4_select_mode"
+                )
+            with filter_col2_v4:
+                top_percent_v4 = st.slider("Top百分比", 1, 10, 2, 1, key="v4_top_percent")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -7308,7 +7348,7 @@ def main():
                                             extra = 0.0
                                             final_score = 0.0
 
-                                        if score_result and final_score >= score_threshold_v4:
+                                        if score_result:
                                             dim_scores = score_result.get('dimension_scores', {})
                                             results.append({
                                                 '股票代码': ts_code,
@@ -7343,11 +7383,26 @@ def main():
                             
                             # 显示结果
                             if results:
-                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v4}分）")
-                                
                                 # 转换为DataFrame
                                 results_df = pd.DataFrame(results)
-                                _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
+                                results_df = _apply_filter_mode(
+                                    results_df,
+                                    score_col="综合评分",
+                                    mode=select_mode_v4,
+                                    threshold=score_threshold_v4,
+                                    top_percent=top_percent_v4
+                                )
+                                if results_df.empty:
+                                    st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
+                                    st.stop()
+
+                                if select_mode_v4 == "阈值筛选":
+                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v4}分）")
+                                elif select_mode_v4 == "双重筛选(阈值+Top%)":
+                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v4}分，Top {top_percent_v4}%（{len(results_df)} 只）")
+                                else:
+                                    st.success(f"选出 Top {top_percent_v4}%（{len(results_df)} 只）")
+
                                 _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
                                 
                                 # 保存到session_state
@@ -7462,7 +7517,7 @@ def main():
                                 )
                                 
                             else:
-                                st.warning(f"未找到≥{score_threshold_v4}分的股票\n\n**建议：**\n1. 降低评分阈值到50-55分\n2. 扩大市值范围\n3. 增加候选股票数量")
+                                st.warning("未找到符合条件的股票，请适当放宽筛选条件")
                     
                     except Exception as e:
                         st.error(f"扫描失败: {e}")
@@ -7645,6 +7700,17 @@ def main():
                     help="建议100-1500亿，中等市值趋势延续能力强",
                     key="cap_max_v5"
                 )
+
+            filter_col1_v5, filter_col2_v5 = st.columns(2)
+            with filter_col1_v5:
+                select_mode_v5 = st.selectbox(
+                    "筛选模式",
+                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
+                    index=0,
+                    key="v5_select_mode"
+                )
+            with filter_col2_v5:
+                top_percent_v5 = st.slider("Top百分比", 1, 10, 2, 1, key="v5_top_percent")
             
             st.info("v5.0策略将扫描所有符合市值条件的股票（无数量限制）")
             evo_hold = evolve_v5_core.get("params", {}).get("holding_days")
@@ -7735,7 +7801,7 @@ def main():
                                             extra = 0.0
                                             final_score = 0.0
 
-                                        if score_result and final_score >= score_threshold_v5:
+                                        if score_result:
                                             dim_scores = score_result.get('dimension_scores', {})
                                             results.append({
                                                 '股票代码': ts_code,
@@ -7770,10 +7836,26 @@ def main():
                             
                             # 显示结果
                             if results:
-                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v5}分）")
-                                
-                                # 转换为DataFrame
                                 results_df = pd.DataFrame(results)
+                                results_df = _apply_filter_mode(
+                                    results_df,
+                                    score_col="综合评分",
+                                    mode=select_mode_v5,
+                                    threshold=score_threshold_v5,
+                                    top_percent=top_percent_v5
+                                )
+                                if results_df.empty:
+                                    st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
+                                    st.stop()
+
+                                if select_mode_v5 == "阈值筛选":
+                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v5}分）")
+                                elif select_mode_v5 == "双重筛选(阈值+Top%)":
+                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v5}分，Top {top_percent_v5}%（{len(results_df)} 只）")
+                                else:
+                                    st.success(f"选出 Top {top_percent_v5}%（{len(results_df)} 只）")
+                                
+                                results_df = results_df.reset_index(drop=True)
                                 
                                 # 保存到session_state
                                 st.session_state['v5_scan_results'] = results_df
@@ -7996,6 +8078,17 @@ def main():
                     help="扫描所有A股，不限制市值范围",
                     key="scan_all_v6_tab1"
                 )
+
+            filter_col1_v6, filter_col2_v6 = st.columns(2)
+            with filter_col1_v6:
+                select_mode_v6 = st.selectbox(
+                    "筛选模式",
+                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
+                    index=0,
+                    key="v6_select_mode_tab1"
+                )
+            with filter_col2_v6:
+                top_percent_v6 = st.slider("Top百分比", 1, 10, 2, 1, key="v6_top_percent_tab1")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -8105,7 +8198,7 @@ def main():
                                             extra = 0.0
                                             final_score = 0.0
 
-                                        if score_result and final_score >= score_threshold_v6_tab1:
+                                        if score_result:
                                             dim_scores = score_result.get('dimension_scores', {})
                                             results.append({
                                                 '股票代码': ts_code,
@@ -8157,10 +8250,26 @@ def main():
                                          delta=f"{len(results)/len(stocks_df)*100:.2f}%")
                             
                             if results:
-                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v6_tab1}分）")
-                                
-                                # 转换为DataFrame
                                 results_df = pd.DataFrame(results)
+                                results_df = _apply_filter_mode(
+                                    results_df,
+                                    score_col="综合评分",
+                                    mode=select_mode_v6,
+                                    threshold=score_threshold_v6_tab1,
+                                    top_percent=top_percent_v6
+                                )
+                                if results_df.empty:
+                                    st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
+                                    st.stop()
+
+                                if select_mode_v6 == "阈值筛选":
+                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v6_tab1}分）")
+                                elif select_mode_v6 == "双重筛选(阈值+Top%)":
+                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v6_tab1}分，Top {top_percent_v6}%（{len(results_df)} 只）")
+                                else:
+                                    st.success(f"选出 Top {top_percent_v6}%（{len(results_df)} 只）")
+                                
+                                results_df = results_df.reset_index(drop=True)
                                 _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
                                 
                                 # 保存到session_state
@@ -8341,6 +8450,17 @@ def main():
                     help="显示市场环境、行业轮动等信息",
                     key="show_details_v7_tab1"
                 )
+
+            filter_col1_v7, filter_col2_v7 = st.columns(2)
+            with filter_col1_v7:
+                select_mode_v7 = st.selectbox(
+                    "筛选模式",
+                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
+                    index=0,
+                    key="v7_select_mode_tab1"
+                )
+            with filter_col2_v7:
+                top_percent_v7 = st.slider("Top百分比", 1, 10, 2, 1, key="v7_top_percent_tab1")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -8481,9 +8601,8 @@ def main():
                                             bonus_industry_map,
                                         )
                                         final_score = float(score_result['final_score']) + extra
-                                        if final_score >= score_threshold_v7:
-                                            dim_scores = score_result.get('dimension_scores', {})
-                                            results.append({
+                                        dim_scores = score_result.get('dimension_scores', {})
+                                        results.append({
                                                 '股票代码': ts_code,
                                                 '股票名称': stock_name,
                                                 '行业': industry,
@@ -8525,10 +8644,26 @@ def main():
                                          delta=f"{len(results)/len(stocks_df)*100:.2f}%")
                             
                             if results:
-                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v7}分）")
-                                
-                                # 转换为DataFrame
                                 results_df = pd.DataFrame(results)
+                                results_df = _apply_filter_mode(
+                                    results_df,
+                                    score_col="综合评分",
+                                    mode=select_mode_v7,
+                                    threshold=score_threshold_v7,
+                                    top_percent=top_percent_v7
+                                )
+                                if results_df.empty:
+                                    st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
+                                    st.stop()
+
+                                if select_mode_v7 == "阈值筛选":
+                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v7}分）")
+                                elif select_mode_v7 == "双重筛选(阈值+Top%)":
+                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v7}分，Top {top_percent_v7}%（{len(results_df)} 只）")
+                                else:
+                                    st.success(f"选出 Top {top_percent_v7}%（{len(results_df)} 只）")
+                                
+                                results_df = results_df.reset_index(drop=True)
                                 _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
                             
                                 # 保存到session_state
@@ -8713,6 +8848,17 @@ def main():
                     help="显示凯利公式计算的最优仓位",
                     key="enable_kelly_v8_tab1"
                 )
+
+            filter_col1_v8, filter_col2_v8 = st.columns(2)
+            with filter_col1_v8:
+                select_mode_v8 = st.selectbox(
+                    "筛选模式",
+                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
+                    index=0,
+                    key="v8_select_mode_tab1"
+                )
+            with filter_col2_v8:
+                top_percent_v8 = st.slider("Top百分比", 1, 10, 2, 1, key="v8_top_percent_tab1")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -8936,63 +9082,61 @@ def main():
                                             bonus_industry_map,
                                         )
                                         final_score = float(score_result['final_score']) + extra
-                                        min_thr, max_thr = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
-                                        if min_thr <= final_score <= max_thr:
-                                            # 计算凯利仓位（如果启用）
-                                            kelly_position = ""
-                                            if enable_kelly and 'win_rate' in score_result and 'win_loss_ratio' in score_result:
-                                                kelly_pct = vp_analyzer.evaluator_v8._calculate_kelly_position(
-                                                    score_result['win_rate'],
-                                                    score_result['win_loss_ratio']
-                                                )
-                                                kelly_position = f"{kelly_pct*100:.1f}%"
-                                            
-                                            close_col = 'close_price' if 'close_price' in stock_data.columns else 'close'
-                                            latest_price = stock_data[close_col].iloc[-1]
-                                            
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': industry,
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{final_score:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '资金加分': f"{extra:.1f}",
-                                                '星级': f"{score_result.get('star_rating', 0)}⭐" if score_result.get('star_rating', 0) else "-",
-                                                '建议仓位': f"{score_result.get('position_suggestion', 0)*100:.0f}%" if score_result.get('position_suggestion') else "-",
-                                                '预期胜率': f"{score_result.get('win_rate', 0)*100:.1f}%" if 'win_rate' in score_result else "-",
-                                                '盈亏比': f"{score_result.get('win_loss_ratio', 0):.2f}" if 'win_loss_ratio' in score_result else "-",
-                                                '凯利仓位': kelly_position if enable_kelly else "-",
-                                                '最新价格': f"{latest_price:.2f}元",
-                                                'ATR值': f"{score_result.get('atr_stops', {}).get('atr_value', 0):.2f}" if score_result.get('atr_stops') else "-",
-                                                'ATR止损': (
-                                                    f"{score_result.get('atr_stops', {}).get('stop_loss', 0):.2f}元"
-                                                    if score_result.get('atr_stops') and score_result['atr_stops'].get('stop_loss') is not None
-                                                    else "-"
-                                                ),
-                                                'ATR止盈': (
-                                                    f"{score_result.get('atr_stops', {}).get('take_profit', 0):.2f}元"
-                                                    if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit') is not None
-                                                    else "-"
-                                                ),
-                                                'ATR移动止损': (
-                                                    f"{score_result.get('atr_stops', {}).get('trailing_stop', 0):.2f}元"
-                                                    if score_result.get('atr_stops') and score_result['atr_stops'].get('trailing_stop') is not None
-                                                    else "-"
-                                                ),
-                                                '止损幅度%': (
-                                                    f"{score_result.get('atr_stops', {}).get('stop_loss_pct', 0):.2f}%"
-                                                    if score_result.get('atr_stops') and score_result['atr_stops'].get('stop_loss_pct') is not None
-                                                    else "-"
-                                                ),
-                                                '止盈幅度%': (
-                                                    f"{score_result.get('atr_stops', {}).get('take_profit_pct', 0):.2f}%"
-                                                    if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit_pct') is not None
-                                                    else "-"
-                                                ),
-                                                '筛选理由': score_result.get('description', ''),
-                                                '原始数据': score_result
-                                            })
+                                        # 计算凯利仓位（如果启用）
+                                        kelly_position = ""
+                                        if enable_kelly and 'win_rate' in score_result and 'win_loss_ratio' in score_result:
+                                            kelly_pct = vp_analyzer.evaluator_v8._calculate_kelly_position(
+                                                score_result['win_rate'],
+                                                score_result['win_loss_ratio']
+                                            )
+                                            kelly_position = f"{kelly_pct*100:.1f}%"
+                                        
+                                        close_col = 'close_price' if 'close_price' in stock_data.columns else 'close'
+                                        latest_price = stock_data[close_col].iloc[-1]
+                                        
+                                        results.append({
+                                            '股票代码': ts_code,
+                                            '股票名称': stock_name,
+                                            '行业': industry,
+                                            '流通市值': f"{row['circ_mv']/10000:.1f}亿",
+                                            '综合评分': f"{final_score:.1f}",
+                                            '评级': score_result.get('grade', '-'),
+                                            '资金加分': f"{extra:.1f}",
+                                            '星级': f"{score_result.get('star_rating', 0)}⭐" if score_result.get('star_rating', 0) else "-",
+                                            '建议仓位': f"{score_result.get('position_suggestion', 0)*100:.0f}%" if score_result.get('position_suggestion') else "-",
+                                            '预期胜率': f"{score_result.get('win_rate', 0)*100:.1f}%" if 'win_rate' in score_result else "-",
+                                            '盈亏比': f"{score_result.get('win_loss_ratio', 0):.2f}" if 'win_loss_ratio' in score_result else "-",
+                                            '凯利仓位': kelly_position if enable_kelly else "-",
+                                            '最新价格': f"{latest_price:.2f}元",
+                                            'ATR值': f"{score_result.get('atr_stops', {}).get('atr_value', 0):.2f}" if score_result.get('atr_stops') else "-",
+                                            'ATR止损': (
+                                                f"{score_result.get('atr_stops', {}).get('stop_loss', 0):.2f}元"
+                                                if score_result.get('atr_stops') and score_result['atr_stops'].get('stop_loss') is not None
+                                                else "-"
+                                            ),
+                                            'ATR止盈': (
+                                                f"{score_result.get('atr_stops', {}).get('take_profit', 0):.2f}元"
+                                                if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit') is not None
+                                                else "-"
+                                            ),
+                                            'ATR移动止损': (
+                                                f"{score_result.get('atr_stops', {}).get('trailing_stop', 0):.2f}元"
+                                                if score_result.get('atr_stops') and score_result['atr_stops'].get('trailing_stop') is not None
+                                                else "-"
+                                            ),
+                                            '止损幅度%': (
+                                                f"{score_result.get('atr_stops', {}).get('stop_loss_pct', 0):.2f}%"
+                                                if score_result.get('atr_stops') and score_result['atr_stops'].get('stop_loss_pct') is not None
+                                                else "-"
+                                            ),
+                                            '止盈幅度%': (
+                                                f"{score_result.get('atr_stops', {}).get('take_profit_pct', 0):.2f}%"
+                                                if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit_pct') is not None
+                                                else "-"
+                                            ),
+                                            '筛选理由': score_result.get('description', ''),
+                                            '原始数据': score_result
+                                        })
                                 
                                 except Exception as e:
                                     logger.warning(f"评分失败 {ts_code}: {e}")
@@ -9015,9 +9159,24 @@ def main():
                             with col3:
                                 st.metric("最终推荐", f"{len(results)}只",
                                          delta=f"{len(results)/len(stocks_df)*100:.2f}%")
-                            
+
+                            results_df = pd.DataFrame(results) if results else pd.DataFrame()
+                            if not results_df.empty:
+                                min_thr, max_thr = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
+                                results_df = _apply_filter_mode(
+                                    results_df,
+                                    score_col="综合评分",
+                                    mode=select_mode_v8,
+                                    threshold=min_thr,
+                                    top_percent=top_percent_v8
+                                )
+
+                            if results and results_df.empty:
+                                st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
+                                st.stop()
+
                             # 分布提示 & 一键推荐阈值
-                            if len(results) > 0:
+                            if len(results) > 0 and not results_df.empty:
                                 try:
                                     dist_scores = results_df['综合评分'].astype(float)
                                     avg_score = dist_scores.mean()
@@ -9036,11 +9195,13 @@ def main():
                                 except Exception:
                                     pass
                             
-                            if results:
-                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v8}分）")
-                                
-                                # 转换为DataFrame
-                                results_df = pd.DataFrame(results)
+                            if results and not results_df.empty:
+                                if select_mode_v8 == "阈值筛选":
+                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v8}分）")
+                                elif select_mode_v8 == "双重筛选(阈值+Top%)":
+                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v8}分，Top {top_percent_v8}%（{len(results_df)} 只）")
+                                else:
+                                    st.success(f"选出 Top {top_percent_v8}%（{len(results_df)} 只）")
                                 _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
                                 
                                 # 保存到session_state
@@ -9897,6 +10058,17 @@ def main():
                     help="超短线聚焦中大市值龙头",
                     key="cap_max_v6"
                 )
+
+            filter_col1_v6b, filter_col2_v6b = st.columns(2)
+            with filter_col1_v6b:
+                select_mode_v6b = st.selectbox(
+                    "筛选模式",
+                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
+                    index=0,
+                    key="v6_select_mode"
+                )
+            with filter_col2_v6b:
+                top_percent_v6b = st.slider("Top百分比", 1, 10, 2, 1, key="v6_top_percent")
             
             # v6.0数据依赖说明
             st.warning("""
@@ -9995,7 +10167,7 @@ def main():
                                             extra = 0.0
                                             final_score = 0.0
 
-                                        if score_result and final_score >= score_threshold_v6:
+                                        if score_result:
                                             dim_scores = score_result.get('dim_scores', {})
                                             results.append({
                                                 '股票代码': ts_code,
@@ -10030,10 +10202,26 @@ def main():
                             
                             # 显示结果
                             if results:
-                                st.success(f"找到 {len(results)} 只符合条件的股票（≥{score_threshold_v6}分）")
-                                
-                                # 转换为DataFrame
                                 results_df = pd.DataFrame(results)
+                                results_df = _apply_filter_mode(
+                                    results_df,
+                                    score_col="综合评分",
+                                    mode=select_mode_v6b,
+                                    threshold=score_threshold_v6,
+                                    top_percent=top_percent_v6b
+                                )
+                                if results_df.empty:
+                                    st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
+                                    st.stop()
+
+                                if select_mode_v6b == "阈值筛选":
+                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v6}分）")
+                                elif select_mode_v6b == "双重筛选(阈值+Top%)":
+                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v6}分，Top {top_percent_v6b}%（{len(results_df)} 只）")
+                                else:
+                                    st.success(f"选出 Top {top_percent_v6b}%（{len(results_df)} 只）")
+                                
+                                results_df = results_df.reset_index(drop=True)
                                 
                                 # 保存到session_state
                                 st.session_state['v6_scan_results'] = results_df
@@ -12114,6 +12302,25 @@ def main():
             top_n_default = 25 if use_v3 else 30
             top_n = st.slider("优选推荐数量", 5, 100, top_n_default, 5, key="ai_top_n_v3")
 
+        filter_ai_col1, filter_ai_col2, filter_ai_col3 = st.columns(3)
+        with filter_ai_col1:
+            select_mode_ai = st.selectbox(
+                "筛选模式",
+                ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
+                index=0,
+                key="ai_select_mode"
+            )
+        with filter_ai_col2:
+            score_threshold_ai = st.slider("评分阈值", 30, 90, 60, 5, key="ai_score_threshold")
+        with filter_ai_col3:
+            top_percent_ai = st.slider("Top百分比", 1, 10, 2, 1, key="ai_top_percent")
+
+        adj_ai_col1, adj_ai_col2 = st.columns(2)
+        with adj_ai_col1:
+            market_adjust_strength_ai = st.slider("市场状态调节强度", 0.0, 1.0, 0.5, 0.05, key="ai_market_strength")
+        with adj_ai_col2:
+            disagree_std_weight_ai = st.slider("分歧惩罚强度", 0.0, 1.5, 0.35, 0.05, key="ai_disagree_weight")
+
         with st.expander("市值筛选（可选）", expanded=False):
             if use_v3:
                 evo_min_mc = evolve_v5.get("params", {}).get("min_market_cap")
@@ -12176,6 +12383,51 @@ def main():
                             version_name = "V2.0"
                         
                         if not stocks.empty:
+                            stocks = stocks.copy()
+                            if "评分" in stocks.columns:
+                                stocks["评分"] = pd.to_numeric(stocks["评分"], errors="coerce")
+                            stocks = stocks.dropna(subset=["评分"]) if "评分" in stocks.columns else stocks
+
+                            market_env_ai = "oscillation"
+                            try:
+                                market_env_ai = vp_analyzer.get_market_environment()
+                            except Exception:
+                                market_env_ai = "oscillation"
+                            env_multiplier = 1.0
+                            if market_env_ai == "bull":
+                                env_multiplier = 1.02
+                            elif market_env_ai == "bear":
+                                env_multiplier = 0.95
+                            else:
+                                env_multiplier = 0.98
+                            adj_factor = 1.0 - market_adjust_strength_ai + (market_adjust_strength_ai * env_multiplier)
+                            if "评分" in stocks.columns:
+                                stocks["评分"] = stocks["评分"] * adj_factor
+
+                            penalty_cols = ["20日涨幅%", "5日涨幅%", "回撤%", "波动率%", "放量倍数"]
+                            present_cols = [c for c in penalty_cols if c in stocks.columns]
+                            if present_cols:
+                                numeric_block = stocks[present_cols].apply(pd.to_numeric, errors="coerce")
+                                penalty = numeric_block.std(axis=1, ddof=0).fillna(0)
+                                stocks["分歧惩罚"] = (penalty * disagree_std_weight_ai).round(2)
+                            else:
+                                stocks["分歧惩罚"] = 0.0
+                            stocks["市场因子"] = round(adj_factor, 2)
+                            if "评分" in stocks.columns:
+                                stocks["评分"] = (stocks["评分"] - stocks["分歧惩罚"]).round(2)
+
+                            if "评分" in stocks.columns:
+                                stocks = _apply_filter_mode(
+                                    stocks,
+                                    score_col="评分",
+                                    mode=select_mode_ai,
+                                    threshold=score_threshold_ai,
+                                    top_percent=top_percent_ai
+                                )
+                            if stocks.empty:
+                                st.error("AI 未找到符合筛选条件的标的，请放宽阈值或筛选比例")
+                                st.stop()
+
                             st.session_state[session_key] = stocks
                             st.session_state['ai_strategy_version'] = version_name
                             st.success(f"{version_name} 扫描完成：找到 {len(stocks)} 只{'综合潜力' if use_v3 else '高收益潜力'}标的")
