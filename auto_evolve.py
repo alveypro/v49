@@ -17,7 +17,9 @@ import os
 import sqlite3
 import subprocess
 import sys
+import time
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -40,45 +42,107 @@ LOCK_PATH = "/tmp/auto_evolve.lock"
 SSE_INDEX_CODE = "000001.SH"
 
 
+def _fetch_trade_cal_with_retry(
+    pro: ts.pro_api,
+    start_date: str,
+    end_date: str,
+    is_open: str | None = None,
+    retries: int = 3,
+    retry_sleep_seconds: float = 0.6,
+) -> pd.DataFrame:
+    """Fetch trade calendar with retries to reduce transient network failures."""
+    last_error = None
+    for attempt in range(retries):
+        try:
+            kwargs = {"exchange": "SSE", "start_date": start_date, "end_date": end_date}
+            if is_open is not None:
+                kwargs["is_open"] = is_open
+            trade_cal = pro.trade_cal(**kwargs)
+            if trade_cal is not None:
+                return trade_cal
+        except Exception as e:
+            last_error = e
+        if attempt < retries - 1:
+            time.sleep(retry_sleep_seconds * (attempt + 1))
+    if last_error:
+        LOGGER.warning("trade_cal fetch failed after retries: %s", last_error)
+    return pd.DataFrame()
+
+
 def _get_last_trade_date(pro: ts.pro_api) -> str | None:
     """Get last open trade date from SSE calendar."""
-    end_date = datetime.now().strftime("%Y%m%d")
-    start_date = (datetime.now() - timedelta(days=20)).strftime("%Y%m%d")
+    cn_now = _get_cn_now()
+    end_date = cn_now.strftime("%Y%m%d")
+    start_date = (cn_now - timedelta(days=20)).strftime("%Y%m%d")
     try:
-        trade_cal = pro.trade_cal(exchange="SSE", start_date=start_date, end_date=end_date, is_open="1")
+        trade_cal = _fetch_trade_cal_with_retry(pro, start_date, end_date, is_open="1")
         if trade_cal is None or trade_cal.empty:
-            return None
+            return _infer_last_trade_date()
         return trade_cal["cal_date"].iloc[-1]
     except Exception:
-        return None
+        return _infer_last_trade_date()
+
+
+def _get_cn_now() -> datetime:
+    """Return current time in Asia/Shanghai, fallback to local time if zoneinfo unavailable."""
+    try:
+        return datetime.now(ZoneInfo("Asia/Shanghai"))
+    except Exception:
+        return datetime.now()
+
+
+def _previous_weekday(d: datetime) -> datetime:
+    """Move back to the most recent weekday (Mon-Fri)."""
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def _infer_last_trade_date() -> str:
+    """Infer last trade date when trade calendar is unavailable."""
+    cn_now = _get_cn_now()
+    if cn_now.weekday() >= 5:
+        return _previous_weekday(cn_now).strftime("%Y%m%d")
+    # If it's a trading day but before close, assume last trade was previous weekday.
+    if cn_now.hour < 16:
+        return _previous_weekday(cn_now - timedelta(days=1)).strftime("%Y%m%d")
+    return cn_now.strftime("%Y%m%d")
 
 
 def _get_db_latest_trade_date(db_path: str) -> str | None:
     try:
         conn = _connect(db_path)
-        df = pd.read_sql_query(
+        # Prefer the newer one between SSE index and overall max trade_date.
+        df_idx = pd.read_sql_query(
             f"SELECT MAX(trade_date) AS max_date FROM daily_trading_data WHERE ts_code = '{SSE_INDEX_CODE}'",
             conn,
         )
+        idx_max = str(df_idx["max_date"].iloc[0]) if (df_idx is not None and not df_idx.empty and df_idx["max_date"].iloc[0]) else None
+
+        df_all = pd.read_sql_query("SELECT MAX(trade_date) AS max_date FROM daily_trading_data", conn)
         conn.close()
-        if df is None or df.empty:
+        if df_all is None or df_all.empty:
             return None
-        return str(df["max_date"].iloc[0]) if df["max_date"].iloc[0] else None
+        all_max = str(df_all["max_date"].iloc[0]) if df_all["max_date"].iloc[0] else None
+        if idx_max and all_max:
+            return max(idx_max, all_max)
+        return idx_max or all_max
     except Exception:
         return None
 
 
 def _get_recent_trade_date(pro: ts.pro_api, lookback_days: int = 30) -> str | None:
     """Get most recent open trade date within lookback window."""
-    end_date = datetime.now().strftime("%Y%m%d")
-    start_date = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y%m%d")
+    cn_now = _get_cn_now()
+    end_date = cn_now.strftime("%Y%m%d")
+    start_date = (cn_now - timedelta(days=lookback_days)).strftime("%Y%m%d")
     try:
-        trade_cal = pro.trade_cal(exchange="SSE", start_date=start_date, end_date=end_date, is_open="1")
+        trade_cal = _fetch_trade_cal_with_retry(pro, start_date, end_date, is_open="1")
         if trade_cal is None or trade_cal.empty:
-            return None
+            return _infer_last_trade_date()
         return trade_cal["cal_date"].iloc[-1]
     except Exception:
-        return None
+        return _infer_last_trade_date()
 
 
 def _get_recent_trade_dates_from_db(db_path: str, limit: int = 8) -> List[str]:
@@ -96,6 +160,27 @@ def _get_recent_trade_dates_from_db(db_path: str, limit: int = 8) -> List[str]:
         return [str(r) for r in rows]
     except Exception:
         return []
+
+
+def _is_trade_day(pro: ts.pro_api, date_str: str) -> bool:
+    try:
+        cal = _fetch_trade_cal_with_retry(pro, date_str, date_str, retries=3, retry_sleep_seconds=0.4)
+        if cal is None or cal.empty:
+            # Fallback: avoid false red caused by transient calendar API issues.
+            try:
+                inferred = _infer_last_trade_date()
+                return inferred == date_str
+            except Exception:
+                return False
+        return str(cal["is_open"].iloc[0]) == "1"
+    except Exception:
+        return False
+
+
+def _get_data_ready_time(cn_now: datetime) -> datetime:
+    close_hour = int(os.getenv("TRADE_CLOSE_HOUR", "15"))
+    delay_hours = int(os.getenv("DATA_READY_DELAY_HOURS", "3"))
+    return cn_now.replace(hour=close_hour + delay_hours, minute=0, second=0, microsecond=0)
 
 
 def _pick_best_trade_date(
@@ -123,15 +208,30 @@ def _pick_best_trade_date(
     return None, pd.DataFrame()
 
 
-def _is_data_fresh(db_path: str) -> Tuple[bool, str | None, str | None]:
-    """Check if DB latest trade date matches exchange last trade date."""
+def _data_freshness_status(db_path: str) -> Tuple[bool, bool, str | None, str | None, bool, str | None]:
+    """Return (fresh, enforce, db_last, last_trade, is_trade_day, ready_time_str)."""
     token = _load_tushare_token()
     if not token:
-        return False, None, None
+        return False, True, None, None, False, None
     pro = ts.pro_api(token)
+    cn_now = _get_cn_now()
+    today = cn_now.strftime("%Y%m%d")
+    is_trade_day = _is_trade_day(pro, today)
+    ready_time = _get_data_ready_time(cn_now)
     last_trade = _get_last_trade_date(pro)
     db_last = _get_db_latest_trade_date(db_path)
-    return (last_trade is not None and db_last == last_trade), db_last, last_trade
+    if db_last is None:
+        return False, True, db_last, last_trade, is_trade_day, ready_time.strftime("%Y-%m-%d %H:%M")
+    # Allow DB to be ahead when trade_cal is delayed.
+    if last_trade is None:
+        return True, False, db_last, last_trade, is_trade_day, ready_time.strftime("%Y-%m-%d %H:%M")
+    fresh = db_last >= last_trade
+    # Enforce freshness only after data is expected to be ready (trade day + close + delay).
+    if is_trade_day and cn_now >= ready_time:
+        enforce = True
+    else:
+        enforce = False
+    return fresh, enforce, db_last, last_trade, is_trade_day, ready_time.strftime("%Y-%m-%d %H:%M")
 
 
 def _ensure_table(conn: sqlite3.Connection, ddl: str) -> None:
@@ -543,6 +643,60 @@ def _setup_logger() -> logging.Logger:
 LOGGER = _setup_logger()
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        val = os.getenv(name)
+        return int(val) if val is not None and val != "" else default
+    except Exception:
+        return default
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _get_evolve_settings() -> Dict[str, int | bool]:
+    fast = _env_bool("EVOLVE_FAST", False)
+    max_seconds = _env_int("EVOLVE_MAX_SECONDS", 900 if fast else 0)
+    log_every = _env_int("EVOLVE_LOG_EVERY", 5 if fast else 10)
+    return {
+        "fast": fast,
+        "max_seconds": max_seconds,
+        "log_every": max(1, log_every),
+        "sample_v4": _env_int("EVOLVE_SAMPLE_SIZE", 300 if fast else 800),
+        "sample_v5": _env_int("EVOLVE_SAMPLE_SIZE_V5", 400 if fast else 1200),
+        "sample_v6": _env_int("EVOLVE_SAMPLE_SIZE_V6", 400 if fast else 1200),
+        "sample_v7": _env_int("EVOLVE_SAMPLE_SIZE_V7", 250 if fast else 600),
+        "sample_v8": _env_int("EVOLVE_SAMPLE_SIZE_V8", 250 if fast else 500),
+        "sample_stable": _env_int("EVOLVE_SAMPLE_SIZE_STABLE", 200 if fast else 400),
+        "sample_ai": _env_int("EVOLVE_SAMPLE_SIZE_AI", 200 if fast else 400),
+    }
+
+
+EVOLVE_SETTINGS = _get_evolve_settings()
+
+
+def _evolve_targets() -> set[str]:
+    targets = {"v4", "ai_v5", "ai_v2", "v5", "v6", "v7", "v8", "v9", "stable"}
+    only = os.getenv("EVOLVE_ONLY", "").strip()
+    exclude = os.getenv("EVOLVE_EXCLUDE", "").strip()
+    if only:
+        targets = {t.strip().lower() for t in only.split(",") if t.strip()}
+    if exclude:
+        targets = {t for t in targets if t not in {x.strip().lower() for x in exclude.split(",") if x.strip()}}
+    return targets
+
+
+def _run_phase() -> str:
+    phase = (os.getenv("AUTO_EVOLVE_PHASE", "full") or "full").strip().lower()
+    if phase not in {"full", "data_only", "optimize_only"}:
+        return "full"
+    return phase
+
+
 def _load_config() -> Dict:
     if not os.path.exists(CONFIG_PATH):
         return {}
@@ -584,14 +738,16 @@ def _update_stock_data(db_path: str, days: int = 30) -> Dict:
     start_date = (datetime.now() - timedelta(days=days + 10)).strftime("%Y%m%d")
 
     try:
-        trade_cal = pro.trade_cal(exchange="SSE", start_date=start_date, end_date=end_date, is_open="1")
+        trade_cal = _fetch_trade_cal_with_retry(pro, start_date, end_date, is_open="1")
     except Exception:
-        return {"success": False, "error": "failed to fetch trade calendar"}
+        trade_cal = pd.DataFrame()
 
-    if trade_cal.empty:
-        return {"success": False, "error": "empty trade calendar"}
-
-    trade_dates = trade_cal["cal_date"].tolist()[-days:]
+    if trade_cal is None or trade_cal.empty:
+        fallback_date = _infer_last_trade_date()
+        trade_dates = [fallback_date]
+        LOGGER.warning("trade calendar unavailable, fallback to inferred trade date: %s", fallback_date)
+    else:
+        trade_dates = trade_cal["cal_date"].tolist()[-days:]
 
     conn = _connect(db_path)
     cur = conn.cursor()
@@ -807,23 +963,40 @@ def _grid_search(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
     evaluator = ComprehensiveStockEvaluatorV4()
     np.random.seed(42)
 
-    thresholds = [55, 60, 65, 70]
-    max_holding_days = [10, 15, 20]
-    stop_losses = [-6.0, -5.0, -4.0]
-    take_profits = [6.0, 8.0, 10.0]
+    if EVOLVE_SETTINGS.get("fast"):
+        thresholds = [60, 65]
+        max_holding_days = [10, 15]
+        stop_losses = [-6.0, -5.0]
+        take_profits = [6.0, 8.0]
+    else:
+        thresholds = [55, 60, 65, 70]
+        max_holding_days = [10, 15, 20]
+        stop_losses = [-6.0, -5.0, -4.0]
+        take_profits = [6.0, 8.0, 10.0]
 
     best_params = {}
     best_stats = {}
     best_score = -1e9
+    start_ts = datetime.now().timestamp()
+    max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
+    log_every = int(EVOLVE_SETTINGS.get("log_every", 10))
+    total = len(thresholds) * len(max_holding_days) * len(stop_losses) * len(take_profits)
+    tried = 0
+    stop_early = False
 
     for threshold in thresholds:
         for hold_days in max_holding_days:
             for stop_loss in stop_losses:
                 for take_profit in take_profits:
+                    if max_seconds > 0 and (datetime.now().timestamp() - start_ts) > max_seconds:
+                        stop_early = True
+                        LOGGER.warning("grid search v4 time limit reached (%ss), returning best so far", max_seconds)
+                        break
+                    tried += 1
                     result = backtest_with_dynamic_strategy(
                         evaluator,
                         df,
-                        sample_size=800,
+                        sample_size=int(EVOLVE_SETTINGS.get("sample_v4", 800)),
                         score_threshold=threshold,
                         max_holding_days=hold_days,
                         stop_loss_pct=stop_loss,
@@ -843,6 +1016,16 @@ def _grid_search(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
                         }
                         best_stats = stats
                         LOGGER.info("new best score=%.3f params=%s", best_score, best_params)
+                    if tried % log_every == 0:
+                        elapsed = int(datetime.now().timestamp() - start_ts)
+                        LOGGER.info("grid v4 progress: %s/%s combos, elapsed=%ss, best=%.3f",
+                                    tried, total, elapsed, best_score)
+                if stop_early:
+                    break
+            if stop_early:
+                break
+        if stop_early:
+            break
 
     return best_params, best_stats, best_score
 
@@ -1112,7 +1295,7 @@ def _backtest_simple_v5(df: pd.DataFrame, score_threshold: float, holding_days: 
     evaluator = ComprehensiveStockEvaluatorV4()
     returns = []
     unique_stocks = df["ts_code"].unique()
-    sample_size = min(1200, len(unique_stocks))
+    sample_size = min(int(EVOLVE_SETTINGS.get("sample_v5", 1200)), len(unique_stocks))
     if len(unique_stocks) > sample_size:
         np.random.seed(42)
         sample_stocks = np.random.choice(unique_stocks, sample_size, replace=False)
@@ -1143,7 +1326,7 @@ def _backtest_simple_v6(df: pd.DataFrame, score_threshold: float, holding_days: 
     evaluator = ComprehensiveStockEvaluatorV6Ultimate()
     returns = []
     unique_stocks = df["ts_code"].unique()
-    sample_size = min(1200, len(unique_stocks))
+    sample_size = min(int(EVOLVE_SETTINGS.get("sample_v6", 1200)), len(unique_stocks))
     if len(unique_stocks) > sample_size:
         np.random.seed(42)
         sample_stocks = np.random.choice(unique_stocks, sample_size, replace=False)
@@ -1175,7 +1358,7 @@ def _backtest_simple_v7(df: pd.DataFrame, score_threshold: float, holding_days: 
     evaluator.reset_cache()
     returns = []
     unique_stocks = df[["ts_code", "industry"]].drop_duplicates()
-    sample_size = min(600, len(unique_stocks))
+    sample_size = min(int(EVOLVE_SETTINGS.get("sample_v7", 600)), len(unique_stocks))
     if len(unique_stocks) > sample_size:
         unique_stocks = unique_stocks.sample(n=sample_size, random_state=42)
     for row in unique_stocks.itertuples(index=False):
@@ -1205,7 +1388,7 @@ def _backtest_simple_v8(df: pd.DataFrame, score_threshold: float, holding_days: 
     evaluator = ComprehensiveStockEvaluatorV8Ultimate(db_path)
     returns = []
     unique_stocks = df[["ts_code", "industry"]].drop_duplicates()
-    sample_size = min(500, len(unique_stocks))
+    sample_size = min(int(EVOLVE_SETTINGS.get("sample_v8", 500)), len(unique_stocks))
     if len(unique_stocks) > sample_size:
         unique_stocks = unique_stocks.sample(n=sample_size, random_state=42)
     for row in unique_stocks.itertuples(index=False):
@@ -1235,13 +1418,30 @@ def _grid_search_v5(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
     thresholds = [50, 55, 60, 65]
     holding_days = [5, 10, 15]
     best_params, best_stats, best_score = {}, {}, -1e9
+    start_ts = datetime.now().timestamp()
+    max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
+    log_every = int(EVOLVE_SETTINGS.get("log_every", 10))
+    total = len(thresholds) * len(holding_days)
+    tried = 0
+    stop_early = False
     for thr in thresholds:
         for hd in holding_days:
+            if max_seconds > 0 and (datetime.now().timestamp() - start_ts) > max_seconds:
+                stop_early = True
+                LOGGER.warning("grid search v5 time limit reached (%ss), returning best so far", max_seconds)
+                break
+            tried += 1
             stats = _backtest_simple_v5(df, thr, hd)
             score = _score_result(stats)
             if score > best_score:
                 best_score, best_params, best_stats = score, {"score_threshold": thr, "holding_days": hd}, stats
                 LOGGER.info("v5 best score=%.3f params=%s", best_score, best_params)
+            if tried % log_every == 0:
+                elapsed = int(datetime.now().timestamp() - start_ts)
+                LOGGER.info("grid v5 progress: %s/%s combos, elapsed=%ss, best=%.3f",
+                            tried, total, elapsed, best_score)
+        if stop_early:
+            break
     return best_params, best_stats, best_score
 
 
@@ -1249,13 +1449,30 @@ def _grid_search_v6(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
     thresholds = [70, 75, 80, 85]
     holding_days = [3, 5]
     best_params, best_stats, best_score = {}, {}, -1e9
+    start_ts = datetime.now().timestamp()
+    max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
+    log_every = int(EVOLVE_SETTINGS.get("log_every", 10))
+    total = len(thresholds) * len(holding_days)
+    tried = 0
+    stop_early = False
     for thr in thresholds:
         for hd in holding_days:
+            if max_seconds > 0 and (datetime.now().timestamp() - start_ts) > max_seconds:
+                stop_early = True
+                LOGGER.warning("grid search v6 time limit reached (%ss), returning best so far", max_seconds)
+                break
+            tried += 1
             stats = _backtest_simple_v6(df, thr, hd)
             score = _score_result(stats)
             if score > best_score:
                 best_score, best_params, best_stats = score, {"score_threshold": thr, "holding_days": hd}, stats
                 LOGGER.info("v6 best score=%.3f params=%s", best_score, best_params)
+            if tried % log_every == 0:
+                elapsed = int(datetime.now().timestamp() - start_ts)
+                LOGGER.info("grid v6 progress: %s/%s combos, elapsed=%ss, best=%.3f",
+                            tried, total, elapsed, best_score)
+        if stop_early:
+            break
     return best_params, best_stats, best_score
 
 
@@ -1263,13 +1480,30 @@ def _grid_search_v7(df: pd.DataFrame, db_path: str) -> Tuple[Dict, Dict, float]:
     thresholds = [60, 65, 70, 75]
     holding_days = [3, 5, 8]
     best_params, best_stats, best_score = {}, {}, -1e9
+    start_ts = datetime.now().timestamp()
+    max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
+    log_every = int(EVOLVE_SETTINGS.get("log_every", 10))
+    total = len(thresholds) * len(holding_days)
+    tried = 0
+    stop_early = False
     for thr in thresholds:
         for hd in holding_days:
+            if max_seconds > 0 and (datetime.now().timestamp() - start_ts) > max_seconds:
+                stop_early = True
+                LOGGER.warning("grid search v7 time limit reached (%ss), returning best so far", max_seconds)
+                break
+            tried += 1
             stats = _backtest_simple_v7(df, thr, hd, db_path)
             score = _score_result(stats)
             if score > best_score:
                 best_score, best_params, best_stats = score, {"score_threshold": thr, "holding_days": hd}, stats
                 LOGGER.info("v7 best score=%.3f params=%s", best_score, best_params)
+            if tried % log_every == 0:
+                elapsed = int(datetime.now().timestamp() - start_ts)
+                LOGGER.info("grid v7 progress: %s/%s combos, elapsed=%ss, best=%.3f",
+                            tried, total, elapsed, best_score)
+        if stop_early:
+            break
     return best_params, best_stats, best_score
 
 
@@ -1277,13 +1511,30 @@ def _grid_search_v8(df: pd.DataFrame, db_path: str, index_data: pd.DataFrame) ->
     thresholds = [60, 65, 70, 75, 80]
     holding_days = [3, 5, 8]
     best_params, best_stats, best_score = {}, {}, -1e9
+    start_ts = datetime.now().timestamp()
+    max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
+    log_every = int(EVOLVE_SETTINGS.get("log_every", 10))
+    total = len(thresholds) * len(holding_days)
+    tried = 0
+    stop_early = False
     for thr in thresholds:
         for hd in holding_days:
+            if max_seconds > 0 and (datetime.now().timestamp() - start_ts) > max_seconds:
+                stop_early = True
+                LOGGER.warning("grid search v8 time limit reached (%ss), returning best so far", max_seconds)
+                break
+            tried += 1
             stats = _backtest_simple_v8(df, thr, hd, db_path, index_data)
             score = _score_result(stats)
             if score > best_score:
                 best_score, best_params, best_stats = score, {"score_threshold": thr, "holding_days": hd}, stats
                 LOGGER.info("v8 best score=%.3f params=%s", best_score, best_params)
+            if tried % log_every == 0:
+                elapsed = int(datetime.now().timestamp() - start_ts)
+                LOGGER.info("grid v8 progress: %s/%s combos, elapsed=%ss, best=%.3f",
+                            tried, total, elapsed, best_score)
+        if stop_early:
+            break
     return best_params, best_stats, best_score
 
 
@@ -1411,10 +1662,21 @@ def _grid_search_v9(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
     lookback_days = [120, 160]
     min_turnovers = [3.0, 5.0, 8.0]
     best_params, best_stats, best_score = {}, {}, -1e9
+    start_ts = datetime.now().timestamp()
+    max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
+    log_every = int(EVOLVE_SETTINGS.get("log_every", 10))
+    total = len(thresholds) * len(holding_days) * len(lookback_days) * len(min_turnovers)
+    tried = 0
+    stop_early = False
     for thr in thresholds:
         for hd in holding_days:
             for lb in lookback_days:
                 for mt in min_turnovers:
+                    if max_seconds > 0 and (datetime.now().timestamp() - start_ts) > max_seconds:
+                        stop_early = True
+                        LOGGER.warning("grid search v9 time limit reached (%ss), returning best so far", max_seconds)
+                        break
+                    tried += 1
                     stats = _backtest_simple_v9(df, thr, hd, lb, mt)
                     score = _score_result(stats)
                     if score > best_score:
@@ -1425,6 +1687,16 @@ def _grid_search_v9(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
                             "min_turnover": mt,
                         }, stats
                         LOGGER.info("v9 best score=%.3f params=%s", best_score, best_params)
+                    if tried % log_every == 0:
+                        elapsed = int(datetime.now().timestamp() - start_ts)
+                        LOGGER.info("grid v9 progress: %s/%s combos, elapsed=%ss, best=%.3f",
+                                    tried, total, elapsed, best_score)
+                if stop_early:
+                    break
+            if stop_early:
+                break
+        if stop_early:
+            break
     return best_params, best_stats, best_score
 
 
@@ -1434,9 +1706,10 @@ def _grid_search_stable_uptrend(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
     df = df.sort_values(["ts_code", "trade_date"])
     grouped = df.groupby("ts_code")
     ts_codes = [ts for ts, g in grouped if len(g) >= 120]
-    if len(ts_codes) > 400:
+    max_samples = int(EVOLVE_SETTINGS.get("sample_stable", 400))
+    if len(ts_codes) > max_samples:
         np.random.seed(42)
-        ts_codes = list(np.random.choice(ts_codes, 400, replace=False))
+        ts_codes = list(np.random.choice(ts_codes, max_samples, replace=False))
 
     lookback_days_list = [80, 120, 160]
     max_drawdown_list = [0.10, 0.15, 0.20]
@@ -1445,12 +1718,23 @@ def _grid_search_stable_uptrend(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
     min_turnover_list = [3.0, 5.0, 8.0]
 
     best_params, best_stats, best_score = {}, {}, -1e9
+    start_ts = datetime.now().timestamp()
+    max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
+    log_every = int(EVOLVE_SETTINGS.get("log_every", 10))
+    total = len(lookback_days_list) * len(max_drawdown_list) * len(vol_max_list) * len(rebound_min_list) * len(min_turnover_list)
+    tried = 0
+    stop_early = False
 
     for lb in lookback_days_list:
         for mdd in max_drawdown_list:
             for vol in vol_max_list:
                 for rb in rebound_min_list:
                     for mt in min_turnover_list:
+                        if max_seconds > 0 and (datetime.now().timestamp() - start_ts) > max_seconds:
+                            stop_early = True
+                            LOGGER.warning("grid search stable_uptrend time limit reached (%ss), returning best so far", max_seconds)
+                            break
+                        tried += 1
                         returns = []
                         total_signals = 0
                         for ts_code in ts_codes:
@@ -1516,12 +1800,24 @@ def _grid_search_stable_uptrend(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
                             }
                             best_stats = stats
                             LOGGER.info("stable uptrend best score=%.3f params=%s", best_score, best_params)
+                        if tried % log_every == 0:
+                            elapsed = int(datetime.now().timestamp() - start_ts)
+                            LOGGER.info("grid stable progress: %s/%s combos, elapsed=%ss, best=%.3f",
+                                        tried, total, elapsed, best_score)
+                    if stop_early:
+                        break
+                if stop_early:
+                    break
+            if stop_early:
+                break
+        if stop_early:
+            break
 
     return best_params, best_stats, best_score
 
 
 def _grid_search_ai_v5(df: pd.DataFrame, db_path: str) -> Tuple[Dict, Dict, float]:
-    cache = _prepare_stock_cache(df, sample_size=400)
+    cache = _prepare_stock_cache(df, sample_size=int(EVOLVE_SETTINGS.get("sample_ai", 400)))
     if not cache:
         return {}, {}, -1e9
     mcap_map = _load_mcap_map(db_path)
@@ -1536,12 +1832,23 @@ def _grid_search_ai_v5(df: pd.DataFrame, db_path: str) -> Tuple[Dict, Dict, floa
     best_params = {}
     best_stats = {}
     best_score = -1e9
+    start_ts = datetime.now().timestamp()
+    max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
+    log_every = int(EVOLVE_SETTINGS.get("log_every", 10))
+    total = len(target_returns) * len(min_amounts) * len(max_vols) * len(min_mcaps) * len(max_mcaps)
+    tried = 0
+    stop_early = False
 
     for tr in target_returns:
         for ma in min_amounts:
             for mv in max_vols:
                 for min_mc in min_mcaps:
                     for max_mc in max_mcaps:
+                        if max_seconds > 0 and (datetime.now().timestamp() - start_ts) > max_seconds:
+                            stop_early = True
+                            LOGGER.warning("grid search AI V5 time limit reached (%ss), returning best so far", max_seconds)
+                            break
+                        tried += 1
                         if min_mc >= max_mc:
                             continue
                         params = {
@@ -1558,12 +1865,24 @@ def _grid_search_ai_v5(df: pd.DataFrame, db_path: str) -> Tuple[Dict, Dict, floa
                             best_params = params
                             best_stats = stats
                             LOGGER.info("AI V5 new best score=%.3f params=%s", best_score, best_params)
+                        if tried % log_every == 0:
+                            elapsed = int(datetime.now().timestamp() - start_ts)
+                            LOGGER.info("grid AI V5 progress: %s/%s combos, elapsed=%ss, best=%.3f",
+                                        tried, total, elapsed, best_score)
+                    if stop_early:
+                        break
+                if stop_early:
+                    break
+            if stop_early:
+                break
+        if stop_early:
+            break
 
     return best_params, best_stats, best_score
 
 
 def _grid_search_ai_v2(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
-    cache = _prepare_stock_cache(df, sample_size=400)
+    cache = _prepare_stock_cache(df, sample_size=int(EVOLVE_SETTINGS.get("sample_ai", 400)))
     if not cache:
         return {}, {}, -1e9
     eval_dates = _get_eval_dates(df, lookback_days=220, step=12)
@@ -1575,10 +1894,21 @@ def _grid_search_ai_v2(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
     best_params = {}
     best_stats = {}
     best_score = -1e9
+    start_ts = datetime.now().timestamp()
+    max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
+    log_every = int(EVOLVE_SETTINGS.get("log_every", 10))
+    total = len(target_returns) * len(min_amounts) * len(max_vols)
+    tried = 0
+    stop_early = False
 
     for tr in target_returns:
         for ma in min_amounts:
             for mv in max_vols:
+                if max_seconds > 0 and (datetime.now().timestamp() - start_ts) > max_seconds:
+                    stop_early = True
+                    LOGGER.warning("grid search AI V2 time limit reached (%ss), returning best so far", max_seconds)
+                    break
+                tried += 1
                 params = {
                     "target_return": tr,
                     "min_amount": ma,
@@ -1591,6 +1921,14 @@ def _grid_search_ai_v2(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
                     best_params = params
                     best_stats = stats
                     LOGGER.info("AI V2 new best score=%.3f params=%s", best_score, best_params)
+                if tried % log_every == 0:
+                    elapsed = int(datetime.now().timestamp() - start_ts)
+                    LOGGER.info("grid AI V2 progress: %s/%s combos, elapsed=%ss, best=%.3f",
+                                tried, total, elapsed, best_score)
+            if stop_early:
+                break
+        if stop_early:
+            break
 
     return best_params, best_stats, best_score
 
@@ -1773,122 +2111,216 @@ def main() -> None:
             LOGGER.error("db path not found in config.json")
             return
 
-        LOGGER.info("auto evolve started")
+        phase = _run_phase()
+        LOGGER.info("auto evolve started (phase=%s)", phase)
 
-        # 1) 更新数据（收盘后）
-        update_days = int(os.getenv("UPDATE_DAYS", "30"))
-        LOGGER.info("updating data: last %s days", update_days)
-        update_result = _update_stock_data(db_path, days=update_days)
-        LOGGER.info("update result: %s", update_result)
+        if phase in {"full", "data_only"}:
+            # 1) 更新数据（收盘后）
+            update_days = int(os.getenv("UPDATE_DAYS", "30"))
+            LOGGER.info("updating data: last %s days", update_days)
+            update_result = _update_stock_data(db_path, days=update_days)
+            LOGGER.info("update result: %s", update_result)
 
-        # 1.1) 数据完整性检查（当日未更新则退出，等待下一次任务）
-        fresh, db_last, last_trade = _is_data_fresh(db_path)
-        LOGGER.info("data freshness: db_last=%s, last_trade=%s, fresh=%s", db_last, last_trade, fresh)
-        if not fresh:
-            LOGGER.warning("data not fresh yet, exiting early to wait for next run")
-            return
+            # 1.1) 数据完整性检查（交易日收盘后+延迟才严格要求最新）
+            fresh, enforce, db_last, last_trade, is_trade_day, ready_time = _data_freshness_status(db_path)
+            LOGGER.info(
+                "data freshness: db_last=%s, last_trade=%s, fresh=%s, enforce=%s, is_trade_day=%s, ready_time=%s",
+                db_last,
+                last_trade,
+                fresh,
+                enforce,
+                is_trade_day,
+                ready_time,
+            )
+            if not fresh and enforce:
+                LOGGER.warning("data not fresh yet (enforced window), exiting early to wait for next run")
+                return
+            if not fresh and not enforce:
+                LOGGER.warning("data not fresh but within non-enforced window, continue with latest available data")
 
-        # 2) 更新市值
-        mc_result = _update_market_cap(db_path)
-        LOGGER.info("market cap update: %s", mc_result)
+            # 2) 更新市值
+            mc_result = _update_market_cap(db_path)
+            LOGGER.info("market cap update: %s", mc_result)
 
-        # 2.1) 扩展资金类数据（北向/融资/基金持仓）
-        nb_result = _update_northbound(db_path)
-        LOGGER.info("northbound update: %s", nb_result)
-        margin_result = _update_margin(db_path)
-        LOGGER.info("margin update: %s", margin_result)
-        margin_detail_result = _update_margin_detail(db_path)
-        LOGGER.info("margin detail update: %s", margin_detail_result)
-        moneyflow_result = _update_moneyflow_daily(db_path)
-        LOGGER.info("moneyflow update: %s", moneyflow_result)
-        industry_flow_result = _update_moneyflow_industry(db_path)
-        LOGGER.info("industry moneyflow update: %s", industry_flow_result)
-        top_list_result = _update_top_list(db_path)
-        LOGGER.info("top list update: %s", top_list_result)
-        top_inst_result = _update_top_inst(db_path)
-        LOGGER.info("top inst update: %s", top_inst_result)
-        fund_result = _update_fund_portfolio(db_path)
-        LOGGER.info("fund portfolio update: %s", fund_result)
+            # 2.1) 扩展资金类数据（北向/融资/基金持仓）
+            nb_result = _update_northbound(db_path)
+            LOGGER.info("northbound update: %s", nb_result)
+            margin_result = _update_margin(db_path)
+            LOGGER.info("margin update: %s", margin_result)
+            margin_detail_result = _update_margin_detail(db_path)
+            LOGGER.info("margin detail update: %s", margin_detail_result)
+            moneyflow_result = _update_moneyflow_daily(db_path)
+            LOGGER.info("moneyflow update: %s", moneyflow_result)
+            industry_flow_result = _update_moneyflow_industry(db_path)
+            LOGGER.info("industry moneyflow update: %s", industry_flow_result)
+            top_list_result = _update_top_list(db_path)
+            LOGGER.info("top list update: %s", top_list_result)
+            top_inst_result = _update_top_inst(db_path)
+            LOGGER.info("top inst update: %s", top_inst_result)
+            fund_result = _update_fund_portfolio(db_path)
+            LOGGER.info("fund portfolio update: %s", fund_result)
+
+            if phase == "data_only":
+                _write_health_report(db_path)
+                LOGGER.info("auto evolve finished (phase=data_only)")
+                return
 
         # 3) 加载回测数据
+        LOGGER.info("loading backtest data")
         df = _load_backtest_data(db_path, lookback_days=420)
-        if df.empty:
-            LOGGER.error("no data for backtest")
+        if df is None or df.empty:
+            LOGGER.error("no data for backtest (empty dataframe)")
             return
+        try:
+            LOGGER.info("backtest rows=%s, stocks=%s, date_min=%s, date_max=%s",
+                        len(df),
+                        df["ts_code"].nunique() if "ts_code" in df.columns else "n/a",
+                        df["trade_date"].min() if "trade_date" in df.columns else "n/a",
+                        df["trade_date"].max() if "trade_date" in df.columns else "n/a")
+        except Exception as e:
+            LOGGER.warning("backtest stats failed: %s", e)
+
         index_df = _load_index_data(db_path, lookback_days=420)
+        if index_df is None or index_df.empty:
+            LOGGER.warning("index data empty (v8 evolution may be skipped)")
+
+        targets = _evolve_targets()
 
         # 4) 全参数网格优化
-        best_params, best_stats, best_score = _grid_search(df)
-        if not best_params:
-            LOGGER.error("no valid params found")
-            return
+        if "v4" in targets:
+            try:
+                LOGGER.info("grid search v4 started")
+                best_params, best_stats, best_score = _grid_search(df)
+                LOGGER.info("grid search v4 finished: best_score=%s", best_score)
+            except Exception as e:
+                LOGGER.error("grid search v4 failed: %s", e, exc_info=True)
+                return
+            if not best_params:
+                LOGGER.error("no valid params found")
+                return
 
-        # 5) 写入结果
-        _save_to_db(db_path, best_params, best_stats, best_score)
-        _write_reports(best_params, best_stats, best_score)
+            # 5) 写入结果
+            _save_to_db(db_path, best_params, best_stats, best_score)
+            _write_reports(best_params, best_stats, best_score)
 
         # 6) AI智能选股进化（V5 + V2）
-        ai_v5_params, ai_v5_stats, ai_v5_score = _grid_search_ai_v5(df, db_path)
-        if ai_v5_params:
-            _write_ai_report("ai_v5_best.json", "AI_V5", ai_v5_params, ai_v5_stats, ai_v5_score)
-            _save_ai_to_db(db_path, "AI_V5", ai_v5_params, ai_v5_stats, ai_v5_score)
-        else:
-            LOGGER.warning("AI V5 evolution failed: no params")
+        if "ai_v5" in targets:
+            try:
+                LOGGER.info("grid search ai_v5 started")
+                ai_v5_params, ai_v5_stats, ai_v5_score = _grid_search_ai_v5(df, db_path)
+                LOGGER.info("grid search ai_v5 finished: score=%s", ai_v5_score)
+            except Exception as e:
+                LOGGER.error("grid search ai_v5 failed: %s", e, exc_info=True)
+                ai_v5_params = None
+            if ai_v5_params:
+                _write_ai_report("ai_v5_best.json", "AI_V5", ai_v5_params, ai_v5_stats, ai_v5_score)
+                _save_ai_to_db(db_path, "AI_V5", ai_v5_params, ai_v5_stats, ai_v5_score)
+            else:
+                LOGGER.warning("AI V5 evolution failed: no params")
 
-        ai_v2_params, ai_v2_stats, ai_v2_score = _grid_search_ai_v2(df)
-        if ai_v2_params:
-            _write_ai_report("ai_v2_best.json", "AI_V2", ai_v2_params, ai_v2_stats, ai_v2_score)
-            _save_ai_to_db(db_path, "AI_V2", ai_v2_params, ai_v2_stats, ai_v2_score)
-        else:
-            LOGGER.warning("AI V2 evolution failed: no params")
+        if "ai_v2" in targets:
+            try:
+                LOGGER.info("grid search ai_v2 started")
+                ai_v2_params, ai_v2_stats, ai_v2_score = _grid_search_ai_v2(df)
+                LOGGER.info("grid search ai_v2 finished: score=%s", ai_v2_score)
+            except Exception as e:
+                LOGGER.error("grid search ai_v2 failed: %s", e, exc_info=True)
+                ai_v2_params = None
+            if ai_v2_params:
+                _write_ai_report("ai_v2_best.json", "AI_V2", ai_v2_params, ai_v2_stats, ai_v2_score)
+                _save_ai_to_db(db_path, "AI_V2", ai_v2_params, ai_v2_stats, ai_v2_score)
+            else:
+                LOGGER.warning("AI V2 evolution failed: no params")
 
         # 7) 核心策略进化（v5/v6/v7/v8）
-        v5_params, v5_stats, v5_score = _grid_search_v5(df)
-        if v5_params:
-            _write_ai_report("v5_best.json", "V5", v5_params, v5_stats, v5_score)
-            _save_ai_to_db(db_path, "V5", v5_params, v5_stats, v5_score)
-        else:
-            LOGGER.warning("V5 evolution failed: no params")
-
-        v6_params, v6_stats, v6_score = _grid_search_v6(df)
-        if v6_params:
-            _write_ai_report("v6_best.json", "V6", v6_params, v6_stats, v6_score)
-            _save_ai_to_db(db_path, "V6", v6_params, v6_stats, v6_score)
-        else:
-            LOGGER.warning("V6 evolution failed: no params")
-
-        v7_params, v7_stats, v7_score = _grid_search_v7(df, db_path)
-        if v7_params:
-            _write_ai_report("v7_best.json", "V7", v7_params, v7_stats, v7_score)
-            _save_ai_to_db(db_path, "V7", v7_params, v7_stats, v7_score)
-        else:
-            LOGGER.warning("V7 evolution failed: no params")
-
-        if index_df is not None and not index_df.empty:
-            v8_params, v8_stats, v8_score = _grid_search_v8(df, db_path, index_df)
-            if v8_params:
-                _write_ai_report("v8_best.json", "V8", v8_params, v8_stats, v8_score)
-                _save_ai_to_db(db_path, "V8", v8_params, v8_stats, v8_score)
+        if "v5" in targets:
+            try:
+                LOGGER.info("grid search v5 started")
+                v5_params, v5_stats, v5_score = _grid_search_v5(df)
+                LOGGER.info("grid search v5 finished: score=%s", v5_score)
+            except Exception as e:
+                LOGGER.error("grid search v5 failed: %s", e, exc_info=True)
+                v5_params = None
+            if v5_params:
+                _write_ai_report("v5_best.json", "V5", v5_params, v5_stats, v5_score)
+                _save_ai_to_db(db_path, "V5", v5_params, v5_stats, v5_score)
             else:
-                LOGGER.warning("V8 evolution failed: no params")
-        else:
-            LOGGER.warning("V8 evolution skipped: no index data")
+                LOGGER.warning("V5 evolution failed: no params")
+
+        if "v6" in targets:
+            try:
+                LOGGER.info("grid search v6 started")
+                v6_params, v6_stats, v6_score = _grid_search_v6(df)
+                LOGGER.info("grid search v6 finished: score=%s", v6_score)
+            except Exception as e:
+                LOGGER.error("grid search v6 failed: %s", e, exc_info=True)
+                v6_params = None
+            if v6_params:
+                _write_ai_report("v6_best.json", "V6", v6_params, v6_stats, v6_score)
+                _save_ai_to_db(db_path, "V6", v6_params, v6_stats, v6_score)
+            else:
+                LOGGER.warning("V6 evolution failed: no params")
+
+        if "v7" in targets:
+            try:
+                LOGGER.info("grid search v7 started")
+                v7_params, v7_stats, v7_score = _grid_search_v7(df, db_path)
+                LOGGER.info("grid search v7 finished: score=%s", v7_score)
+            except Exception as e:
+                LOGGER.error("grid search v7 failed: %s", e, exc_info=True)
+                v7_params = None
+            if v7_params:
+                _write_ai_report("v7_best.json", "V7", v7_params, v7_stats, v7_score)
+                _save_ai_to_db(db_path, "V7", v7_params, v7_stats, v7_score)
+            else:
+                LOGGER.warning("V7 evolution failed: no params")
+
+        if "v8" in targets:
+            if index_df is not None and not index_df.empty:
+                try:
+                    LOGGER.info("grid search v8 started")
+                    v8_params, v8_stats, v8_score = _grid_search_v8(df, db_path, index_df)
+                    LOGGER.info("grid search v8 finished: score=%s", v8_score)
+                except Exception as e:
+                    LOGGER.error("grid search v8 failed: %s", e, exc_info=True)
+                    v8_params = None
+                if v8_params:
+                    _write_ai_report("v8_best.json", "V8", v8_params, v8_stats, v8_score)
+                    _save_ai_to_db(db_path, "V8", v8_params, v8_stats, v8_score)
+                else:
+                    LOGGER.warning("V8 evolution failed: no params")
+            else:
+                LOGGER.warning("V8 evolution skipped: no index data")
 
         # 8) v9 中线均衡版进化
-        v9_params, v9_stats, v9_score = _grid_search_v9(df)
-        if v9_params:
-            _write_ai_report("v9_best.json", "V9", v9_params, v9_stats, v9_score)
-            _save_ai_to_db(db_path, "V9", v9_params, v9_stats, v9_score)
-        else:
-            LOGGER.warning("V9 evolution failed: no params")
+        if "v9" in targets:
+            try:
+                LOGGER.info("grid search v9 started")
+                v9_params, v9_stats, v9_score = _grid_search_v9(df)
+                LOGGER.info("grid search v9 finished: score=%s", v9_score)
+            except Exception as e:
+                LOGGER.error("grid search v9 failed: %s", e, exc_info=True)
+                v9_params = None
+            if v9_params:
+                _write_ai_report("v9_best.json", "V9", v9_params, v9_stats, v9_score)
+                _save_ai_to_db(db_path, "V9", v9_params, v9_stats, v9_score)
+            else:
+                LOGGER.warning("V9 evolution failed: no params")
 
         # 9) 稳定上涨策略进化
-        stable_params, stable_stats, stable_score = _grid_search_stable_uptrend(df)
-        if stable_params:
-            _write_ai_report("stable_uptrend_best.json", "STABLE_UPTREND", stable_params, stable_stats, stable_score)
-            _save_ai_to_db(db_path, "STABLE_UPTREND", stable_params, stable_stats, stable_score)
-        else:
-            LOGGER.warning("Stable uptrend evolution failed: no params")
+        if "stable" in targets:
+            try:
+                LOGGER.info("grid search stable_uptrend started")
+                stable_params, stable_stats, stable_score = _grid_search_stable_uptrend(df)
+                LOGGER.info("grid search stable_uptrend finished: score=%s", stable_score)
+            except Exception as e:
+                LOGGER.error("grid search stable_uptrend failed: %s", e, exc_info=True)
+                stable_params = None
+            if stable_params:
+                _write_ai_report("stable_uptrend_best.json", "STABLE_UPTREND", stable_params, stable_stats, stable_score)
+                _save_ai_to_db(db_path, "STABLE_UPTREND", stable_params, stable_stats, stable_score)
+            else:
+                LOGGER.warning("Stable uptrend evolution failed: no params")
 
         # 9.5) 自动健康检测报告
         _write_health_report(db_path)
@@ -1897,6 +2329,8 @@ def main() -> None:
         _git_push()
 
         LOGGER.info("auto evolve finished")
+    except Exception as e:
+        LOGGER.error("auto evolve crashed: %s", e, exc_info=True)
     finally:
         try:
             os.remove(LOCK_PATH)

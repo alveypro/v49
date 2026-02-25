@@ -29,8 +29,10 @@ from typing import Dict, List, Optional
 import logging
 from datetime import datetime, timedelta
 import sqlite3
+import os
 
 logger = logging.getLogger(__name__)
+V7_LOG_DYNAMIC_WEIGHTS = os.getenv("V7_LOG_DYNAMIC_WEIGHTS", "0") == "1"
 
 
 class MarketRegimeAnalyzer:
@@ -409,9 +411,10 @@ class AdaptiveWeightCalculator:
             factor = 100 / total
             weights = {k: v * factor for k, v in weights.items()}
         
-        logger.info(f"⚖️ 动态权重 ({market_regime}, 行业热度{industry_heat:.2f}):")
-        for k, v in weights.items():
-            logger.info(f"  {k}: {v:.1f}分")
+        if V7_LOG_DYNAMIC_WEIGHTS:
+            logger.info(f"⚖️ 动态权重 ({market_regime}, 行业热度{industry_heat:.2f}):")
+            for k, v in weights.items():
+                logger.info(f"  {k}: {v:.1f}分")
         
         return weights
 
@@ -759,4 +762,3 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     print("✅ v7.0系统测试完成！")
     print("="*60)
-

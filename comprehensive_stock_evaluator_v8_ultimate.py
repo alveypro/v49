@@ -31,6 +31,38 @@ warnings.filterwarnings('ignore')
 logger = logging.getLogger(__name__)
 
 
+def _normalize_index_data(index_data: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
+    if index_data is None or not hasattr(index_data, "columns"):
+        return index_data
+
+    copy_made = False
+    if "close" not in index_data.columns and "close_price" in index_data.columns:
+        index_data = index_data.copy()
+        copy_made = True
+        index_data["close"] = index_data["close_price"]
+    if "volume" not in index_data.columns and "vol" in index_data.columns:
+        if not copy_made:
+            index_data = index_data.copy()
+            copy_made = True
+        index_data["volume"] = index_data["vol"]
+    if "high" not in index_data.columns and "high_price" in index_data.columns:
+        if not copy_made:
+            index_data = index_data.copy()
+            copy_made = True
+        index_data["high"] = index_data["high_price"]
+    if "low" not in index_data.columns and "low_price" in index_data.columns:
+        if not copy_made:
+            index_data = index_data.copy()
+            copy_made = True
+        index_data["low"] = index_data["low_price"]
+    if "open" not in index_data.columns and "open_price" in index_data.columns:
+        if not copy_made:
+            index_data = index_data.copy()
+            copy_made = True
+        index_data["open"] = index_data["open_price"]
+    return index_data
+
+
 class ATRCalculator:
     """ATR动态风控计算器"""
     
@@ -201,6 +233,7 @@ class MarketRegimeFilter:
         Returns:
             综合判断结果
         """
+        index_data = _normalize_index_data(index_data)
         if len(index_data) < 60:
             return {'can_trade': True, 'reason': '数据不足，默认可交易', 'position_multiplier': 1.0}
         
@@ -751,6 +784,7 @@ class AdvancedFactors:
         max_score = 0
         
         try:
+            index_data = _normalize_index_data(index_data)
             close = stock_data['close_price'] if 'close_price' in stock_data.columns else stock_data['close']
             volume = stock_data['vol']
             # 估算换手率（若无流通股本字段，则用相对量能代理）
@@ -919,6 +953,7 @@ class ComprehensiveStockEvaluatorV8Ultimate:
                 stock_data = stock_data.sort_values('trade_date').reset_index(drop=True)
             if index_data is not None and 'trade_date' in index_data.columns:
                 index_data = index_data.sort_values('trade_date').reset_index(drop=True)
+            index_data = _normalize_index_data(index_data)
             
             # ========== 1. 市场过滤（软过滤模式 - 不直接拒绝，而是调整评分）==========
             market_status = {'can_trade': True, 'position_multiplier': 1.0, 'reason': '未启用市场过滤'}
@@ -1171,4 +1206,3 @@ if __name__ == "__main__":
     
     print("\n" + "="*60)
     print("🎉 v8.0评分器创建完成！准备集成到系统...")
-

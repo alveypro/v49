@@ -8,6 +8,8 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
+import json
+import os
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -17,13 +19,26 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
-PERMANENT_DB_PATH = "/Users/mac/QLIB/permanent_stock_database.db"
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+PERMANENT_DB_PATH = "/Users/mac/2026Qlin/permanent_stock_database.db"
+
+
+def _load_config() -> Dict:
+    if not os.path.exists(CONFIG_PATH):
+        return {}
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 class V6LeaderAnalyzer:
     """v6.0龙头属性分析器"""
     
     def __init__(self):
+        cfg = _load_config()
+        self.db_path = cfg.get("PERMANENT_DB_PATH", PERMANENT_DB_PATH)
         self._sector_ranking_cache = {}  # 板块排名缓存
         self._limit_up_cache = {}  # 涨停缓存
         
@@ -104,7 +119,7 @@ class V6LeaderAnalyzer:
                         }
             
             # 查询板块内所有股票的3日涨幅
-            conn = sqlite3.connect(PERMANENT_DB_PATH)
+            conn = sqlite3.connect(self.db_path)
             
             # 获取最近3个交易日
             dates_query = """
@@ -190,7 +205,7 @@ class V6LeaderAnalyzer:
                     return cached['data']
             
             # 查询涨停数据
-            conn = sqlite3.connect(PERMANENT_DB_PATH)
+            conn = sqlite3.connect(self.db_path)
             
             # 近20天涨停
             query_20d = """
@@ -324,4 +339,3 @@ def calculate_leader_score(ts_code: str, industry: str, recent_change_3d: float)
     """便捷调用：计算龙头属性得分"""
     analyzer = get_leader_analyzer()
     return analyzer.calculate_leader_score(ts_code, industry, recent_change_3d)
-

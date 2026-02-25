@@ -17,14 +17,15 @@ import sqlite3
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional, Any
 import json
 import logging
+import os
 from pathlib import Path
 
-# 配置日志（优先写入 /opt/airivo/logs）
-_log_path = Path("/opt/airivo/logs/trading_assistant.log")
-if not _log_path.parent.exists():
+# 配置日志（优先写入 /opt/airivo/logs，可通过环境变量覆盖）
+_log_path = Path(os.getenv("TRADING_ASSISTANT_LOG_PATH", "/opt/airivo/logs/trading_assistant.log"))
+if not _log_path.parent.exists() or not os.access(str(_log_path.parent), os.W_OK):
     _log_path = Path(__file__).with_name("trading_assistant.log")
 
 logging.basicConfig(
@@ -57,9 +58,10 @@ class TradingAssistant:
             db_path: 主数据库路径
         """
         self.db_path = self._resolve_db_path(db_path)
-        self.assistant_db = "trading_assistant.db"
+        self.assistant_db = self._resolve_assistant_db()
         self._init_database()
         self.last_scan_debug = {}
+        self._learning_assistant = None
         
         # 初始化通知服务
         self.notifier = None
@@ -71,6 +73,243 @@ class TradingAssistant:
                 logger.warning(f"⚠️ 通知服务初始化失败: {e}")
         
         logger.info("🚀 智能交易助手初始化完成")
+
+    def _get_learning_assistant(self):
+        if self._learning_assistant is not None:
+            return self._learning_assistant
+        try:
+            from openclaw.assistant import OpenClawStockAssistant
+
+            self._learning_assistant = OpenClawStockAssistant(
+                log_dir="logs/openclaw",
+                db_path=self.db_path,
+            )
+            return self._learning_assistant
+        except Exception as e:
+            logger.warning(f"⚠️ 自学习助手初始化失败: {e}")
+            self._learning_assistant = False
+            return None
+
+    def _record_learning_event(
+        self,
+        module: str,
+        event_type: str,
+        payload: Optional[Dict[str, Any]] = None,
+        ts_code: Optional[str] = None,
+    ) -> None:
+        learner = self._get_learning_assistant()
+        if not learner:
+            return
+        try:
+            learner.record_module_outcome(
+                module=module,
+                event_type=event_type,
+                payload=payload or {},
+                ts_code=ts_code,
+                route="stock_core",
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ 记录自学习事件失败: {module}/{event_type} -> {e}")
+
+    def record_learning_event(
+        self,
+        module: str,
+        event_type: str,
+        payload: Optional[Dict[str, Any]] = None,
+        ts_code: Optional[str] = None,
+    ) -> None:
+        """对外暴露的自学习事件记录接口。"""
+        self._record_learning_event(
+            module=module,
+            event_type=event_type,
+            payload=payload,
+            ts_code=ts_code,
+        )
+
+    def _get_config_float(self, key: str, default: float) -> float:
+        try:
+            val = self.get_config(key)
+            return float(val) if val is not None else float(default)
+        except Exception:
+            return float(default)
+
+    def get_auto_tuning_recommendation(self, lookback_days: int = 30, min_samples: int = 8) -> Dict[str, Any]:
+        """基于学习卡片结果与交易表现生成自动调参建议（不直接落库）。"""
+        learner = self._get_learning_assistant()
+        if not learner:
+            return {"ok": False, "reason": "learning assistant unavailable"}
+
+        learning_db = Path("logs/openclaw/assistant_learning.db")
+        if not learning_db.exists():
+            return {"ok": False, "reason": "learning db not found"}
+
+        since = (datetime.now() - timedelta(days=max(1, int(lookback_days)))).strftime("%Y-%m-%d %H:%M:%S")
+        d5_returns: List[float] = []
+        d20_returns: List[float] = []
+        try:
+            conn = sqlite3.connect(str(learning_db))
+            rows = conn.execute(
+                """
+                SELECT outcome_json
+                FROM learning_cards
+                WHERE created_at >= ? AND route = 'stock_core' AND status IN ('closed', 'pending')
+                ORDER BY created_at DESC
+                """,
+                (since,),
+            ).fetchall()
+            conn.close()
+            for (raw,) in rows:
+                if not raw:
+                    continue
+                try:
+                    obj = json.loads(raw)
+                except Exception:
+                    continue
+                horizons = (obj or {}).get("horizons") or {}
+                d5 = (horizons.get("d5") or {}).get("ret_pct")
+                d20 = (horizons.get("d20") or {}).get("ret_pct")
+                if d5 is not None:
+                    d5_returns.append(float(d5))
+                if d20 is not None:
+                    d20_returns.append(float(d20))
+        except Exception as e:
+            return {"ok": False, "reason": f"read learning db failed: {e}"}
+
+        sample_count = len(d5_returns)
+        fallback_source = "learning_cards"
+        if sample_count < max(1, int(min_samples)):
+            # Fallback to realized trade outcomes when learning horizon samples are still sparse.
+            try:
+                conn = sqlite3.connect(self.assistant_db)
+                sold_df = pd.read_sql_query(
+                    """
+                    SELECT profit_loss_pct
+                    FROM trade_history
+                    WHERE action = 'sell' AND trade_date >= ?
+                    ORDER BY trade_date DESC
+                    """,
+                    conn,
+                    params=((datetime.now() - timedelta(days=max(1, int(lookback_days)))).strftime("%Y-%m-%d"),),
+                )
+                conn.close()
+                if not sold_df.empty:
+                    pnl = pd.to_numeric(sold_df["profit_loss_pct"], errors="coerce").dropna()
+                    if not pnl.empty:
+                        d5_returns = (pnl * 100.0).tolist()
+                        sample_count = len(d5_returns)
+                        fallback_source = "trade_history"
+            except Exception:
+                pass
+        if sample_count < max(1, int(min_samples)):
+            return {
+                "ok": True,
+                "regime": "neutral",
+                "insufficient_samples": True,
+                "reason": "insufficient samples",
+                "metrics": {"sample_count": sample_count, "required": int(min_samples), "sample_source": "none"},
+                "current": {
+                    "min_score": self._get_config_float("min_score", 55.0),
+                    "take_profit_pct": self._get_config_float("take_profit_pct", 0.06),
+                    "stop_loss_pct": self._get_config_float("stop_loss_pct", 0.04),
+                    "single_position_pct": self._get_config_float("single_position_pct", 0.20),
+                    "max_position_pct": self._get_config_float("max_position_pct", 0.80),
+                },
+                "target": {},
+                "changes": {},
+                "rationale": ["样本不足，暂不调整参数。建议继续积累交易/回填结果。"],
+            }
+
+        d5_series = pd.Series(d5_returns, dtype=float)
+        win_rate = float((d5_series > 0).mean())
+        avg_ret = float(d5_series.mean())
+        vol = float(d5_series.std()) if len(d5_series) > 1 else 0.0
+        d20_avg = float(pd.Series(d20_returns, dtype=float).mean()) if d20_returns else None
+
+        current = {
+            "min_score": self._get_config_float("min_score", 55.0),
+            "take_profit_pct": self._get_config_float("take_profit_pct", 0.06),
+            "stop_loss_pct": self._get_config_float("stop_loss_pct", 0.04),
+            "single_position_pct": self._get_config_float("single_position_pct", 0.20),
+            "max_position_pct": self._get_config_float("max_position_pct", 0.80),
+        }
+        target = dict(current)
+        regime = "neutral"
+        rationale: List[str] = []
+
+        if win_rate < 0.45 or avg_ret < 0:
+            regime = "defensive"
+            target["min_score"] = min(80.0, current["min_score"] + 2.0)
+            target["stop_loss_pct"] = max(0.02, current["stop_loss_pct"] - 0.005)
+            target["take_profit_pct"] = max(0.04, current["take_profit_pct"] - 0.005)
+            target["single_position_pct"] = max(0.10, current["single_position_pct"] - 0.02)
+            target["max_position_pct"] = max(0.50, current["max_position_pct"] - 0.05)
+            rationale.append("近30天样本胜率/收益偏弱，进入防守调参。")
+        elif win_rate >= 0.60 and avg_ret >= 1.2 and vol <= 3.5:
+            regime = "offensive"
+            target["min_score"] = max(50.0, current["min_score"] - 1.0)
+            target["stop_loss_pct"] = min(0.07, current["stop_loss_pct"] + 0.003)
+            target["take_profit_pct"] = min(0.15, current["take_profit_pct"] + 0.01)
+            target["single_position_pct"] = min(0.25, current["single_position_pct"] + 0.01)
+            target["max_position_pct"] = min(0.95, current["max_position_pct"] + 0.03)
+            rationale.append("近30天胜率和收益较好且波动可控，进入进攻调参。")
+        else:
+            rationale.append("近30天表现中性，建议维持参数或小幅微调。")
+
+        changes: Dict[str, Dict[str, float]] = {}
+        for k, old in current.items():
+            new = round(float(target[k]), 4)
+            if round(float(old), 4) != new:
+                changes[k] = {"from": round(float(old), 4), "to": new}
+
+        return {
+            "ok": True,
+            "regime": regime,
+            "metrics": {
+                "sample_count": sample_count,
+                "sample_source": fallback_source,
+                "d5_win_rate": round(win_rate, 4),
+                "d5_avg_ret_pct": round(avg_ret, 4),
+                "d5_vol_pct": round(vol, 4),
+                "d20_avg_ret_pct": round(float(d20_avg), 4) if d20_avg is not None else None,
+            },
+            "current": current,
+            "target": target,
+            "changes": changes,
+            "rationale": rationale,
+        }
+
+    def apply_auto_tuning(self, recommendation: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """应用自动调参建议并落库。"""
+        rec = recommendation or self.get_auto_tuning_recommendation()
+        if not rec.get("ok"):
+            return {"ok": False, "reason": rec.get("reason", "invalid recommendation"), "detail": rec}
+        changes = rec.get("changes") or {}
+        if not changes:
+            return {"ok": True, "applied": False, "message": "no parameter changes needed", "detail": rec}
+
+        mapping = {
+            "min_score": lambda x: str(int(round(float(x)))),
+            "take_profit_pct": lambda x: str(float(x)),
+            "stop_loss_pct": lambda x: str(float(x)),
+            "single_position_pct": lambda x: str(float(x)),
+            "max_position_pct": lambda x: str(float(x)),
+        }
+        for key, diff in changes.items():
+            if key not in mapping:
+                continue
+            self.update_config(key, mapping[key](diff["to"]))
+
+        self._record_learning_event(
+            module="auto_tuning",
+            event_type="config_updated",
+            payload={
+                "changes": changes,
+                "metrics": rec.get("metrics", {}),
+                "regime": rec.get("regime", "neutral"),
+                "rationale": rec.get("rationale", []),
+            },
+        )
+        return {"ok": True, "applied": True, "changes": changes, "detail": rec}
     
     def _init_database(self):
         """初始化助手数据库"""
@@ -175,15 +414,24 @@ class TradingAssistant:
         if fallback.exists():
             return str(fallback)
         return str(cand)
+
+    def _resolve_assistant_db(self) -> str:
+        env_db = os.getenv("TRADING_ASSISTANT_DB_PATH")
+        if env_db:
+            return env_db
+        server_dir = Path("/opt/airivo/data")
+        if server_dir.exists() and os.access(str(server_dir), os.W_OK):
+            return str(server_dir / "trading_assistant.db")
+        return str(Path(__file__).with_name("trading_assistant.db"))
     
     def _init_default_config(self):
         """初始化默认配置"""
         default_config = {
             'strategy': 'v4.0',
-            'min_score': '65',  # 🔧 优化：基于回测数据，65分以上期望值为正
+            'min_score': '55',  # 日常输出更稳定
             'max_score': '90',  # 🔧 新增：最高分数，避免过度筛选
-            'market_cap_min': '10000000000',  # 100亿
-            'market_cap_max': '50000000000',  # 500亿
+            'market_cap_min': '5000000000',  # 50亿
+            'market_cap_max': '100000000000',  # 1000亿
             'recommend_count': '5',
             'single_position_pct': '0.2',  # 单只20%
             'max_position_pct': '0.8',  # 最多80%仓位
@@ -255,8 +503,8 @@ class TradingAssistant:
             base_threshold = min_score
             thr_v4 = base_threshold
             thr_v5 = base_threshold
-            thr_v7 = base_threshold + 5
-            thr_v8 = base_threshold + 5
+            thr_v7 = base_threshold + 2
+            thr_v8 = base_threshold + 2
             thr_v9 = base_threshold
 
             weights = {
@@ -291,7 +539,7 @@ class TradingAssistant:
                 FROM stock_basic sb
                 WHERE sb.circ_mv >= ? AND sb.circ_mv <= ?
                 ORDER BY RANDOM()
-                LIMIT 800
+                LIMIT 1500
             """
             
             candidates = pd.read_sql_query(
@@ -461,6 +709,9 @@ class TradingAssistant:
                 # 降低门槛，保证有结果
                 lower_threshold = max(50.0, base_threshold - 5)
                 candidates_final = [r for r in recs_agree2 if r["score"] >= lower_threshold]
+                if not candidates_final:
+                    # 兜底：至少输出一致性>=2的Top
+                    candidates_final = recs_agree2
             else:
                 candidates_final = recommendations
 
@@ -497,6 +748,22 @@ class TradingAssistant:
                 debug_counts["agree2"],
                 debug_counts["pass_base"],
             )
+            self._record_learning_event(
+                module="daily_stock_scan",
+                event_type="scan_completed",
+                payload={
+                    "recommend_count": len(top_recommendations),
+                    "debug_counts": debug_counts,
+                    "thresholds": {
+                        "v4": thr_v4,
+                        "v5": thr_v5,
+                        "v7": thr_v7,
+                        "v8": thr_v8,
+                        "v9": thr_v9,
+                    },
+                    "base_threshold": base_threshold,
+                },
+            )
             
             # 🆕 发送选股通知
             self._send_stock_selection_notification(top_recommendations)
@@ -511,6 +778,11 @@ class TradingAssistant:
                 "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "error": str(e),
             }
+            self._record_learning_event(
+                module="daily_stock_scan",
+                event_type="scan_failed",
+                payload={"error": str(e)},
+            )
             return []
 
     def _calc_v9_score_from_hist(self, hist: pd.DataFrame, industry_strength: float = 0.0) -> Dict:
@@ -764,6 +1036,20 @@ class TradingAssistant:
         conn.close()
         
         logger.info(f"✅ 添加持仓: {stock_name}({ts_code}), {quantity}股 @ ¥{buy_price}")
+        self._record_learning_event(
+            module="portfolio_management",
+            event_type="buy_recorded",
+            payload={
+                "action": "buy",
+                "stock_name": stock_name,
+                "price": float(buy_price),
+                "quantity": int(quantity),
+                "cost_total": float(cost_total),
+                "strategy": strategy,
+                "score": float(score or 0),
+            },
+            ts_code=ts_code,
+        )
     
     def update_holdings(self):
         """更新持仓信息"""
@@ -778,6 +1064,11 @@ class TradingAssistant:
         if holdings.empty:
             logger.info("📊 当前无持仓")
             conn_assistant.close()
+            self._record_learning_event(
+                module="portfolio_management",
+                event_type="holdings_empty",
+                payload={"holding_count": 0},
+            )
             return
         
         # 获取最新价格
@@ -836,6 +1127,19 @@ class TradingAssistant:
         conn_assistant.close()
         
         logger.info("✅ 持仓更新完成")
+        holdings_after = holdings.copy()
+        avg_profit_pct = (
+            float(pd.to_numeric(holdings_after.get('profit_loss_pct', pd.Series(dtype=float)), errors='coerce').fillna(0.0).mean())
+            if not holdings_after.empty else 0.0
+        )
+        self._record_learning_event(
+            module="portfolio_management",
+            event_type="holdings_updated",
+            payload={
+                "holding_count": int(len(holdings_after)),
+                "avg_profit_pct": avg_profit_pct,
+            },
+        )
     
     def check_stop_conditions(self) -> List[Dict]:
         """
@@ -894,6 +1198,15 @@ class TradingAssistant:
         # 🆕 发送止盈止损通知
         if alerts:
             self._send_stop_condition_notification(alerts)
+        self._record_learning_event(
+            module="portfolio_management",
+            event_type="stop_conditions_checked",
+            payload={
+                "alert_count": int(len(alerts)),
+                "take_profit_count": int(sum(1 for a in alerts if a.get("type") == "take_profit")),
+                "stop_loss_count": int(sum(1 for a in alerts if a.get("type") == "stop_loss")),
+            },
+        )
         
         return alerts
     
@@ -957,6 +1270,21 @@ class TradingAssistant:
         
         logger.info(f"✅ 卖出成功: {holding[2]}({ts_code}), "
                    f"盈亏{profit_loss_pct*100:.2f}%")
+        self._record_learning_event(
+            module="trade_history",
+            event_type="sell_recorded",
+            payload={
+                "action": "sell",
+                "stock_name": holding[2],
+                "price": float(sell_price),
+                "quantity": int(quantity),
+                "sell_amount": float(sell_amount),
+                "profit_loss": float(profit_loss),
+                "profit_loss_pct": float(profit_loss_pct),
+                "reason": reason,
+            },
+            ts_code=ts_code,
+        )
     
     def generate_daily_report(self) -> str:
         """
@@ -1104,6 +1432,16 @@ class TradingAssistant:
         
         # 🆕 发送每日报告通知
         self._send_daily_report_notification(report)
+        self._record_learning_event(
+            module="daily_report",
+            event_type="report_generated",
+            payload={
+                "date": today,
+                "recommendations_count": int(len(recommendations)),
+                "holdings_count": int(len(holdings)),
+                "trades_today_count": int(len(trades_today)),
+            },
+        )
         
         return report
     

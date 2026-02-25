@@ -1,0 +1,23 @@
+{
+  "strategy": "STABLE_UPTREND",
+  "run_at": "2026-02-24 16:37:53",
+  "score": 14.98223096181173,
+  "params": {
+    "lookback_days": 80,
+    "max_drawdown_pct": 20,
+    "vol_max_pct": 4.0,
+    "rebound_min_pct": 12,
+    "min_turnover": 3.0,
+    "candidate_count": 200,
+    "result_count": 30,
+    "min_mv": 100,
+    "max_mv": 5000
+  },
+  "stats": {
+    "total_signals": 11,
+    "avg_return": 21.04704940543938,
+    "win_rate": 100.0,
+    "sharpe_ratio": 7.532311339584386,
+    "max_drawdown": 0.0
+  }
+}

@@ -1,57 +1,63 @@
 {
   "strategy": "综合优选v4.0",
-  "run_at": "2026-02-07 04:45:25",
-  "score": 7.105496379494805,
+  "run_at": "2026-02-25 16:22:42",
+  "score": 7.693599246653681,
   "params": {
-    "score_threshold": 70,
-    "max_holding_days": 20,
+    "score_threshold": 65,
+    "max_holding_days": 10,
     "stop_loss_pct": -6.0,
     "take_profit_pct": 6.0
   },
   "stats": {
-    "total_signals": 134,
-    "avg_return": 4.805528845377495,
-    "weighted_avg_return": 1.3378093404069908,
-    "median_return": 6.331235362997668,
-    "win_rate": 77.61194029850746,
-    "max_return": 23.156981786643538,
-    "min_return": -11.637080867850095,
-    "sharpe_ratio": 3.493964378297373,
-    "max_drawdown": -4.6533684480088455,
-    "avg_holding_days": 11.134328358208956,
+    "total_signals": 20,
+    "avg_return": 2.973807403750169,
+    "weighted_avg_return": 0.701508880270089,
+    "median_return": 3.0631036499581095,
+    "win_rate": 75.0,
+    "max_return": 9.725776965265082,
+    "min_return": -4.814814814814827,
+    "sharpe_ratio": 3.9624905406289863,
+    "max_drawdown": -1.4444444444444573,
+    "avg_holding_days": 8.3,
     "level_stats": {
       "S级(≥80分)": {
-        "count": 70,
-        "avg_return": 5.223210084111632,
-        "weighted_return": 1.5669630252334896,
-        "win_rate": 81.42857142857143,
-        "avg_holding_days": 10.957142857142857
+        "count": 2,
+        "avg_return": -2.1897457158651243,
+        "weighted_return": -0.6569237147595373,
+        "win_rate": 50.0,
+        "avg_holding_days": 10.0
       },
       "A级(70-79分)": {
-        "count": 64,
-        "avg_return": 4.348689990512032,
-        "weighted_return": 1.087172497628008,
-        "win_rate": 73.4375,
-        "avg_holding_days": 11.328125
+        "count": 12,
+        "avg_return": 4.288161889290209,
+        "weighted_return": 1.0720404723225523,
+        "win_rate": 91.66666666666666,
+        "avg_holding_days": 7.833333333333333
+      },
+      "B级(60-69分)": {
+        "count": 6,
+        "avg_return": 2.066282805875188,
+        "weighted_return": 0.4132565611750376,
+        "win_rate": 50.0,
+        "avg_holding_days": 8.666666666666666
       }
     },
     "exit_stats": {
-      "止盈6.0%": 88,
-      "持仓到期": 28,
-      "止损-6.0%": 18
+      "持仓到期": 14,
+      "止盈6.0%": 6
     },
     "score_distribution": {
-      "total_evaluated": 765,
-      "max_score": 96.0,
-      "avg_score": 45.37777777777778,
-      "score_90+": 8,
-      "score_85+": 34,
-      "score_80+": 70,
-      "score_75+": 107,
-      "score_70+": 134,
-      "score_65+": 176,
-      "score_60+": 211,
-      "score_50+": 324
+      "total_evaluated": 769,
+      "max_score": 86.0,
+      "avg_score": 29.177503250975292,
+      "score_90+": 0,
+      "score_85+": 1,
+      "score_80+": 2,
+      "score_75+": 9,
+      "score_70+": 14,
+      "score_65+": 20,
+      "score_60+": 29,
+      "score_50+": 74
     }
   }
 }

@@ -8,6 +8,8 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
+import json
+import os
 import sqlite3
 import tushare as ts
 import pandas as pd
@@ -19,16 +21,35 @@ from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
-TUSHARE_TOKEN = "9ad24a6745c2625e7e2064d03855f5a419efa06c97e5e7df70c64856"
-PERMANENT_DB_PATH = "/Users/mac/QLIB/permanent_stock_database.db"
+TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN", "9ad24a6745c2625e7e2064d03855f5a419efa06c97e5e7df70c64856")
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+PERMANENT_DB_PATH = "/Users/mac/2026Qlin/permanent_stock_database.db"
+
+
+def _load_config() -> Dict:
+    if not os.path.exists(CONFIG_PATH):
+        return {}
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 class V6DataProviderOptimized:
     """v6.0数据提供者 - 优化版（使用本地数据库）"""
     
     def __init__(self):
-        ts.set_token(TUSHARE_TOKEN)
-        self.pro = ts.pro_api(TUSHARE_TOKEN)
+        cfg = _load_config()
+        self.db_path = cfg.get("PERMANENT_DB_PATH", PERMANENT_DB_PATH)
+        token = cfg.get("TUSHARE_TOKEN") or TUSHARE_TOKEN
+        self.pro = None
+        if token:
+            try:
+                ts.set_token(token)
+                self.pro = ts.pro_api(token)
+            except Exception as e:
+                logger.warning("Tushare init failed, continuing without pro: %s", e)
         self._sector_cache = {}
         self._money_flow_cache = {}
         self._north_money_cache = {}
@@ -53,7 +74,7 @@ class V6DataProviderOptimized:
                 return self._sector_cache[cache_key]
             
             # 从本地数据库获取
-            conn = sqlite3.connect(PERMANENT_DB_PATH)
+            conn = sqlite3.connect(self.db_path)
             query = """
                 SELECT industry, name
                 FROM stock_basic
@@ -147,7 +168,7 @@ class V6DataProviderOptimized:
         避免对每只股票都调用API
         """
         try:
-            conn = sqlite3.connect(PERMANENT_DB_PATH)
+            conn = sqlite3.connect(self.db_path)
             
             # 获取最近N天的日期
             latest_date_query = """
@@ -249,6 +270,9 @@ class V6DataProviderOptimized:
             cache_key = f"{ts_code}_{days}"
             if cache_key in self._money_flow_cache:
                 return self._money_flow_cache[cache_key]
+
+            if not self.pro:
+                return self._get_money_flow_from_local(ts_code, days)
             
             # 获取资金流向数据
             end_date = datetime.now().strftime('%Y%m%d')
@@ -323,7 +347,7 @@ class V6DataProviderOptimized:
         原理：涨幅 × 放量比例 = 资金流向估算
         """
         try:
-            conn = sqlite3.connect(PERMANENT_DB_PATH)
+            conn = sqlite3.connect(self.db_path)
             
             # 查询最近N天的数据
             query = """
@@ -391,6 +415,9 @@ class V6DataProviderOptimized:
             return  # 已加载
         
         try:
+            if not self.pro:
+                self._hs_const_stocks = set()
+                return
             logger.info("正在加载陆股通标的...")
             # 从Tushare获取陆股通成分股（只调用2次）
             sh_const = self.pro.hs_const(hs_type='SH')  # 沪股通
@@ -462,7 +489,7 @@ class V6DataProviderOptimized:
         返回：大盘N天涨跌幅（%）
         """
         try:
-            conn = sqlite3.connect(PERMANENT_DB_PATH)
+            conn = sqlite3.connect(self.db_path)
             
             # 获取上证指数最近N天的涨跌幅
             query = """
@@ -517,4 +544,3 @@ def get_data_provider() -> V6DataProviderOptimized:
     if _data_provider_optimized is None:
         _data_provider_optimized = V6DataProviderOptimized()
     return _data_provider_optimized
-

@@ -3,9 +3,12 @@
 echo "🚀 启动v068永久版 - 13模块完整系统"
 echo "======================================"
 
-# 停止之前的streamlit进程
-echo "🛑 停止之前的进程..."
-pkill -f streamlit
+# 停止之前的v068进程（仅本系统）
+echo "🛑 停止之前的v068进程..."
+pkill -f "streamlit run 机构级V13系统_v068_永久版.py" 2>/dev/null || true
+if lsof -ti:8501 >/dev/null 2>&1; then
+    lsof -ti:8501 | xargs kill -9 2>/dev/null || true
+fi
 
 # 检查Python环境
 echo "🔍 检查Python环境..."

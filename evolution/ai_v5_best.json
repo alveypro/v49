@@ -1,0 +1,17 @@
+{
+  "strategy": "AI_V5",
+  "run_at": "2026-02-25 16:26:15",
+  "score": 10.893360804908653,
+  "params": {
+    "target_return": 0.12,
+    "min_amount": 1.5,
+    "max_volatility": 0.12,
+    "min_market_cap": 100,
+    "max_market_cap": 1000
+  },
+  "stats": {
+    "total_signals": 435,
+    "avg_return": 6.240756989572544,
+    "win_rate": 53.5632183908046
+  }
+}

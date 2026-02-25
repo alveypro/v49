@@ -59,6 +59,7 @@
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import sqlite3
@@ -77,17 +78,304 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 import traceback
+import uuid
 from itertools import product
+from strategies.scan_pipeline import run_stock_scan_pipeline
+
+# 加载 .env 环境变量（Kimi API Key 等）
+try:
+    from dotenv import load_dotenv
+    _env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if os.path.exists(_env_path):
+        load_dotenv(_env_path, override=True)
+except Exception:
+    pass
 
 warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+OFFLINE_MODE = os.getenv("OFFLINE_MODE") == "1" or os.getenv("RUN_OFFLINE_ALL") == "1" or os.getenv("RUN_OFFLINE_V7") == "1"
+TUSHARE_ENABLED = os.getenv("TUSHARE_ENABLED", "1") != "0" and not OFFLINE_MODE
+OFFLINE_STOCK_LIMIT = int(os.getenv("OFFLINE_STOCK_LIMIT", "0"))
+OFFLINE_LOG_EVERY = int(os.getenv("OFFLINE_LOG_EVERY", "200"))
+BULK_HISTORY_LIMIT = int(os.getenv("BULK_HISTORY_LIMIT", "1200"))
+BULK_HISTORY_CHUNK = int(os.getenv("BULK_HISTORY_CHUNK", "200"))
+
+
+def _focus_tab_by_text(tab_text: str) -> None:
+    """Best-effort: keep Streamlit tab focus after rerun by clicking tab in DOM."""
+    if not tab_text:
+        return
+    safe_text = tab_text.replace("\\", "\\\\").replace('"', '\\"')
+    components.html(
+        f"""
+<script>
+(function() {{
+  const target = "{safe_text}";
+  const targetLower = target.toLowerCase();
+  let n = 0;
+  const timer = setInterval(() => {{
+    n += 1;
+    const tabs = window.parent.document.querySelectorAll('button[data-baseweb="tab"]');
+    for (const t of tabs) {{
+      const txt = (t.innerText || '').trim();
+      const txtLower = txt.toLowerCase();
+      if (txt === target || txtLower.includes(targetLower)) {{
+        t.click();
+        clearInterval(timer);
+        return;
+      }}
+    }}
+    if (n > 20) clearInterval(timer);
+  }}, 120);
+}})();
+</script>
+        """,
+        height=0,
+    )
+
+
+def _enable_tab_persistence(storage_prefix: str = "openclaw_v49_tabs") -> None:
+    """Persist selected Streamlit tabs in browser localStorage across reruns."""
+    safe_prefix = storage_prefix.replace("\\", "\\\\").replace('"', '\\"')
+    components.html(
+        f"""
+<script>
+(function() {{
+  const prefix = "{safe_prefix}";
+  const doc = window.parent.document;
+  let tries = 0;
+  const timer = setInterval(() => {{
+    tries += 1;
+    const tablists = doc.querySelectorAll('[role="tablist"]');
+    if (!tablists || !tablists.length) {{
+      if (tries > 20) clearInterval(timer);
+      return;
+    }}
+
+    tablists.forEach((tablist, idx) => {{
+      const key = `${{prefix}}_${{idx}}`;
+      const tabs = tablist.querySelectorAll('button[data-baseweb="tab"]');
+      if (!tabs || !tabs.length) return;
+
+      const saved = window.localStorage.getItem(key);
+      if (saved) {{
+        for (const t of tabs) {{
+          const txt = (t.innerText || '').trim();
+          if (txt === saved && t.getAttribute('aria-selected') !== 'true') {{
+            t.click();
+            break;
+          }}
+        }}
+      }}
+
+      tabs.forEach((t) => {{
+        if (t.dataset && t.dataset.openclawBound === '1') return;
+        t.addEventListener('click', () => {{
+          const txt = (t.innerText || '').trim();
+          if (txt) window.localStorage.setItem(key, txt);
+        }});
+        if (t.dataset) t.dataset.openclawBound = '1';
+      }});
+    }});
+    clearInterval(timer);
+  }}, 120);
+}})();
+</script>
+        """,
+        height=0,
+    )
+
+
+def _set_focus_once(main_tab: Optional[str] = None, assistant_tab: Optional[str] = None) -> None:
+    if main_tab:
+        st.session_state["desired_main_tab"] = main_tab
+    if assistant_tab:
+        st.session_state["desired_assistant_tab"] = assistant_tab
+
+
+def _is_low_value_remote_answer(text: str) -> bool:
+    if not text:
+        return True
+    t = text.strip()
+    if len(t) < 60:
+        return True
+    low_value_markers = [
+        "已收到问题",
+        "优化建议：提高信号质量阈值",
+        "暂未读取到最新 run_summary",
+        "执行建议：分批建仓",
+        "仅供参考，不构成投资建议",
+        "我暂时没读到这只股票的本地行情明细",
+        "以下是基于本地 OpenClaw 数据的回答",
+    ]
+    return any(m in t for m in low_value_markers)
+
+
+def _is_advanced_protocol_answer(text: str) -> bool:
+    if not text:
+        return False
+    t = str(text)
+    must_have_any = ["结论", "依据", "风险", "建议", "置信度", "触发", "失效"]
+    hits = sum(1 for k in must_have_any if k in t)
+    return hits >= 3 and len(t.strip()) >= 120
 
 
 def _df_to_csv_bytes(df: pd.DataFrame) -> bytes:
     """Return UTF-8 CSV bytes with BOM for Excel compatibility."""
     csv_text = df.to_csv(index=False)
     return ('\ufeff' + csv_text).encode('utf-8')
+
+
+def _normalize_stock_df(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    if "trade_date" in df.columns:
+        df = df.sort_values("trade_date").reset_index(drop=True)
+    for col in ("close_price", "high_price", "low_price", "vol", "pct_chg", "amount", "turnover_rate"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.ffill().bfill()
+    return df
+
+
+def _load_stock_history(conn: sqlite3.Connection, ts_code: str, limit: int, columns: str) -> pd.DataFrame:
+    try:
+        from data.history import load_stock_recent as _load_stock_recent_v2  # type: ignore
+        db_rows = conn.execute("PRAGMA database_list").fetchall()
+        db_path = str(db_rows[0][2]) if db_rows and len(db_rows[0]) >= 3 else ""
+        if db_path:
+            df = _load_stock_recent_v2(
+                db_path=db_path,
+                ts_code=ts_code,
+                limit=int(limit),
+                columns=columns,
+            )
+            return _normalize_stock_df(df)
+    except Exception:
+        pass
+    try:
+        from data.dao import DataAccessError, detect_daily_table  # type: ignore
+        try:
+            table = detect_daily_table(conn)
+        except DataAccessError:
+            table = "daily_trading_data"
+        table = _safe_daily_table_name(table)
+    except Exception:
+        table = "daily_trading_data"
+    query = f"""
+        SELECT {columns}
+        FROM {table}
+        WHERE ts_code = ?
+        ORDER BY trade_date DESC
+        LIMIT {int(limit)}
+    """
+    df = pd.read_sql_query(query, conn, params=(ts_code,))
+    return _normalize_stock_df(df)
+
+
+def _load_stock_history_fallback(
+    conn: sqlite3.Connection, ts_code: str, limit: int, columns: str
+) -> pd.DataFrame:
+    return _load_stock_history(conn, ts_code, limit, columns)
+
+
+def _load_stock_history_bulk(
+    conn: sqlite3.Connection,
+    ts_codes: List[str],
+    limit: int,
+    columns: str,
+    table: str = "daily_trading_data",
+) -> Dict[str, pd.DataFrame]:
+    try:
+        from data.history import load_stock_history_bulk as _load_stock_history_bulk_v2  # type: ignore
+        return _load_stock_history_bulk_v2(
+            conn=conn,
+            ts_codes=ts_codes,
+            limit=limit,
+            columns=columns,
+            normalize_fn=_normalize_stock_df,
+            bulk_chunk=BULK_HISTORY_CHUNK,
+            table=table,
+        )
+    except Exception:
+        pass
+    if not ts_codes:
+        return {}
+    out: Dict[str, pd.DataFrame] = {}
+    cols = columns
+    use_window = True
+    for i in range(0, len(ts_codes), max(1, BULK_HISTORY_CHUNK)):
+        chunk = ts_codes[i:i + max(1, BULK_HISTORY_CHUNK)]
+        placeholders = ",".join(["?"] * len(chunk))
+        if use_window:
+            query = f"""
+                SELECT {cols} FROM (
+                    SELECT {cols},
+                           ROW_NUMBER() OVER (PARTITION BY ts_code ORDER BY trade_date DESC) AS rn
+                    FROM {table}
+                    WHERE ts_code IN ({placeholders})
+                ) t
+                WHERE rn <= {int(limit)}
+                ORDER BY ts_code, trade_date DESC
+            """
+            try:
+                df = pd.read_sql_query(query, conn, params=chunk)
+            except Exception:
+                use_window = False
+                df = pd.DataFrame()
+        else:
+            df = pd.DataFrame()
+        if df is None or df.empty:
+            continue
+        for ts_code, g in df.groupby("ts_code"):
+            out[ts_code] = _normalize_stock_df(g)
+    return out
+
+
+def _load_history_range_bulk(
+    conn: sqlite3.Connection,
+    ts_codes: List[str],
+    start_date: str,
+    end_date: str,
+    columns: str,
+    table: str = "daily_trading_data",
+) -> Dict[str, pd.DataFrame]:
+    try:
+        from data.history import load_history_range_bulk as _load_history_range_bulk_v2  # type: ignore
+        return _load_history_range_bulk_v2(
+            conn=conn,
+            ts_codes=ts_codes,
+            start_date=start_date,
+            end_date=end_date,
+            columns=columns,
+            normalize_fn=_normalize_stock_df,
+            bulk_chunk=BULK_HISTORY_CHUNK,
+            table=table,
+        )
+    except Exception:
+        pass
+    if not ts_codes:
+        return {}
+    out: Dict[str, pd.DataFrame] = {}
+    cols = columns
+    for i in range(0, len(ts_codes), max(1, BULK_HISTORY_CHUNK)):
+        chunk = ts_codes[i:i + max(1, BULK_HISTORY_CHUNK)]
+        placeholders = ",".join(["?"] * len(chunk))
+        query = f"""
+            SELECT {cols}
+            FROM {table}
+            WHERE ts_code IN ({placeholders})
+              AND trade_date >= ?
+              AND trade_date <= ?
+            ORDER BY ts_code, trade_date
+        """
+        df = pd.read_sql_query(query, conn, params=chunk + [start_date, end_date])
+        if df is None or df.empty:
+            continue
+        for ts_code, g in df.groupby("ts_code"):
+            out[ts_code] = _normalize_stock_df(g)
+    return out
 
 
 def _load_evolve_params(filename: str) -> Dict[str, Any]:
@@ -99,6 +387,21 @@ def _load_evolve_params(filename: str) -> Dict[str, Any]:
     except Exception:
         pass
     return {}
+
+
+def _get_last_trade_date_from_tushare() -> Optional[str]:
+    if not TUSHARE_ENABLED:
+        return None
+    try:
+        pro = ts.pro_api(TUSHARE_TOKEN)
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=20)).strftime("%Y%m%d")
+        df = pro.trade_cal(exchange="SSE", start_date=start_date, end_date=end_date, is_open="1")
+        if df is None or df.empty:
+            return None
+        return str(df["cal_date"].iloc[-1])
+    except Exception:
+        return None
 
 
 def _load_external_bonus_maps(conn: sqlite3.Connection) -> Tuple[float, Dict[str, float], set, set, Dict[str, float]]:
@@ -113,8 +416,8 @@ def _load_external_bonus_maps(conn: sqlite3.Connection) -> Tuple[float, Dict[str
     last_trade = None
 
     try:
-        df_last = pd.read_sql_query("SELECT MAX(trade_date) AS max_date FROM daily_trading_data", conn)
-        last_trade = str(df_last["max_date"].iloc[0]) if not df_last.empty else None
+        from data.dao import latest_trade_date as _latest_trade_date_v2  # type: ignore
+        last_trade = _latest_trade_date_v2(conn)
     except Exception:
         last_trade = None
 
@@ -279,8 +582,8 @@ except ImportError as e:
 
 # 配置
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_PERMANENT_DB_PATH = "/Users/mac/QLIB/permanent_stock_database.db"
-DEFAULT_TUSHARE_TOKEN = "9ad24a6745c2625e7e2064d03855f5a419efa06c97e5e7df70c64856"
+DEFAULT_PERMANENT_DB_PATH = os.path.join(BASE_DIR, "permanent_stock_database.db")
+DEFAULT_TUSHARE_TOKEN = ""
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 def _load_config() -> Dict[str, Any]:
@@ -295,10 +598,22 @@ def _load_config() -> Dict[str, Any]:
         return {}
 
 _CONFIG = _load_config()
-PERMANENT_DB_PATH = os.getenv("PERMANENT_DB_PATH") or _CONFIG.get("PERMANENT_DB_PATH") or DEFAULT_PERMANENT_DB_PATH
+try:
+    from data.dao import resolve_db_path as _resolve_db_path_v2  # type: ignore
+except Exception:
+    _resolve_db_path_v2 = None
+
+_db_cfg = os.getenv("PERMANENT_DB_PATH") or _CONFIG.get("PERMANENT_DB_PATH") or DEFAULT_PERMANENT_DB_PATH
+if _resolve_db_path_v2:
+    try:
+        PERMANENT_DB_PATH = str(_resolve_db_path_v2(_db_cfg))
+    except Exception:
+        PERMANENT_DB_PATH = _db_cfg
+else:
+    PERMANENT_DB_PATH = _db_cfg
 TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN") or _CONFIG.get("TUSHARE_TOKEN") or DEFAULT_TUSHARE_TOKEN
-SIM_TRADING_DB_PATH = os.path.join(BASE_DIR, "sim_trading.db")
-DEFAULT_ENABLE_FUND_BONUS = bool(int(os.getenv("ENABLE_FUND_BONUS", _CONFIG.get("ENABLE_FUND_BONUS", 0))))
+SIM_TRADING_DB_PATH = os.getenv("SIM_TRADING_DB_PATH") or _CONFIG.get("SIM_TRADING_DB_PATH") or os.path.join(BASE_DIR, "sim_trading.db")
+DEFAULT_ENABLE_FUND_BONUS = bool(int(os.getenv("ENABLE_FUND_BONUS", _CONFIG.get("ENABLE_FUND_BONUS", 1))))
 
 def _fund_bonus_enabled() -> bool:
     if "enable_fund_bonus" in st.session_state:
@@ -314,26 +629,138 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _safe_daily_table_name(name: str, fallback: str = "daily_trading_data") -> str:
+    return name if name in {"daily_trading_data", "daily_data"} else fallback
+
+
 def _get_latest_prices(ts_codes: List[str], db_path: str = PERMANENT_DB_PATH) -> Dict[str, Dict[str, Any]]:
     if not ts_codes:
         return {}
     conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    placeholders = ",".join(["?"] * len(ts_codes))
-    query = f"""
-        SELECT ts_code, close_price, trade_date
-        FROM daily_trading_data
-        WHERE ts_code IN ({placeholders})
-        ORDER BY ts_code, trade_date DESC
-    """
-    cursor.execute(query, ts_codes)
-    rows = cursor.fetchall()
-    conn.close()
+    try:
+        from data.dao import DataAccessError, detect_daily_table  # type: ignore
+        try:
+            table = detect_daily_table(conn)
+        except DataAccessError:
+            table = "daily_trading_data"
+        table = _safe_daily_table_name(table)
+        cursor = conn.cursor()
+        placeholders = ",".join(["?"] * len(ts_codes))
+        query = f"""
+            SELECT ts_code, close_price, trade_date
+            FROM {table}
+            WHERE ts_code IN ({placeholders})
+            ORDER BY ts_code, trade_date DESC
+        """
+        cursor.execute(query, ts_codes)
+        rows = cursor.fetchall()
+    finally:
+        conn.close()
     latest = {}
     for ts_code, close_price, trade_date in rows:
         if ts_code not in latest:
             latest[ts_code] = {"price": _safe_float(close_price), "trade_date": trade_date}
     return latest
+
+
+def _connect_permanent_db() -> sqlite3.Connection:
+    try:
+        from data.dao import resolve_db_path as _resolve_db_path_v2  # type: ignore
+        conn = sqlite3.connect(str(_resolve_db_path_v2(PERMANENT_DB_PATH)))
+    except Exception:
+        conn = sqlite3.connect(PERMANENT_DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_real_stock_data(db_path: str) -> pd.DataFrame:
+    """Cached wrapper: loads latest-day stock data. TTL=5min to stay fresh."""
+    from data.dao import detect_daily_table, recent_trade_profile  # type: ignore
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    try:
+        daily_table = detect_daily_table(conn)
+        profile = recent_trade_profile(conn, date_limit=1, recent_window=1)
+        latest_date = str(profile.get("last_trade_date", "") or "")
+        if not latest_date:
+            return pd.DataFrame()
+        query = f"""
+            SELECT dtd.ts_code AS "股票代码",
+                   sb.name AS "股票名称",
+                   dtd.amount AS "成交额",
+                   dtd.close_price AS "价格",
+                   sb.circ_mv AS "流通市值"
+            FROM {daily_table} dtd
+            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
+            WHERE dtd.trade_date = ?
+        """
+        df = pd.read_sql_query(query, conn, params=(latest_date,))
+    except Exception:
+        return pd.DataFrame()
+    finally:
+        conn.close()
+    if df is None or df.empty:
+        return pd.DataFrame()
+    df["成交额"] = pd.to_numeric(df["成交额"], errors="coerce").fillna(0.0)
+    df["价格"] = pd.to_numeric(df["价格"], errors="coerce").fillna(0.0)
+    df["流通市值"] = pd.to_numeric(df["流通市值"], errors="coerce").fillna(0.0)
+    try:
+        median_amount = float(df["成交额"].median())
+        if 0 < median_amount < 1e7:
+            df["成交额"] = df["成交额"] * 1000.0
+    except Exception:
+        pass
+    return df
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_candidate_stocks(db_path: str, scan_all: bool, cap_min_yi: float, cap_max_yi: float) -> pd.DataFrame:
+    """Cached wrapper for candidate stock list. TTL=5min."""
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    try:
+        df = _load_candidate_stocks(conn, scan_all=scan_all, cap_min_yi=cap_min_yi, cap_max_yi=cap_max_yi)
+    finally:
+        conn.close()
+    return df
+
+
+def _batch_load_stock_histories(
+    conn: sqlite3.Connection,
+    ts_codes: List[str],
+    limit: int = 120,
+    columns: str = "ts_code, trade_date, close_price, vol, pct_chg",
+) -> Dict[str, pd.DataFrame]:
+    """Batch-load history for many stocks in one query instead of N individual queries."""
+    if not ts_codes:
+        return {}
+    try:
+        from data.dao import detect_daily_table  # type: ignore
+        table = detect_daily_table(conn)
+        table = _safe_daily_table_name(table)
+    except Exception:
+        table = "daily_trading_data"
+    placeholders = ",".join(["?"] * len(ts_codes))
+    query = f"""
+        SELECT {columns}
+        FROM (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY ts_code ORDER BY trade_date DESC) AS rn
+            FROM {table}
+            WHERE ts_code IN ({placeholders})
+        ) sub
+        WHERE rn <= {int(limit)}
+        ORDER BY ts_code, trade_date
+    """
+    big_df = pd.read_sql_query(query, conn, params=ts_codes)
+    result = {}
+    if big_df is not None and not big_df.empty:
+        for code, grp in big_df.groupby("ts_code"):
+            result[str(code)] = _normalize_stock_df(grp.drop(columns=["ts_code"], errors="ignore").reset_index(drop=True))
+    return result
 
 
 def _init_sim_db() -> None:
@@ -986,92 +1413,108 @@ def _apply_multi_period_filter(
     ts_col = _get_ts_code_col(df)
     if not ts_col:
         return df
-    conn = sqlite3.connect(db_path)
     rows = []
-    try:
-        for _, row in df.iterrows():
-            ts_code = row[ts_col]
-            q = """
-                SELECT trade_date, close_price
-                FROM daily_trading_data
-                WHERE ts_code = ?
-                ORDER BY trade_date DESC
-                LIMIT 61
-            """
-            hist = pd.read_sql_query(q, conn, params=(ts_code,))
-            if len(hist) < 21:
-                continue
-            hist = hist.sort_values("trade_date").reset_index(drop=True)
-            closes = pd.to_numeric(hist["close_price"], errors="coerce").dropna()
-            if len(closes) < 21:
-                continue
-            def _ret(n: int) -> float:
-                if len(closes) <= n:
-                    return 0.0
-                base = closes.iloc[-(n + 1)]
-                return (closes.iloc[-1] / base - 1.0) if base else 0.0
-            r5, r20, r60 = _ret(5), _ret(20), _ret(60)
-            pos = sum(1 for v in (r5, r20, r60) if v >= 0)
-            neg = 3 - pos
-            align = max(pos, neg)
-            if align >= min_align:
-                row = row.copy()
-                row["5日趋势"] = "上行" if r5 >= 0 else "下行"
-                row["20日趋势"] = "上行" if r20 >= 0 else "下行"
-                row["60日趋势"] = "上行" if r60 >= 0 else "下行"
-                row["趋势一致数"] = align
-                rows.append(row)
-        if not rows:
-            return pd.DataFrame()
-        return pd.DataFrame(rows)
-    finally:
-        conn.close()
+    for _, row in df.iterrows():
+        ts_code = row[ts_col]
+        try:
+            from data.history import load_stock_recent as _load_stock_recent_v2  # type: ignore
+            hist = _load_stock_recent_v2(
+                db_path=db_path,
+                ts_code=ts_code,
+                limit=61,
+                columns="trade_date, close_price",
+            )
+        except Exception:
+            hist = pd.DataFrame()
+        if len(hist) < 21:
+            continue
+        hist = hist.sort_values("trade_date").reset_index(drop=True)
+        closes = pd.to_numeric(hist["close_price"], errors="coerce").dropna()
+        if len(closes) < 21:
+            continue
+
+        def _ret(n: int) -> float:
+            if len(closes) <= n:
+                return 0.0
+            base = closes.iloc[-(n + 1)]
+            return (closes.iloc[-1] / base - 1.0) if base else 0.0
+
+        r5, r20, r60 = _ret(5), _ret(20), _ret(60)
+        pos = sum(1 for v in (r5, r20, r60) if v >= 0)
+        neg = 3 - pos
+        align = max(pos, neg)
+        if align >= min_align:
+            row = row.copy()
+            row["5日趋势"] = "上行" if r5 >= 0 else "下行"
+            row["20日趋势"] = "上行" if r20 >= 0 else "下行"
+            row["60日趋势"] = "上行" if r60 >= 0 else "下行"
+            row["趋势一致数"] = align
+            rows.append(row)
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
 
 
 def _add_reason_summary(df: pd.DataFrame, score_col: str = "综合评分") -> pd.DataFrame:
     if df is None or df.empty:
         return df
+    if "理由摘要" in df.columns:
+        return df
     out = df.copy()
-    def _build(row) -> str:
-        reasons = []
-        if score_col in row:
-            try:
-                reasons.append(f"评分{float(row[score_col]):.1f}")
-            except Exception:
-                pass
-        if "资金加分" in row:
-            try:
-                val = float(str(row["资金加分"]).replace("+", ""))
-                if val > 0:
-                    reasons.append(f"资金加分+{val:.1f}")
-            except Exception:
-                pass
-        if "行业热度" in row:
-            try:
-                reasons.append(f"行业热度{float(row['行业热度']):.2f}")
-            except Exception:
-                pass
-        if "行业排名" in row and str(row["行业排名"]).startswith("#"):
-            reasons.append(f"行业排名{row['行业排名']}")
-        if "回撤%" in row:
-            try:
-                reasons.append(f"回撤{float(str(row['回撤%']).replace('%','')):.1f}%")
-            except Exception:
-                pass
-        if "波动率%" in row:
-            try:
-                reasons.append(f"波动{float(str(row['波动率%']).replace('%','')):.1f}%")
-            except Exception:
-                pass
-        if len(reasons) < 3 and "筛选理由" in row and row["筛选理由"]:
-            raw = str(row["筛选理由"])
-            parts = [p.strip() for p in re.split(r"[·;；,，/]+", raw) if p.strip()]
-            reasons.extend(parts[:2])
-        if len(reasons) < 3:
-            reasons.append("满足筛选阈值")
-        return "；".join(reasons[:5])
-    out["核心理由"] = out.apply(_build, axis=1)
+    if "筛选理由" in out.columns:
+        out["理由摘要"] = out["筛选理由"]
+    elif "协同组合" in out.columns:
+        out["理由摘要"] = out["协同组合"]
+    else:
+        out["理由摘要"] = ""
     return out
+
+
+def _render_v7_results(
+    results_df: pd.DataFrame,
+    candidate_count: int,
+    filter_failed: int,
+    score_threshold_v7: float,
+    select_mode_v7: str,
+    top_percent_v7: int,
+) -> None:
+    st.markdown("---")
+    st.markdown(f"###  智能扫描结果")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("候选股票", f"{candidate_count}只")
+    with col2:
+        if candidate_count > 0:
+            st.metric("过滤淘汰", f"{filter_failed}只",
+                      delta=f"{filter_failed/candidate_count*100:.1f}%")
+        else:
+            st.metric("过滤淘汰", f"{filter_failed}只")
+    with col3:
+        if candidate_count > 0:
+            st.metric("最终推荐", f"{len(results_df)}只",
+                      delta=f"{len(results_df)/candidate_count*100:.2f}%")
+        else:
+            st.metric("最终推荐", f"{len(results_df)}只")
+
+    if results_df is None or results_df.empty:
+        st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
+        return
+
+    if "理由摘要" not in results_df.columns:
+        results_df = _add_reason_summary(results_df, score_col="综合评分")
+
+    if select_mode_v7 == "阈值筛选":
+        st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v7}分）")
+    elif select_mode_v7 == "双重筛选(阈值+Top%)":
+        st.success(f"先阈值后Top筛选：≥{score_threshold_v7}分，Top {top_percent_v7}%（{len(results_df)} 只）")
+    else:
+        st.success(f"选出 Top {top_percent_v7}%（{len(results_df)} 只）")
+
+    results_df = results_df.reset_index(drop=True)
+    _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
+    msg, level = _signal_density_hint(len(results_df), candidate_count)
+    getattr(st, level)(msg)
 
 
 def _signal_density_hint(results_count: int, candidate_count: int) -> Tuple[str, str]:
@@ -1114,6 +1557,1199 @@ def _apply_filter_mode(
         keep_n = max(1, int(len(out) * top_percent / 100))
         out = out.head(keep_n)
     return out.drop(columns=["score_val"])
+
+
+def _get_db_last_trade_date(db_path: str) -> str:
+    try:
+        from data.history import get_db_last_trade_date as _get_db_last_trade_date_v2  # type: ignore
+        return _get_db_last_trade_date_v2(db_path)
+    except Exception:
+        pass
+    try:
+        from data.dao import latest_trade_date as _latest_trade_date_v2  # type: ignore
+        conn = sqlite3.connect(db_path)
+        max_date = _latest_trade_date_v2(conn)
+        conn.close()
+        if max_date:
+            return str(max_date)
+    except Exception:
+        pass
+    return ""
+
+
+def _get_index_daily_from_db(start_date: str, end_date: str) -> pd.DataFrame:
+    try:
+        from data.history import get_index_daily_from_db as _get_index_daily_from_db_v2  # type: ignore
+        return _get_index_daily_from_db_v2(
+            db_path=PERMANENT_DB_PATH,
+            start_date=start_date,
+            end_date=end_date,
+            index_code="000001.SH",
+        )
+    except Exception:
+        return pd.DataFrame()
+
+
+def _v7_cache_dir() -> str:
+    return os.getenv("AIRIVO_CACHE_DIR", os.path.join(os.path.dirname(__file__), "cache_v9"))
+
+
+def _offline_apply_limit(stocks_df: pd.DataFrame) -> pd.DataFrame:
+    limit = OFFLINE_STOCK_LIMIT
+    if limit and limit > 0 and len(stocks_df) > limit:
+        return stocks_df.head(limit)
+    return stocks_df
+
+
+def _load_candidate_stocks(
+    conn: sqlite3.Connection,
+    *,
+    scan_all: bool = True,
+    cap_min_yi: float = 0.0,
+    cap_max_yi: float = 0.0,
+    require_industry: bool = False,
+    distinct: bool = True,
+    random_order: bool = False,
+) -> pd.DataFrame:
+    select_kw = "SELECT DISTINCT" if distinct else "SELECT"
+    where_parts: List[str] = []
+    params: List[Any] = []
+    use_cap = not (scan_all and cap_min_yi == 0 and cap_max_yi == 0)
+    if require_industry:
+        where_parts.append("sb.industry IS NOT NULL")
+    if use_cap:
+        cap_min_wan = cap_min_yi * 10000 if cap_min_yi > 0 else 0
+        cap_max_wan = cap_max_yi * 10000 if cap_max_yi > 0 else 999999999
+        where_parts.append("sb.circ_mv >= ?")
+        where_parts.append("sb.circ_mv <= ?")
+        params.extend([cap_min_wan, cap_max_wan])
+    where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+    order_sql = "ORDER BY RANDOM()" if random_order else "ORDER BY sb.circ_mv DESC"
+    query = f"""
+        {select_kw} sb.ts_code, sb.name, sb.industry, sb.circ_mv
+        FROM stock_basic sb
+        {where_sql}
+        {order_sql}
+    """
+    return pd.read_sql_query(query, conn, params=params)
+
+
+def _offline_log_progress(tag: str, idx: int, total: int) -> None:
+    if OFFLINE_LOG_EVERY <= 0:
+        return
+    if (idx + 1) % OFFLINE_LOG_EVERY == 0:
+        logger.info(f"[offline:{tag}] progress {idx+1}/{total}")
+
+
+def _offline_targets() -> set:
+    targets = {"v4", "v5", "v6", "v7", "v8", "v9", "combo", "sector", "stable", "ai"}
+    only = os.getenv("OFFLINE_ONLY", "").strip()
+    exclude = os.getenv("OFFLINE_EXCLUDE", "").strip()
+    if only:
+        targets = {t.strip().lower() for t in only.split(",") if t.strip()}
+    if exclude:
+        targets = {t for t in targets if t not in {x.strip().lower() for x in exclude.split(",") if x.strip()}}
+    return targets
+
+
+def _v7_cache_key(params: Dict[str, Any], db_last: str) -> str:
+    raw = json.dumps({"params": params, "db_last": db_last}, ensure_ascii=False, sort_keys=True)
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+
+def _v7_cache_paths(params: Dict[str, Any], db_last: str) -> Tuple[str, str]:
+    cache_dir = _v7_cache_dir()
+    os.makedirs(cache_dir, exist_ok=True)
+    key = _v7_cache_key(params, db_last)
+    csv_path = os.path.join(cache_dir, f"v7_scan_{key}.csv")
+    meta_path = os.path.join(cache_dir, f"v7_scan_{key}.meta.json")
+    return csv_path, meta_path
+
+
+def _load_v7_cache(params: Dict[str, Any], db_last: str) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    try:
+        csv_path, meta_path = _v7_cache_paths(params, db_last)
+        if not (os.path.exists(csv_path) and os.path.exists(meta_path)):
+            return None, {}
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f) or {}
+        df = pd.read_csv(csv_path)
+        return df, meta
+    except Exception:
+        return None, {}
+
+
+def _save_v7_cache(params: Dict[str, Any], db_last: str, df: pd.DataFrame, meta: Dict[str, Any]) -> None:
+    try:
+        csv_path, meta_path = _v7_cache_paths(params, db_last)
+        df.to_csv(csv_path, index=False)
+        meta_out = {
+            "params": params,
+            "db_last": db_last,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        meta_out.update(meta or {})
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta_out, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def _scan_cache_key(strategy: str, params: Dict[str, Any], db_last: str) -> str:
+    raw = json.dumps({"strategy": strategy, "params": params, "db_last": db_last}, ensure_ascii=False, sort_keys=True)
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+
+def _scan_cache_paths(strategy: str, params: Dict[str, Any], db_last: str) -> Tuple[str, str]:
+    cache_dir = _v7_cache_dir()
+    os.makedirs(cache_dir, exist_ok=True)
+    key = _scan_cache_key(strategy, params, db_last)
+    csv_path = os.path.join(cache_dir, f"{strategy}_{key}.csv")
+    meta_path = os.path.join(cache_dir, f"{strategy}_{key}.meta.json")
+    return csv_path, meta_path
+
+
+def _load_scan_cache(strategy: str, params: Dict[str, Any], db_last: str) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    try:
+        csv_path, meta_path = _scan_cache_paths(strategy, params, db_last)
+        if not (os.path.exists(csv_path) and os.path.exists(meta_path)):
+            return None, {}
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f) or {}
+        df = pd.read_csv(csv_path)
+        return df, meta
+    except Exception:
+        return None, {}
+
+
+def _save_scan_cache(strategy: str, params: Dict[str, Any], db_last: str, df: pd.DataFrame, meta: Dict[str, Any]) -> None:
+    try:
+        csv_path, meta_path = _scan_cache_paths(strategy, params, db_last)
+        df.to_csv(csv_path, index=False)
+        meta_out = {
+            "strategy": strategy,
+            "params": params,
+            "db_last": db_last,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        meta_out.update(meta or {})
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta_out, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def _render_cached_scan_results(
+    title: str,
+    results_df: pd.DataFrame,
+    score_col: str,
+    candidate_count: int,
+    filter_failed: int,
+    select_mode: str,
+    threshold: float,
+    top_percent: int,
+) -> None:
+    st.markdown("---")
+    st.markdown(f"###  {title}")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("候选股票", f"{candidate_count}只")
+    with col2:
+        if candidate_count > 0:
+            st.metric("过滤淘汰", f"{filter_failed}只",
+                      delta=f"{filter_failed/candidate_count*100:.1f}%")
+        else:
+            st.metric("过滤淘汰", f"{filter_failed}只")
+    with col3:
+        if candidate_count > 0:
+            st.metric("最终推荐", f"{len(results_df)}只",
+                      delta=f"{len(results_df)/candidate_count*100:.2f}%")
+        else:
+            st.metric("最终推荐", f"{len(results_df)}只")
+
+    if results_df is None or results_df.empty:
+        st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
+        return
+
+    if select_mode == "阈值筛选":
+        st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{threshold}分）")
+    elif select_mode == "双重筛选(阈值+Top%)":
+        st.success(f"先阈值后Top筛选：≥{threshold}分，Top {top_percent}%（{len(results_df)} 只）")
+    else:
+        st.success(f"选出 Top {top_percent}%（{len(results_df)} 只）")
+
+    results_df = results_df.reset_index(drop=True)
+    _render_result_overview(results_df, score_col=score_col, title="扫描结果概览")
+    msg, level = _signal_density_hint(len(results_df), candidate_count)
+    getattr(st, level)(msg)
+
+    # 缓存命中时也要展示明细，否则用户只能看到概览卡片
+    st.markdown("---")
+    st.subheader("结果明细（缓存）")
+    display_df = results_df.drop(columns=["原始数据"], errors="ignore")
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+def run_offline_v7_scan() -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    """
+    Offline v7 scan for precompute/cache. Configure via env:
+      V7_SCORE_THRESHOLD, V7_TOP_PERCENT, V7_SELECT_MODE, V7_SCAN_ALL,
+      V7_CAP_MIN, V7_CAP_MAX, V7_ENABLE_CONSISTENCY, V7_MIN_ALIGN
+    """
+    score_threshold = float(os.getenv("V7_SCORE_THRESHOLD", "60"))
+    top_percent = int(os.getenv("V7_TOP_PERCENT", "2"))
+    select_mode = os.getenv("V7_SELECT_MODE", "双重筛选(阈值+Top%)")
+    scan_all = os.getenv("V7_SCAN_ALL", "1") == "1"
+    cap_min = float(os.getenv("V7_CAP_MIN", "0"))
+    cap_max = float(os.getenv("V7_CAP_MAX", "0"))
+    enable_consistency = os.getenv("V7_ENABLE_CONSISTENCY", "1") == "1"
+    min_align = int(os.getenv("V7_MIN_ALIGN", "2"))
+
+    params = {
+        "score_threshold": score_threshold,
+        "top_percent": top_percent,
+        "select_mode": select_mode,
+        "scan_all": scan_all,
+        "cap_min": cap_min,
+        "cap_max": cap_max,
+        "enable_consistency": enable_consistency,
+        "min_align": min_align,
+    }
+
+    db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+    cached_df, cached_meta = _load_v7_cache(params, db_last)
+    if cached_df is not None and not cached_df.empty:
+        return cached_df, cached_meta
+
+    analyzer = CompleteVolumePriceAnalyzer()
+    if not (hasattr(analyzer, "evaluator_v7") and analyzer.evaluator_v7):
+        return None, {"error": "v7 evaluator not available"}
+
+    conn = _connect_permanent_db()
+    stocks_df = _load_candidate_stocks(
+        conn,
+        scan_all=scan_all,
+        cap_min_yi=cap_min,
+        cap_max_yi=cap_max,
+        require_industry=True,
+    )
+
+    results = []
+    filter_failed = 0
+    bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+    failed_counter = {"n": 0}
+    results = run_stock_scan_pipeline(
+        stocks_df=stocks_df,
+        conn=conn,
+        tag="v7",
+        min_history=60,
+        load_history=lambda c, ts: _load_stock_history(
+            c, ts, 120, "trade_date, close_price, vol, pct_chg"
+        ),
+        evaluate=lambda row, stock_data: (
+            (res if res.get("success") else None)
+            if (res := analyzer.evaluator_v7.evaluate_stock_v7(
+                stock_data=stock_data,
+                ts_code=row["ts_code"],
+                industry=row["industry"],
+            ))
+            else None
+        ),
+        build_result=lambda payload: {
+            "股票代码": payload.row["ts_code"],
+            "股票名称": payload.row["name"],
+            "行业": payload.row["industry"],
+            "流通市值": f"{payload.row['circ_mv']/10000:.1f}亿",
+            "综合评分": f"{float(payload.score_result.get('final_score', 0)) + _calc_external_bonus(payload.row['ts_code'], payload.row['industry'], bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map):.1f}",
+            "评级": payload.score_result.get("grade", "-"),
+            "资金加分": f"{_calc_external_bonus(payload.row['ts_code'], payload.row['industry'], bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map):.1f}",
+            "市场环境": payload.score_result.get("market_regime", "-"),
+            "行业热度": f"{payload.score_result.get('industry_heat', 0):.2f}",
+            "行业排名": f"#{payload.score_result.get('industry_rank', 0)}" if payload.score_result.get('industry_rank', 0) > 0 else "未进Top8",
+            "行业加分": f"+{payload.score_result.get('bonus_score', 0)}分",
+            "最新价格": f"{payload.stock_data['close_price'].iloc[0]:.2f}元",
+            "智能止损": f"{payload.score_result.get('stop_loss', 0):.2f}元",
+            "智能止盈": f"{payload.score_result.get('take_profit', 0):.2f}元",
+            "筛选理由": payload.score_result.get("signal_reasons", ""),
+        },
+        on_no_result=lambda _row, _stock: failed_counter.__setitem__("n", failed_counter["n"] + 1),
+        on_exception=lambda _row, _e: failed_counter.__setitem__("n", failed_counter["n"] + 1),
+    )
+    filter_failed = int(failed_counter["n"])
+
+    conn.close()
+    if not results:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": filter_failed}
+
+    results_df = pd.DataFrame(results)
+    results_df = _apply_filter_mode(
+        results_df,
+        score_col="综合评分",
+        mode=select_mode,
+        threshold=score_threshold,
+        top_percent=top_percent,
+    )
+    if enable_consistency and not results_df.empty:
+        results_df = _apply_multi_period_filter(
+            results_df,
+            PERMANENT_DB_PATH,
+            min_align=min_align
+        )
+    results_df = _add_reason_summary(results_df, score_col="综合评分")
+    results_df = results_df.reset_index(drop=True)
+
+    meta = {
+        "candidate_count": int(len(stocks_df)),
+        "filter_failed": int(filter_failed),
+    }
+    _save_v7_cache(params, db_last, results_df, meta)
+    return results_df, meta
+
+
+def _offline_scan_v4(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    score_threshold = float(os.getenv("V4_SCORE_THRESHOLD", "60"))
+    top_percent = int(os.getenv("V4_TOP_PERCENT", "2"))
+    select_mode = os.getenv("V4_SELECT_MODE", "双重筛选(阈值+Top%)")
+    scan_all = os.getenv("V4_SCAN_ALL", "1") == "1"
+    cap_min = float(os.getenv("V4_CAP_MIN", "0"))
+    cap_max = float(os.getenv("V4_CAP_MAX", "0"))
+    enable_consistency = os.getenv("V4_ENABLE_CONSISTENCY", "1") == "1"
+    min_align = int(os.getenv("V4_MIN_ALIGN", "2"))
+
+    params = {
+        "score_threshold": score_threshold,
+        "top_percent": top_percent,
+        "select_mode": select_mode,
+        "scan_all": scan_all,
+        "cap_min": cap_min,
+        "cap_max": cap_max,
+        "enable_consistency": enable_consistency,
+        "min_align": min_align,
+    }
+    db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+    cached_df, cached_meta = _load_scan_cache("v4_scan", params, db_last)
+    if cached_df is not None and not cached_df.empty:
+        return cached_df, cached_meta
+
+    if not V4_EVALUATOR_AVAILABLE or not hasattr(analyzer, "evaluator_v4") or analyzer.evaluator_v4 is None:
+        return None, {"error": "v4 evaluator not available"}
+
+    conn = _connect_permanent_db()
+    bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+
+    stocks_df = _load_candidate_stocks(
+        conn,
+        scan_all=scan_all,
+        cap_min_yi=cap_min,
+        cap_max_yi=cap_max,
+    )
+
+    stocks_df = _offline_apply_limit(stocks_df)
+    logger.info(f"[offline:v4] candidates {len(stocks_df)}")
+    results = run_stock_scan_pipeline(
+        stocks_df=stocks_df,
+        conn=conn,
+        tag="v4",
+        min_history=60,
+        load_history=lambda c, ts: _load_stock_history(
+            c, ts, 120, "trade_date, close_price, vol, pct_chg"
+        ),
+        evaluate=lambda row, stock_data: analyzer.evaluator_v4.evaluate_stock_v4(stock_data),
+        build_result=lambda payload: {
+            "股票代码": payload.row["ts_code"],
+            "股票名称": payload.row["name"],
+            "行业": payload.row["industry"],
+            "流通市值": f"{payload.row['circ_mv']/10000:.1f}亿",
+            "综合评分": f"{float(payload.score_result.get('final_score', 0)) + _calc_external_bonus(payload.row['ts_code'], payload.row['industry'], bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map):.1f}",
+            "评级": payload.score_result.get("grade", "-"),
+        },
+        on_progress=_offline_log_progress,
+    )
+
+    conn.close()
+    logger.info(f"[offline:v4] results {len(results)}")
+    if not results:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+    results_df = pd.DataFrame(results)
+    results_df = _apply_filter_mode(results_df, "综合评分", select_mode, score_threshold, top_percent)
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    if enable_consistency and not results_df.empty:
+        results_df = _apply_multi_period_filter(results_df, PERMANENT_DB_PATH, min_align=min_align)
+    results_df = _add_reason_summary(results_df, score_col="综合评分")
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    results_df = results_df.reset_index(drop=True)
+
+    _save_scan_cache(
+        "v4_scan",
+        params,
+        db_last,
+        results_df,
+        {"candidate_count": len(stocks_df), "filter_failed": 0},
+    )
+    return results_df, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+
+def _offline_scan_v5(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    score_threshold = float(os.getenv("V5_SCORE_THRESHOLD", "60"))
+    top_percent = int(os.getenv("V5_TOP_PERCENT", "2"))
+    select_mode = os.getenv("V5_SELECT_MODE", "双重筛选(阈值+Top%)")
+    cap_min = float(os.getenv("V5_CAP_MIN", "100"))
+    cap_max = float(os.getenv("V5_CAP_MAX", "1500"))
+    enable_consistency = os.getenv("V5_ENABLE_CONSISTENCY", "1") == "1"
+    min_align = int(os.getenv("V5_MIN_ALIGN", "2"))
+
+    params = {
+        "score_threshold": score_threshold,
+        "top_percent": top_percent,
+        "select_mode": select_mode,
+        "cap_min": cap_min,
+        "cap_max": cap_max,
+        "enable_consistency": enable_consistency,
+        "min_align": min_align,
+    }
+    db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+    cached_df, cached_meta = _load_scan_cache("v5_scan", params, db_last)
+    if cached_df is not None and not cached_df.empty:
+        return cached_df, cached_meta
+
+    if not V5_EVALUATOR_AVAILABLE or not hasattr(analyzer, "evaluator_v5") or analyzer.evaluator_v5 is None:
+        return None, {"error": "v5 evaluator not available"}
+
+    conn = _connect_permanent_db()
+    stocks_df = _load_candidate_stocks(
+        conn,
+        scan_all=False,
+        cap_min_yi=cap_min,
+        cap_max_yi=cap_max,
+    )
+    stocks_df = _offline_apply_limit(stocks_df)
+    logger.info(f"[offline:v5] candidates {len(stocks_df)}")
+    results = run_stock_scan_pipeline(
+        stocks_df=stocks_df,
+        conn=conn,
+        tag="v5",
+        min_history=60,
+        load_history=lambda c, ts: _load_stock_history(
+            c, ts, 120, "trade_date, close_price, vol, pct_chg"
+        ),
+        evaluate=lambda row, stock_data: analyzer.evaluator_v5.evaluate_stock_v4(stock_data),
+        build_result=lambda payload: {
+            "股票代码": payload.row["ts_code"],
+            "股票名称": payload.row["name"],
+            "行业": payload.row["industry"],
+            "流通市值": f"{payload.row['circ_mv']/10000:.1f}亿",
+            "综合评分": f"{float(payload.score_result.get('final_score', 0)):.1f}",
+            "评级": payload.score_result.get("grade", "-"),
+        },
+        on_progress=_offline_log_progress,
+    )
+
+    conn.close()
+    logger.info(f"[offline:v5] results {len(results)}")
+    if not results:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+    results_df = pd.DataFrame(results)
+    results_df = _apply_filter_mode(results_df, "综合评分", select_mode, score_threshold, top_percent)
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    if enable_consistency and not results_df.empty:
+        results_df = _apply_multi_period_filter(results_df, PERMANENT_DB_PATH, min_align=min_align)
+    results_df = _add_reason_summary(results_df, score_col="综合评分")
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    results_df = results_df.reset_index(drop=True)
+
+    _save_scan_cache(
+        "v5_scan",
+        params,
+        db_last,
+        results_df,
+        {"candidate_count": len(stocks_df), "filter_failed": 0},
+    )
+    return results_df, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+
+def _offline_scan_v6(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    score_threshold = float(os.getenv("V6_SCORE_THRESHOLD", "85"))
+    top_percent = int(os.getenv("V6_TOP_PERCENT", "2"))
+    select_mode = os.getenv("V6_SELECT_MODE", "双重筛选(阈值+Top%)")
+    cap_min = float(os.getenv("V6_CAP_MIN", "50"))
+    cap_max = float(os.getenv("V6_CAP_MAX", "1000"))
+    enable_consistency = os.getenv("V6_ENABLE_CONSISTENCY", "1") == "1"
+    min_align = int(os.getenv("V6_MIN_ALIGN", "2"))
+
+    params = {
+        "score_threshold": score_threshold,
+        "top_percent": top_percent,
+        "select_mode": select_mode,
+        "cap_min": cap_min,
+        "cap_max": cap_max,
+        "enable_consistency": enable_consistency,
+        "min_align": min_align,
+    }
+    db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+    cached_df, cached_meta = _load_scan_cache("v6_scan", params, db_last)
+    if cached_df is not None and not cached_df.empty:
+        return cached_df, cached_meta
+
+    if not V6_EVALUATOR_AVAILABLE or not hasattr(analyzer, "evaluator_v6") or analyzer.evaluator_v6 is None:
+        return None, {"error": "v6 evaluator not available"}
+
+    conn = _connect_permanent_db()
+    stocks_df = _load_candidate_stocks(
+        conn,
+        scan_all=False,
+        cap_min_yi=cap_min,
+        cap_max_yi=cap_max,
+    )
+    stocks_df = _offline_apply_limit(stocks_df)
+    logger.info(f"[offline:v6] candidates {len(stocks_df)}")
+    results = run_stock_scan_pipeline(
+        stocks_df=stocks_df,
+        conn=conn,
+        tag="v6",
+        min_history=60,
+        load_history=lambda c, ts: _load_stock_history(
+            c, ts, 120, "trade_date, close_price, vol, pct_chg"
+        ),
+        evaluate=lambda row, stock_data: analyzer.evaluator_v6.evaluate_stock_v6(
+            stock_data, row["ts_code"]
+        ),
+        build_result=lambda payload: {
+            "股票代码": payload.row["ts_code"],
+            "股票名称": payload.row["name"],
+            "行业": payload.row["industry"],
+            "流通市值": f"{payload.row['circ_mv']/10000:.1f}亿",
+            "综合评分": f"{float(payload.score_result.get('final_score', 0)):.1f}",
+            "评级": payload.score_result.get("grade", "-"),
+        },
+        on_progress=_offline_log_progress,
+    )
+
+    conn.close()
+    logger.info(f"[offline:v6] results {len(results)}")
+    if not results:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+    results_df = pd.DataFrame(results)
+    results_df = _apply_filter_mode(results_df, "综合评分", select_mode, score_threshold, top_percent)
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    if enable_consistency and not results_df.empty:
+        results_df = _apply_multi_period_filter(results_df, PERMANENT_DB_PATH, min_align=min_align)
+    results_df = _add_reason_summary(results_df, score_col="综合评分")
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    results_df = results_df.reset_index(drop=True)
+
+    _save_scan_cache(
+        "v6_scan",
+        params,
+        db_last,
+        results_df,
+        {"candidate_count": len(stocks_df), "filter_failed": 0},
+    )
+    return results_df, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+
+def _offline_scan_v8(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    score_min = float(os.getenv("V8_SCORE_MIN", "55"))
+    score_max = float(os.getenv("V8_SCORE_MAX", "70"))
+    top_percent = int(os.getenv("V8_TOP_PERCENT", "2"))
+    select_mode = os.getenv("V8_SELECT_MODE", "双重筛选(阈值+Top%)")
+    scan_all = os.getenv("V8_SCAN_ALL", "1") == "1"
+    cap_min = float(os.getenv("V8_CAP_MIN", "0"))
+    cap_max = float(os.getenv("V8_CAP_MAX", "0"))
+    enable_consistency = os.getenv("V8_ENABLE_CONSISTENCY", "1") == "1"
+    min_align = int(os.getenv("V8_MIN_ALIGN", "2"))
+
+    params = {
+        "score_threshold": [score_min, score_max],
+        "top_percent": top_percent,
+        "select_mode": select_mode,
+        "scan_all": scan_all,
+        "cap_min": cap_min,
+        "cap_max": cap_max,
+        "enable_consistency": enable_consistency,
+        "min_align": min_align,
+    }
+    db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+    cached_df, cached_meta = _load_scan_cache("v8_scan", params, db_last)
+    if cached_df is not None and not cached_df.empty:
+        return cached_df, cached_meta
+
+    if not V8_EVALUATOR_AVAILABLE or not hasattr(analyzer, "evaluator_v8") or analyzer.evaluator_v8 is None:
+        return None, {"error": "v8 evaluator not available"}
+
+    conn = _connect_permanent_db()
+    stocks_df = _load_candidate_stocks(
+        conn,
+        scan_all=scan_all,
+        cap_min_yi=cap_min,
+        cap_max_yi=cap_max,
+        require_industry=True,
+    )
+
+    stocks_df = _offline_apply_limit(stocks_df)
+    logger.info(f"[offline:v8] candidates {len(stocks_df)}")
+    results = run_stock_scan_pipeline(
+        stocks_df=stocks_df,
+        conn=conn,
+        tag="v8",
+        min_history=60,
+        load_history=lambda c, ts: _load_stock_history(
+            c, ts, 120, "trade_date, close_price, high_price, low_price, vol, pct_chg"
+        ),
+        evaluate=lambda row, stock_data: (
+            (res if res.get("success") else None)
+            if (res := analyzer.evaluator_v8.evaluate_stock_v8(
+                stock_data=stock_data, ts_code=row["ts_code"], index_data=None
+            ))
+            else None
+        ),
+        build_result=lambda payload: {
+            "股票代码": payload.row["ts_code"],
+            "股票名称": payload.row["name"],
+            "行业": payload.row["industry"],
+            "流通市值": f"{payload.row['circ_mv']/10000:.1f}亿",
+            "综合评分": f"{float(payload.score_result.get('final_score', 0)):.1f}",
+            "评级": payload.score_result.get("grade", "-"),
+        },
+        on_progress=_offline_log_progress,
+    )
+
+    conn.close()
+    logger.info(f"[offline:v8] results {len(results)}")
+    if not results:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+    results_df = pd.DataFrame(results)
+    # 区间过滤
+    results_df["score_val"] = pd.to_numeric(results_df["综合评分"], errors="coerce")
+    results_df = results_df[(results_df["score_val"] >= score_min) & (results_df["score_val"] <= score_max)]
+    results_df = results_df.drop(columns=["score_val"])
+    results_df = _apply_filter_mode(results_df, "综合评分", select_mode, score_min, top_percent)
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    if enable_consistency and not results_df.empty:
+        results_df = _apply_multi_period_filter(results_df, PERMANENT_DB_PATH, min_align=min_align)
+    results_df = _add_reason_summary(results_df, score_col="综合评分")
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    results_df = results_df.reset_index(drop=True)
+
+    _save_scan_cache(
+        "v8_scan",
+        params,
+        db_last,
+        results_df,
+        {"candidate_count": len(stocks_df), "filter_failed": 0},
+    )
+    return results_df, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+
+def _offline_scan_v9(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    score_threshold = float(os.getenv("V9_SCORE_THRESHOLD", "60"))
+    top_percent = int(os.getenv("V9_TOP_PERCENT", "3"))
+    select_mode = os.getenv("V9_SELECT_MODE", "分位数筛选(Top%)")
+    scan_all = os.getenv("V9_SCAN_ALL", "1") == "1"
+    cap_min = float(os.getenv("V9_CAP_MIN", "0"))
+    cap_max = float(os.getenv("V9_CAP_MAX", "0"))
+    enable_consistency = os.getenv("V9_ENABLE_CONSISTENCY", "1") == "1"
+    min_align = int(os.getenv("V9_MIN_ALIGN", "2"))
+    holding_days = int(os.getenv("V9_HOLDING_DAYS", "20"))
+    lookback_days = int(os.getenv("V9_LOOKBACK_DAYS", "160"))
+    min_turnover = float(os.getenv("V9_MIN_TURNOVER", "5.0"))
+    candidate_count = int(os.getenv("V9_CANDIDATE_COUNT", "800"))
+
+    params = {
+        "score_threshold": score_threshold,
+        "top_percent": top_percent,
+        "select_mode": select_mode,
+        "scan_all": scan_all,
+        "cap_min": cap_min,
+        "cap_max": cap_max,
+        "enable_consistency": enable_consistency,
+        "min_align": min_align,
+        "holding_days": holding_days,
+        "lookback_days": lookback_days,
+        "min_turnover": min_turnover,
+        "candidate_count": candidate_count,
+    }
+    db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+    cached_df, cached_meta = _load_scan_cache("v9_scan", params, db_last)
+    if cached_df is not None and not cached_df.empty:
+        return cached_df, cached_meta
+
+    conn = _connect_permanent_db()
+    stocks_df = _load_candidate_stocks(
+        conn,
+        scan_all=scan_all,
+        cap_min_yi=cap_min,
+        cap_max_yi=cap_max,
+        require_industry=True,
+    )
+    if OFFLINE_STOCK_LIMIT > 0:
+        candidate_count = min(candidate_count, OFFLINE_STOCK_LIMIT)
+    stocks_df = stocks_df.head(candidate_count)
+    logger.info(f"[offline:v9] candidates {len(stocks_df)}")
+
+    bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+    results = run_stock_scan_pipeline(
+        stocks_df=stocks_df,
+        conn=conn,
+        tag="v9",
+        min_history=80,
+        load_history=lambda c, ts: _load_stock_history(
+            c, ts, 160, "trade_date, close_price, high_price, low_price, vol, pct_chg"
+        ),
+        evaluate=lambda row, stock_data: (
+            score_info
+            if (
+                (score_info := analyzer._calc_v9_score_from_hist(stock_data, industry_strength=0.0))
+                and (
+                    select_mode != "阈值筛选"
+                    or (
+                        float(score_info.get("score", 0))
+                        + _calc_external_bonus(
+                            row["ts_code"],
+                            row["industry"],
+                            bonus_global,
+                            bonus_stock_map,
+                            top_list_set,
+                            top_inst_set,
+                            bonus_industry_map,
+                        )
+                    ) >= score_threshold
+                )
+            )
+            else None
+        ),
+        build_result=lambda payload: {
+            "股票代码": payload.row["ts_code"],
+            "股票名称": payload.row["name"],
+            "行业": payload.row["industry"],
+            "流通市值": f"{payload.row['circ_mv']/10000:.1f}亿",
+            "综合评分": f"{float(payload.score_result.get('score', 0)) + _calc_external_bonus(payload.row['ts_code'], payload.row['industry'], bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map):.1f}",
+            "建议持仓": f"{holding_days}天",
+        },
+        on_progress=_offline_log_progress,
+    )
+
+    conn.close()
+    logger.info(f"[offline:v9] results {len(results)}")
+    if not results:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+    results_df = pd.DataFrame(results)
+    if select_mode != "阈值筛选":
+        results_df["score_val"] = pd.to_numeric(results_df["综合评分"], errors="coerce")
+        results_df = results_df.sort_values("score_val", ascending=False)
+        keep_n = max(1, int(len(results_df) * top_percent / 100))
+        results_df = results_df.head(keep_n).drop(columns=["score_val"])
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    if enable_consistency and not results_df.empty:
+        results_df = _apply_multi_period_filter(results_df, PERMANENT_DB_PATH, min_align=min_align)
+    results_df = _add_reason_summary(results_df, score_col="综合评分")
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    results_df = results_df.reset_index(drop=True)
+
+    _save_scan_cache(
+        "v9_scan",
+        params,
+        db_last,
+        results_df,
+        {"candidate_count": len(stocks_df), "filter_failed": 0},
+    )
+    return results_df, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+
+def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    candidate_count = int(os.getenv("COMBO_CANDIDATE_COUNT", "800"))
+    min_turnover = float(os.getenv("COMBO_MIN_TURNOVER", "5.0"))
+    min_agree = int(os.getenv("COMBO_MIN_AGREE", "3"))
+    cap_min = float(os.getenv("COMBO_CAP_MIN", "0"))
+    cap_max = float(os.getenv("COMBO_CAP_MAX", "0"))
+    select_mode = os.getenv("COMBO_SELECT_MODE", "双重筛选(阈值+Top%)")
+    combo_threshold = float(os.getenv("COMBO_THRESHOLD", "68"))
+    top_percent = int(os.getenv("COMBO_TOP_PERCENT", "2"))
+    lookback_days = int(os.getenv("COMBO_LOOKBACK_DAYS", "120"))
+
+    params = {
+        "candidate_count": candidate_count,
+        "min_turnover": min_turnover,
+        "min_agree": min_agree,
+        "cap_min": cap_min,
+        "cap_max": cap_max,
+        "select_mode": select_mode,
+        "combo_threshold": combo_threshold,
+        "top_percent": top_percent,
+        "lookback_days": lookback_days,
+    }
+    db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+    cached_df, cached_meta = _load_scan_cache("combo_scan", params, db_last)
+    if cached_df is not None and not cached_df.empty:
+        return cached_df, cached_meta
+
+    conn = _connect_permanent_db()
+    stocks_df = _load_candidate_stocks(
+        conn,
+        scan_all=True,
+        cap_min_yi=cap_min,
+        cap_max_yi=cap_max,
+        require_industry=True,
+    )
+    if OFFLINE_STOCK_LIMIT > 0:
+        candidate_count = min(candidate_count, OFFLINE_STOCK_LIMIT)
+    stocks_df = stocks_df.head(candidate_count)
+    logger.info(f"[offline:combo] candidates {len(stocks_df)}")
+    conn.close()
+
+    combo_start = (datetime.now() - timedelta(days=lookback_days + 30)).strftime("%Y%m%d")
+    combo_end = datetime.now().strftime("%Y%m%d")
+
+    def _combo_eval(row: pd.Series, hist: pd.DataFrame) -> Optional[Dict[str, Any]]:
+        avg_amount = pd.to_numeric(hist["amount"], errors="coerce").tail(20).mean()
+        avg_amount_yi = avg_amount / 1e5
+        if avg_amount_yi < min_turnover:
+            return None
+
+        stock_data = hist.copy()
+        stock_data["name"] = row["name"]
+
+        v4_res = analyzer.evaluator_v4.evaluate_stock_v4(stock_data)
+        v5_res = analyzer.evaluator_v5.evaluate_stock_v4(stock_data)
+        v7_res = analyzer.evaluator_v7.evaluate_stock_v7(
+            stock_data=stock_data, ts_code=row["ts_code"], industry=row["industry"]
+        )
+        v8_res = analyzer.evaluator_v8.evaluate_stock_v8(
+            stock_data=stock_data, ts_code=row["ts_code"], index_data=None
+        )
+        v9_info = analyzer._calc_v9_score_from_hist(hist, industry_strength=0.0)
+
+        scores = {
+            "v4": float(v4_res.get("final_score", 0)) if v4_res else None,
+            "v5": float(v5_res.get("final_score", 0)) if v5_res else None,
+            "v7": float(v7_res.get("final_score", 0)) if v7_res and v7_res.get("success") else None,
+            "v8": float(v8_res.get("final_score", 0)) if v8_res and v8_res.get("success") else None,
+            "v9": float(v9_info.get("score", 0)) if v9_info else None,
+        }
+        agree_count = sum(1 for s in scores.values() if s is not None and s >= combo_threshold)
+        if agree_count < min_agree:
+            return None
+
+        return {"scores": scores, "agree_count": int(agree_count)}
+
+    results = run_stock_scan_pipeline(
+        stocks_df=stocks_df,
+        conn=None,
+        tag="combo",
+        min_history=80,
+        load_history=lambda _c, ts: _load_history_full(ts, combo_start, combo_end),
+        evaluate=_combo_eval,
+        build_result=lambda payload: {
+            "股票代码": payload.row["ts_code"],
+            "股票名称": payload.row["name"],
+            "行业": payload.row["industry"],
+            "流通市值": f"{payload.row['circ_mv']/10000:.1f}亿",
+            "共识评分": f"{float(np.mean([s for s in payload.score_result['scores'].values() if s is not None])):.1f}",
+            "一致数": int(payload.score_result["agree_count"]),
+        },
+        on_progress=_offline_log_progress,
+    )
+
+    logger.info(f"[offline:combo] results {len(results)}")
+    if not results:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+    results_df = pd.DataFrame(results)
+    if select_mode != "阈值筛选":
+        results_df["score_val"] = pd.to_numeric(results_df["共识评分"], errors="coerce")
+        results_df = results_df.sort_values("score_val", ascending=False)
+        keep_n = max(1, int(len(results_df) * top_percent / 100))
+        results_df = results_df.head(keep_n).drop(columns=["score_val"])
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    results_df = _add_reason_summary(results_df, score_col="共识评分")
+    if results_df is None or results_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    results_df = results_df.reset_index(drop=True)
+
+    _save_scan_cache(
+        "combo_scan",
+        params,
+        db_last,
+        results_df,
+        {"candidate_count": len(stocks_df), "filter_failed": 0},
+    )
+    return results_df, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+
+def _offline_scan_stable() -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    lookback_days = int(os.getenv("STABLE_LOOKBACK_DAYS", "120"))
+    max_drawdown = float(os.getenv("STABLE_MAX_DRAWDOWN", "0.15"))
+    vol_max = float(os.getenv("STABLE_VOL_MAX", "0.04"))
+    rebound_min = float(os.getenv("STABLE_REBOUND_MIN", "0.10"))
+    candidate_count = int(os.getenv("STABLE_CANDIDATE_COUNT", "200"))
+    result_count = int(os.getenv("STABLE_RESULT_COUNT", "30"))
+    min_turnover = float(os.getenv("STABLE_MIN_TURNOVER", "5.0"))
+    min_mv = int(os.getenv("STABLE_MIN_MV", "100"))
+    max_mv = int(os.getenv("STABLE_MAX_MV", "5000"))
+
+    params = {
+        "lookback_days": lookback_days,
+        "max_drawdown": max_drawdown,
+        "vol_max": vol_max,
+        "rebound_min": rebound_min,
+        "candidate_count": candidate_count,
+        "result_count": result_count,
+        "min_turnover": min_turnover,
+        "min_mv": min_mv,
+        "max_mv": max_mv,
+    }
+    db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+    cached_df, cached_meta = _load_scan_cache("stable_scan", params, db_last)
+    if cached_df is not None and not cached_df.empty:
+        return cached_df, cached_meta
+
+    if not os.path.exists(PERMANENT_DB_PATH):
+        return None, {"error": "database not found"}
+
+    try:
+        import stable_uptrend_strategy as _stable_mod
+    except Exception as e:
+        return None, {"error": f"stable module missing: {e}"}
+
+    ctx = _StableUptrendContext(PERMANENT_DB_PATH, db_manager=None)
+    data = ctx.get_real_stock_data_optimized()
+    data = ctx._apply_global_filters(data, min_mv=min_mv, max_mv=max_mv, use_price=False, use_turnover=False)
+    if data is None or data.empty:
+        return None, {"candidate_count": 0, "filter_failed": 0}
+
+    filtered = data.copy()
+    filtered = filtered[filtered["成交额"] >= min_turnover * 1e8]
+    filtered = filtered[(filtered["价格"] > 2) & (filtered["价格"] < 200)]
+    filtered = filtered.sort_values("成交额", ascending=False)
+    if OFFLINE_STOCK_LIMIT > 0:
+        candidate_count = min(candidate_count, OFFLINE_STOCK_LIMIT)
+    filtered = filtered.head(candidate_count)
+    logger.info(f"[offline:stable] candidates {len(filtered)}")
+
+    if filtered.empty:
+        return None, {"candidate_count": 0, "filter_failed": 0}
+
+    start_date = (datetime.now() - timedelta(days=lookback_days * 2)).strftime("%Y%m%d")
+    end_date = datetime.now().strftime("%Y%m%d")
+
+    results = []
+    for idx, row in enumerate(filtered.itertuples(index=False), 1):
+        _offline_log_progress("stable", idx, len(filtered))
+        ts_code = getattr(row, "股票代码")
+        name = getattr(row, "股票名称")
+        score_info = _stable_mod._score_stable_uptrend(
+            ctx,
+            ts_code,
+            lookback_days,
+            max_drawdown,
+            vol_max,
+            rebound_min,
+            start_date,
+            end_date,
+            pro=None,
+        )
+        if score_info:
+            results.append(
+                {
+                    "股票代码": ts_code,
+                    "股票名称": name,
+                    "稳定上涨评分": round(score_info["score"], 1),
+                    "最大回撤": round(score_info["max_dd"] * 100, 2),
+                    "20日波动率": round(score_info["vol"] * 100, 2),
+                    "反弹幅度": round(score_info["rebound"] * 100, 2),
+                    "趋势": "✅" if score_info["trend_ok"] else "❌",
+                    "二次启动": "✅" if score_info["breakout"] else "❌",
+                    "建议持有周期": score_info["hold_days"],
+                }
+            )
+
+    logger.info(f"[offline:stable] results {len(results)}")
+    if not results:
+        return None, {"candidate_count": len(filtered), "filter_failed": 0}
+
+    results_df = pd.DataFrame(results).sort_values("稳定上涨评分", ascending=False)
+    results_df = results_df.head(result_count)
+
+    _save_scan_cache(
+        "stable_scan",
+        params,
+        db_last,
+        results_df,
+        {"candidate_count": len(filtered), "filter_failed": 0},
+    )
+    return results_df, {"candidate_count": len(filtered), "filter_failed": 0}
+
+
+def _offline_scan_ai(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    min_strength = int(os.getenv("AI_MIN_STRENGTH", "55"))
+    investment_cycle = os.getenv("AI_CYCLE", "balanced")
+    lookback_days = int(os.getenv("AI_LOOKBACK_DAYS", "120"))
+    candidate_count = int(os.getenv("AI_CANDIDATE_COUNT", "800"))
+    result_count = int(os.getenv("AI_RESULT_COUNT", "50"))
+    cap_min = float(os.getenv("AI_CAP_MIN", "0"))
+    cap_max = float(os.getenv("AI_CAP_MAX", "0"))
+
+    params = {
+        "min_strength": min_strength,
+        "investment_cycle": investment_cycle,
+        "lookback_days": lookback_days,
+        "candidate_count": candidate_count,
+        "result_count": result_count,
+        "cap_min": cap_min,
+        "cap_max": cap_max,
+    }
+    db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+    cached_df, cached_meta = _load_scan_cache("ai_scan", params, db_last)
+    if cached_df is not None and not cached_df.empty:
+        return cached_df, cached_meta
+
+    conn = _connect_permanent_db()
+    stocks_df = _load_candidate_stocks(
+        conn,
+        scan_all=True,
+        cap_min_yi=cap_min,
+        cap_max_yi=cap_max,
+        distinct=False,
+    )
+
+    if OFFLINE_STOCK_LIMIT > 0:
+        candidate_count = min(candidate_count, OFFLINE_STOCK_LIMIT)
+    stocks_df = stocks_df.head(candidate_count)
+    logger.info(f"[offline:ai] candidates {len(stocks_df)}")
+
+    frame_rows = run_stock_scan_pipeline(
+        stocks_df=stocks_df,
+        conn=conn,
+        tag="ai",
+        min_history=1,
+        load_history=lambda c, ts: _load_stock_history(
+            c,
+            ts,
+            lookback_days + 30,
+            "trade_date, close_price, pct_chg, vol, amount",
+        ),
+        evaluate=lambda _row, _stock_data: {"ok": True},
+        build_result=lambda payload: {
+            "frame": (
+                payload.stock_data.assign(
+                    close=lambda d: d["close_price"] if "close_price" in d.columns and "close" not in d.columns else d.get("close", np.nan),
+                    ts_code=payload.row["ts_code"],
+                    name=payload.row["name"],
+                    industry=payload.row["industry"] if pd.notna(payload.row["industry"]) else "未知",
+                )
+            ),
+        },
+        on_progress=_offline_log_progress,
+    )
+    conn.close()
+
+    frames = [item.get("frame") for item in frame_rows if isinstance(item, dict) and item.get("frame") is not None]
+
+    if not frames:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+    all_df = pd.concat(frames, ignore_index=True)
+    result_df = analyzer.select_current_stocks_complete(
+        all_df,
+        min_strength=min_strength,
+        investment_cycle=investment_cycle,
+    )
+    if result_df is None or result_df.empty:
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+    result_df = result_df.rename(
+        columns={
+            "ts_code": "股票代码",
+            "name": "股票名称",
+            "industry": "行业",
+            "buy_value": "综合评分",
+            "signal_strength": "信号强度",
+            "latest_price": "最新价格",
+            "signal_reasons": "筛选理由",
+            "signal_date": "信号日期",
+        }
+    )
+    result_df = result_df.sort_values("综合评分", ascending=False).head(result_count)
+
+    _save_scan_cache(
+        "ai_scan",
+        params,
+        db_last,
+        result_df,
+        {"candidate_count": len(stocks_df), "filter_failed": 0},
+    )
+    return result_df, {"candidate_count": len(stocks_df), "filter_failed": 0}
+
+
+def _offline_scan_sector() -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    days = int(os.getenv("SECTOR_SCAN_DAYS", "60"))
+    try:
+        scanner = MarketScanner()
+        results = scanner.scan_all_sectors(days=days)
+        cache_dir = _v7_cache_dir()
+        os.makedirs(cache_dir, exist_ok=True)
+        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+        out_path = os.path.join(cache_dir, f"sector_scan_{db_last}_{days}.json")
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+        return results, {"cache_path": out_path}
+    except Exception as e:
+        return None, {"error": str(e)}
+
+
+def _load_history_full(ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
+    try:
+        from data.history import load_history_full as _load_history_full_v2  # type: ignore
+        return _load_history_full_v2(
+            db_path=PERMANENT_DB_PATH,
+            ts_code=ts_code,
+            start_date=start_date,
+            end_date=end_date,
+            columns="trade_date, close_price, high_price, low_price, vol, amount, pct_chg, turnover_rate",
+            normalize_fn=_normalize_stock_df,
+        )
+    except Exception:
+        return pd.DataFrame()
+
+
+def run_offline_all() -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    targets = _offline_targets()
+    analyzer = CompleteVolumePriceAnalyzer()
+    if "v4" in targets:
+        out["v4"] = _offline_scan_v4(analyzer)
+    if "v5" in targets:
+        out["v5"] = _offline_scan_v5(analyzer)
+    if "v6" in targets:
+        out["v6"] = _offline_scan_v6(analyzer)
+    if "v7" in targets:
+        out["v7"] = run_offline_v7_scan()
+    if "v8" in targets:
+        out["v8"] = _offline_scan_v8(analyzer)
+    if "v9" in targets:
+        out["v9"] = _offline_scan_v9(analyzer)
+    if "combo" in targets:
+        out["combo"] = _offline_scan_combo(analyzer)
+    if "stable" in targets:
+        out["stable"] = _offline_scan_stable()
+    if "ai" in targets:
+        out["ai"] = _offline_scan_ai(analyzer)
+    if "sector" in targets:
+        out["sector"] = _offline_scan_sector()
+    return out
 
 
 # ===================== 完整的量价分析器（集成v43+v44）=====================
@@ -1313,14 +2949,15 @@ class CompleteVolumePriceAnalyzer:
         使用Tushare Pro直接获取上证指数数据
         """
         try:
-            #  使用Tushare Pro获取大盘数据
-            import tushare as ts
-            pro = ts.pro_api(TUSHARE_TOKEN)
-            
             end_date = datetime.now().strftime('%Y%m%d')
             start_date = (datetime.now() - timedelta(days=max(days, 10) + 5)).strftime('%Y%m%d')
-            
-            df = pro.index_daily(ts_code='000001.SH', start_date=start_date, end_date=end_date)
+
+            if TUSHARE_ENABLED:
+                import tushare as ts
+                pro = ts.pro_api(TUSHARE_TOKEN)
+                df = pro.index_daily(ts_code='000001.SH', start_date=start_date, end_date=end_date)
+            else:
+                df = _get_index_daily_from_db(start_date, end_date)
             
             if df is None or len(df) == 0:
                 return {
@@ -1407,12 +3044,12 @@ class CompleteVolumePriceAnalyzer:
         方法：直接从Tushare Pro获取上证指数数据
         """
         try:
-            #  直接从Tushare Pro获取大盘数据
-            import tushare as ts
-            pro = ts.pro_api(TUSHARE_TOKEN)
-            
-            # 获取上证指数数据
-            df = pro.index_daily(ts_code='000001.SH', start_date=start_date, end_date=end_date)
+            if TUSHARE_ENABLED:
+                import tushare as ts
+                pro = ts.pro_api(TUSHARE_TOKEN)
+                df = pro.index_daily(ts_code='000001.SH', start_date=start_date, end_date=end_date)
+            else:
+                df = _get_index_daily_from_db(start_date, end_date)
             
             if df is None or len(df) == 0:
                 return {
@@ -1906,17 +3543,13 @@ class CompleteVolumePriceAnalyzer:
         - 震荡市：其他情况
         """
         try:
-            # 尝试获取上证指数数据
-            conn = sqlite3.connect(PERMANENT_DB_PATH)
-            query = """
-                SELECT trade_date, close_price, pct_chg
-                FROM daily_trading_data
-                WHERE ts_code = '000001.SH'
-                ORDER BY trade_date DESC
-                LIMIT 20
-            """
-            index_data = pd.read_sql_query(query, conn)
-            conn.close()
+            from data.history import load_index_recent as _load_index_recent_v2  # type: ignore
+            index_data = _load_index_recent_v2(
+                db_path=PERMANENT_DB_PATH,
+                index_code="000001.SH",
+                limit=20,
+                columns="trade_date, close_price, pct_chg",
+            )
             
             if len(index_data) < 20:
                 return 'oscillation'  # 默认震荡市
@@ -2019,18 +3652,31 @@ class CompleteVolumePriceAnalyzer:
         try:
             if not industry or pd.isna(industry):
                 return {'heat_score': 0, 'heat_level': '未知', 'industry_return': 0}
-            
-            conn = sqlite3.connect(PERMANENT_DB_PATH)
-            
+
+            from data.dao import DataAccessError, detect_daily_table, recent_trade_profile  # type: ignore
+
+            conn = _connect_permanent_db()
+            try:
+                daily_table = detect_daily_table(conn)
+                profile = recent_trade_profile(conn, date_limit=1, recent_window=1)
+                latest_trade = str(profile.get("last_trade_date", "") or "")
+            except DataAccessError:
+                conn.close()
+                return {'heat_score': 0, 'heat_level': '未知', 'industry_return': 0}
+
+            if not latest_trade:
+                conn.close()
+                return {'heat_score': 0, 'heat_level': '未知', 'industry_return': 0}
+
             # 获取同行业股票的最新交易数据
-            query = """
+            query = f"""
                 SELECT dtd.ts_code, dtd.pct_chg, dtd.vol
-                FROM daily_trading_data dtd
+                FROM {daily_table} dtd
                 INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
                 WHERE sb.industry = ?
-                AND dtd.trade_date = (SELECT MAX(trade_date) FROM daily_trading_data)
+                AND dtd.trade_date = ?
             """
-            industry_data = pd.read_sql_query(query, conn, params=(industry,))
+            industry_data = pd.read_sql_query(query, conn, params=(industry, latest_trade))
             conn.close()
             
             if len(industry_data) < 5:
@@ -4830,19 +6476,16 @@ class CompleteVolumePriceAnalyzer:
         # 获取大盘数据（用于市场过滤）
         index_data = None
         try:
-            conn = sqlite3.connect(self.db_path)
-            index_query = """
-                SELECT trade_date, close_price as close, vol as volume
-                FROM daily_trading_data
-                WHERE ts_code = '000001.SH'
-                ORDER BY trade_date DESC
-                LIMIT 300
-            """
-            index_df = pd.read_sql_query(index_query, conn)
+            from data.history import load_index_recent as _load_index_recent_v2  # type: ignore
+            index_df = _load_index_recent_v2(
+                db_path=self.db_path,
+                index_code="000001.SH",
+                limit=300,
+                columns="trade_date, close_price as close, vol as volume",
+            )
             if len(index_df) > 0:
-                index_data = index_df.sort_values('trade_date')
+                index_data = index_df.sort_values("trade_date")
                 logger.info(f"大盘数据加载成功: {len(index_data)}条")
-            conn.close()
         except Exception as e:
             logger.warning(f"大盘数据加载失败: {e}，将不使用市场过滤")
         
@@ -5361,14 +7004,13 @@ class CompleteVolumePriceAnalyzer:
             market_multiplier = 1.0
             market_status = "正常"
             try:
-                conn = sqlite3.connect(self.db_path)
-                idx_query = """
-                    SELECT close_price FROM daily_trading_data 
-                    WHERE ts_code = '000001.SH' 
-                    ORDER BY trade_date DESC LIMIT 40
-                """
-                idx_df = pd.read_sql_query(idx_query, conn)
-                conn.close()
+                from data.history import load_index_recent as _load_index_recent_v2  # type: ignore
+                idx_df = _load_index_recent_v2(
+                    db_path=self.db_path,
+                    index_code="000001.SH",
+                    limit=40,
+                    columns="close_price",
+                )
                 if len(idx_df) >= 20:
                     idx_closes = idx_df['close_price'].tolist()
                     idx_ma20 = sum(idx_closes[:20]) / 20
@@ -5927,14 +7569,13 @@ class CompleteVolumePriceAnalyzer:
             market_score = 1.0
             market_warning = ""
             try:
-                conn = sqlite3.connect(self.db_path)
-                idx_query = """
-                    SELECT close_price FROM daily_trading_data 
-                    WHERE ts_code = '000001.SH' 
-                    ORDER BY trade_date DESC LIMIT 40
-                """
-                idx_df = pd.read_sql_query(idx_query, conn)
-                conn.close()
+                from data.history import load_index_recent as _load_index_recent_v2  # type: ignore
+                idx_df = _load_index_recent_v2(
+                    db_path=self.db_path,
+                    index_code="000001.SH",
+                    limit=40,
+                    columns="close_price",
+                )
                 if len(idx_df) >= 20:
                     idx_closes = idx_df['close_price'].tolist()
                     idx_ma20 = sum(idx_closes[:20]) / 20
@@ -6358,16 +7999,24 @@ class MarketScanner:
     
     def _get_all_sectors_data(self, days: int) -> pd.DataFrame:
         try:
-            if not os.path.exists(PERMANENT_DB_PATH):
+            if not os.path.exists(self.db_path):
                 return pd.DataFrame()
-            
-            conn = sqlite3.connect(PERMANENT_DB_PATH)
+
+            from data.dao import DataAccessError, detect_daily_table  # type: ignore
+
+            conn = sqlite3.connect(self.db_path)
             start_date = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
-            
-            query = """
+
+            try:
+                daily_table = detect_daily_table(conn)
+            except DataAccessError:
+                conn.close()
+                return pd.DataFrame()
+
+            query = f"""
                 SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date, 
                        dtd.close_price, dtd.vol, dtd.pct_chg
-                FROM daily_trading_data dtd
+                FROM {daily_table} dtd
                 INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
                 WHERE dtd.trade_date >= ? AND sb.industry IS NOT NULL
                 ORDER BY sb.industry, dtd.trade_date
@@ -6388,6 +8037,13 @@ class DatabaseManager:
     
     def __init__(self, db_path: str = PERMANENT_DB_PATH):
         self.db_path = db_path
+        # 线上部署时工作目录可能变化，优先自动解析真实数据库路径
+        try:
+            from data.dao import resolve_db_path as _resolve_db_path_runtime  # type: ignore
+
+            self.db_path = str(_resolve_db_path_runtime(self.db_path))
+        except Exception:
+            pass
         self.pro = None
         self._init_tushare()
 
@@ -6403,6 +8059,9 @@ class DatabaseManager:
         return conn
     
     def _init_tushare(self):
+        if not TUSHARE_ENABLED:
+            logger.info("Tushare已禁用（OFFLINE_MODE 或 TUSHARE_ENABLED=0）")
+            return
         try:
             ts.set_token(TUSHARE_TOKEN)
             self.pro = ts.pro_api()
@@ -6414,12 +8073,25 @@ class DatabaseManager:
         """获取数据库状态"""
         try:
             if not os.path.exists(self.db_path):
-                return {'error': '数据库文件不存在'}
-            
+                try:
+                    from data.dao import resolve_db_path as _resolve_db_path_runtime  # type: ignore
+
+                    self.db_path = str(_resolve_db_path_runtime(self.db_path))
+                except Exception:
+                    return {'error': f'数据库文件不存在: {self.db_path}'}
+
+            from data.dao import DataAccessError, detect_daily_table, recent_trade_profile  # type: ignore
+
             conn = self._connect()
             cursor = conn.cursor()
             
             status = {}
+            daily_table = None
+            try:
+                daily_table = detect_daily_table(conn)
+                status["daily_table"] = daily_table
+            except DataAccessError:
+                status["daily_table"] = "N/A"
             
             try:
                 cursor.execute("SELECT COUNT(DISTINCT ts_code) FROM stock_basic")
@@ -6434,19 +8106,29 @@ class DatabaseManager:
                 status['total_industries'] = 0
             
             try:
-                cursor.execute("SELECT COUNT(*) FROM daily_trading_data")
-                status['total_records'] = cursor.fetchone()[0]
+                if daily_table:
+                    cursor.execute(f"SELECT COUNT(*) FROM {daily_table}")
+                    status['total_records'] = cursor.fetchone()[0]
+                else:
+                    status['total_records'] = 0
             except:
                 status['total_records'] = 0
             
             try:
-                cursor.execute("SELECT MIN(trade_date), MAX(trade_date) FROM daily_trading_data")
-                date_range = cursor.fetchone()
-                status['min_date'] = date_range[0] if date_range[0] else 'N/A'
-                status['max_date'] = date_range[1] if date_range[1] else 'N/A'
+                if daily_table:
+                    cursor.execute(f"SELECT MIN(trade_date), MAX(trade_date) FROM {daily_table}")
+                    date_range = cursor.fetchone()
+                    status['min_date'] = date_range[0] if date_range and date_range[0] else 'N/A'
+                    status['max_date'] = date_range[1] if date_range and date_range[1] else 'N/A'
+                    profile = recent_trade_profile(conn, date_limit=10, recent_window=3)
+                    status["records_last_trade_date"] = int(profile.get("records_last_trade_date", 0) or 0)
+                else:
+                    status['min_date'] = 'N/A'
+                    status['max_date'] = 'N/A'
             except:
                 status['min_date'] = 'N/A'
                 status['max_date'] = 'N/A'
+                status["records_last_trade_date"] = 0
             
             if os.path.exists(self.db_path):
                 size_bytes = os.path.getsize(self.db_path)
@@ -6479,16 +8161,52 @@ class DatabaseManager:
             
             end_date = datetime.now().strftime('%Y%m%d')
             start_date = (datetime.now() - timedelta(days=days+10)).strftime('%Y%m%d')
-            
-            try:
-                trade_cal = self.pro.trade_cal(exchange='SSE', start_date=start_date, end_date=end_date, is_open='1')
-            except Exception as e:
-                return {'success': False, 'error': '无法获取交易日历'}
-            
-            if trade_cal.empty:
-                return {'success': False, 'error': '交易日历为空'}
-            
-            trade_dates = trade_cal['cal_date'].tolist()[-days:]
+
+            def _infer_weekday_trade_dates(_end_date: str, _days: int) -> List[str]:
+                try:
+                    _d = datetime.strptime(_end_date, "%Y%m%d")
+                except Exception:
+                    _d = datetime.now()
+                _out = []
+                _max_scan = max(_days * 4, _days + 30)
+                for _ in range(_max_scan):
+                    if _d.weekday() < 5:
+                        _out.append(_d.strftime("%Y%m%d"))
+                        if len(_out) >= _days:
+                            break
+                    _d -= timedelta(days=1)
+                _out.sort()
+                return _out[-_days:]
+
+            trade_dates: List[str] = []
+            calendar_source = "trade_cal"
+            calendar_warning = ""
+            last_calendar_error = ""
+            for _attempt in range(3):
+                try:
+                    trade_cal = self.pro.trade_cal(
+                        exchange='SSE',
+                        start_date=start_date,
+                        end_date=end_date,
+                        is_open='1',
+                    )
+                    if trade_cal is not None and not trade_cal.empty:
+                        trade_dates = sorted([str(x) for x in trade_cal['cal_date'].tolist()])[-days:]
+                        break
+                    last_calendar_error = "trade_cal empty"
+                except Exception as e:
+                    last_calendar_error = str(e)
+                    logger.warning(f"trade_cal 获取失败（第{_attempt+1}/3次）: {e}")
+                time.sleep(0.6 * (_attempt + 1))
+
+            if not trade_dates:
+                trade_dates = _infer_weekday_trade_dates(end_date, days)
+                calendar_source = "weekday_fallback"
+                calendar_warning = "交易日历接口暂不可用，已按工作日兜底更新。"
+                logger.warning(f"trade_cal 不可用，启用工作日兜底。last_error={last_calendar_error}")
+
+            if not trade_dates:
+                return {'success': False, 'error': f'无法获取交易日期（trade_cal与兜底均失败）: {last_calendar_error}'}
             
             if not stock_codes:
                 try:
@@ -6507,6 +8225,15 @@ class DatabaseManager:
             
             conn = self._connect()
             cursor = conn.cursor()
+            try:
+                from data.dao import DataAccessError, detect_daily_table  # type: ignore
+                try:
+                    daily_table = detect_daily_table(conn)
+                except DataAccessError:
+                    daily_table = "daily_trading_data"
+                daily_table = _safe_daily_table_name(daily_table)
+            except Exception:
+                daily_table = "daily_trading_data"
             
             updated_count = 0
             failed_count = 0
@@ -6522,8 +8249,8 @@ class DatabaseManager:
                         
                         for _, row in df.iterrows():
                             try:
-                                cursor.execute("""
-                                    INSERT OR REPLACE INTO daily_trading_data 
+                                cursor.execute(f"""
+                                    INSERT OR REPLACE INTO {daily_table}
                                     (ts_code, trade_date, open_price, high_price, low_price, 
                                      close_price, pre_close, vol, amount, pct_chg)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -6558,7 +8285,9 @@ class DatabaseManager:
                 'success': True,
                 'updated_days': updated_count,
                 'failed_days': failed_count,
-                'total_records': total_records
+                'total_records': total_records,
+                'calendar_source': calendar_source,
+                'calendar_warning': calendar_warning,
             }
             
         except Exception as e:
@@ -6570,24 +8299,33 @@ class DatabaseManager:
         try:
             conn = self._connect()
             cursor = conn.cursor()
+            try:
+                from data.dao import DataAccessError, detect_daily_table  # type: ignore
+                try:
+                    daily_table = detect_daily_table(conn)
+                except DataAccessError:
+                    daily_table = "daily_trading_data"
+                daily_table = _safe_daily_table_name(daily_table)
+            except Exception:
+                daily_table = "daily_trading_data"
             
             logger.info("开始优化数据库...")
             
             # 1. 清理重复数据
-            cursor.execute("""
-                DELETE FROM daily_trading_data 
+            cursor.execute(f"""
+                DELETE FROM {daily_table}
                 WHERE rowid NOT IN (
                     SELECT MIN(rowid) 
-                    FROM daily_trading_data 
+                    FROM {daily_table}
                     GROUP BY ts_code, trade_date
                 )
             """)
             deleted_duplicates = cursor.rowcount
             
             # 2. 重建索引
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ts_code ON daily_trading_data(ts_code)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_trade_date ON daily_trading_data(trade_date)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ts_date ON daily_trading_data(ts_code, trade_date)")
+            cursor.execute(f"CREATE INDEX IF NOT EXISTS idx_ts_code ON {daily_table}(ts_code)")
+            cursor.execute(f"CREATE INDEX IF NOT EXISTS idx_trade_date ON {daily_table}(trade_date)")
+            cursor.execute(f"CREATE INDEX IF NOT EXISTS idx_ts_date ON {daily_table}(ts_code, trade_date)")
             
             # 3. VACUUM优化
             cursor.execute("VACUUM")
@@ -6717,33 +8455,38 @@ class DatabaseManager:
     def check_database_health(self) -> Dict:
         """检查数据库健康状态"""
         try:
+            from data.dao import DataAccessError, detect_daily_table, recent_trade_profile, table_exists  # type: ignore
+
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
             health = {}
             
-            # 检查表是否存在
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = [row[0] for row in cursor.fetchall()]
-            health['has_stock_basic'] = 'stock_basic' in tables
-            health['has_daily_data'] = 'daily_trading_data' in tables
+            health['has_stock_basic'] = table_exists(conn, "stock_basic")
+            try:
+                daily_table = detect_daily_table(conn)
+                health['has_daily_data'] = True
+                health['daily_table'] = daily_table
+            except DataAccessError:
+                daily_table = ""
+                health['has_daily_data'] = False
+                health['daily_table'] = "N/A"
             
             # 检查数据完整性
             if health['has_stock_basic']:
                 cursor.execute("SELECT COUNT(*) FROM stock_basic")
                 health['stock_count'] = cursor.fetchone()[0]
             
-            if health['has_daily_data']:
-                cursor.execute("SELECT COUNT(*) FROM daily_trading_data")
+            if health['has_daily_data'] and daily_table:
+                cursor.execute(f"SELECT COUNT(*) FROM {daily_table}")
                 health['data_count'] = cursor.fetchone()[0]
-                
-                # 检查最近数据
-                cursor.execute("SELECT MAX(trade_date) FROM daily_trading_data")
-                latest_date = cursor.fetchone()[0]
+
+                profile = recent_trade_profile(conn, date_limit=10, recent_window=3)
+                latest_date = profile.get("last_trade_date", "")
                 if latest_date:
                     health['latest_date'] = latest_date
                     try:
-                        latest = datetime.strptime(latest_date, '%Y%m%d')
+                        latest = datetime.strptime(str(latest_date), '%Y%m%d')
                         days_old = (datetime.now() - latest).days
                         health['days_since_update'] = days_old
                         health['is_fresh'] = days_old <= 3
@@ -6776,12 +8519,17 @@ class _StableUptrendContext:
         if not os.path.exists(self.db_path):
             return False
         try:
+            from data.dao import DataAccessError, detect_daily_table, table_exists  # type: ignore
+
             conn = self._connect()
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = {row[0] for row in cursor.fetchall()}
+            has_stock_basic = table_exists(conn, "stock_basic")
+            try:
+                _ = detect_daily_table(conn)
+                has_daily_data = True
+            except DataAccessError:
+                has_daily_data = False
             conn.close()
-            return "stock_basic" in tables and "daily_trading_data" in tables
+            return has_stock_basic and has_daily_data
         except Exception:
             return False
 
@@ -6794,32 +8542,8 @@ class _StableUptrendContext:
     def get_real_stock_data_optimized(self) -> pd.DataFrame:
         if not self._permanent_db_available():
             return pd.DataFrame()
-        conn = self._connect()
-        query = """
-            SELECT dtd.ts_code AS "股票代码",
-                   sb.name AS "股票名称",
-                   dtd.amount AS "成交额",
-                   dtd.close_price AS "价格",
-                   sb.circ_mv AS "流通市值"
-            FROM daily_trading_data dtd
-            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-            WHERE dtd.trade_date = (SELECT MAX(trade_date) FROM daily_trading_data)
-        """
-        df = pd.read_sql_query(query, conn)
-        conn.close()
-        if df is None or df.empty:
-            return pd.DataFrame()
-        df["成交额"] = pd.to_numeric(df["成交额"], errors="coerce").fillna(0.0)
-        df["价格"] = pd.to_numeric(df["价格"], errors="coerce").fillna(0.0)
-        df["流通市值"] = pd.to_numeric(df["流通市值"], errors="coerce").fillna(0.0)
-        # Tushare amount is usually in thousand yuan; scale to yuan if values look too small.
-        try:
-            median_amount = float(df["成交额"].median())
-            if 0 < median_amount < 1e7:
-                df["成交额"] = df["成交额"] * 1000.0
-        except Exception:
-            pass
-        return df
+        db_path = getattr(self, "db_path", PERMANENT_DB_PATH)
+        return _cached_real_stock_data(str(db_path))
 
     def _apply_global_filters(
         self,
@@ -6850,179 +8574,50 @@ class _StableUptrendContext:
     ) -> pd.DataFrame:
         if not self._permanent_db_available():
             return pd.DataFrame()
-        conn = self._connect()
         try:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='daily_trading_history'"
+            from data.history import load_history_full as _load_history_full_v2  # type: ignore
+            return _load_history_full_v2(
+                db_path=self.db_path,
+                ts_code=ts_code,
+                start_date=start_date,
+                end_date=end_date,
+                columns="trade_date, close_price AS close",
+                table_candidates=("daily_trading_history", "daily_trading_data", "daily_data"),
             )
-            has_history = cursor.fetchone() is not None
         except Exception:
-            has_history = False
-
-        if has_history:
-            query = """
-                SELECT trade_date, close_price AS close
-                FROM daily_trading_history
-                WHERE ts_code = ? AND trade_date >= ? AND trade_date <= ?
-                ORDER BY trade_date
-            """
-        else:
-            query = """
-                SELECT trade_date, close_price AS close
-                FROM daily_trading_data
-                WHERE ts_code = ? AND trade_date >= ? AND trade_date <= ?
-                ORDER BY trade_date
-            """
-
-        try:
-            df = pd.read_sql_query(query, conn, params=(ts_code, start_date, end_date))
-        finally:
-            conn.close()
-        return df
+            return pd.DataFrame()
 
     def _load_history_full(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
         """加载用于v9.0评分的完整历史数据"""
-        if not self._permanent_db_available():
-            return pd.DataFrame()
-        conn = self._connect()
-        query = """
-            SELECT trade_date, close_price, vol, amount, pct_chg, turnover_rate
-            FROM daily_trading_data
-            WHERE ts_code = ? AND trade_date >= ? AND trade_date <= ?
-            ORDER BY trade_date
-        """
         try:
-            df = pd.read_sql_query(query, conn, params=(ts_code, start_date, end_date))
-        finally:
-            conn.close()
-        return df
+            from data.history import load_history_full as _load_history_full_v2  # type: ignore
+            return _load_history_full_v2(
+                db_path=self.db_path,
+                ts_code=ts_code,
+                start_date=start_date,
+                end_date=end_date,
+                columns="trade_date, close_price, vol, amount, pct_chg, turnover_rate",
+            )
+        except Exception:
+            return pd.DataFrame()
 
 
 def _compute_health_report(db_path: str) -> Dict:
-    report = {
-        "run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "ok": True,
-        "warnings": [],
-        "stats": {},
-    }
-
-    if not db_path or not os.path.exists(db_path):
-        report["ok"] = False
-        report["warnings"].append("database not found")
-        return report
-
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
     try:
-        cursor.execute("SELECT MAX(trade_date) FROM daily_trading_data")
-        last_trade = cursor.fetchone()[0]
-        report["stats"]["last_trade_date"] = last_trade
-
-        if last_trade:
-            cursor.execute(
-                "SELECT COUNT(*) FROM daily_trading_data WHERE trade_date = ?",
-                (last_trade,),
-            )
-            count_last = cursor.fetchone()[0]
-            report["stats"]["records_last_trade_date"] = count_last
-            if count_last < 2000:
-                report["warnings"].append(f"daily_trading_data records low: {count_last}")
-
-            cursor.execute(
-                "SELECT DISTINCT trade_date FROM daily_trading_data ORDER BY trade_date DESC LIMIT 10"
-            )
-            distinct_dates = [row[0] for row in cursor.fetchall() if row and row[0]]
-            report["stats"]["recent_trade_dates"] = distinct_dates
-            if len(distinct_dates) < 5:
-                report["warnings"].append("recent trade dates < 5")
-            # 最近3日记录数检查
-            recent_counts = {}
-            for d in distinct_dates[:3]:
-                cursor.execute(
-                    "SELECT COUNT(*) FROM daily_trading_data WHERE trade_date = ?",
-                    (d,),
-                )
-                recent_counts[d] = cursor.fetchone()[0]
-            report["stats"]["recent_counts"] = recent_counts
-            if recent_counts:
-                vals = list(recent_counts.values())
-                if min(vals) < 2000:
-                    report["warnings"].append("recent trade day records low (<2000)")
-                if len(vals) >= 2 and vals[0] > 0:
-                    drop_ratio = (vals[0] - vals[-1]) / max(vals[0], 1)
-                    if drop_ratio > 0.3:
-                        report["warnings"].append("recent trade day records drop >30%")
-
-        def _table_exists(name: str) -> bool:
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                (name,),
-            )
-            return cursor.fetchone() is not None
-
-        def _table_has_column(table: str, col: str) -> bool:
-            try:
-                cursor.execute(f"PRAGMA table_info({table})")
-                cols = [row[1] for row in cursor.fetchall()]
-                return col in cols
-            except Exception:
-                return False
-
-        table_checks = {
-            "northbound_flow": "trade_date",
-            "margin_summary": "trade_date",
-            "margin_detail": "trade_date",
-            "moneyflow_daily": "trade_date",
-            "moneyflow_ind_ths": "trade_date",
-            "top_list": "trade_date",
-            "top_inst": "trade_date",
-        }
-        if os.getenv("FUND_PORTFOLIO_FUNDS", "").strip():
-            table_checks["fund_portfolio_cache"] = "trade_date"
-
-        if not _fund_bonus_enabled():
-            # 资金类数据已关闭，跳过相关检查
-            return report
-        for table, col in table_checks.items():
-            if not _table_exists(table):
-                report["warnings"].append(f"table missing: {table}")
-                continue
-            if not _table_has_column(table, col):
-                report["warnings"].append(f"{table} missing column: {col}")
-                continue
-            cursor.execute(f"SELECT MAX({col}) FROM {table}")
-            max_date = cursor.fetchone()[0]
-            report["stats"][f"{table}_max_date"] = max_date
-            if last_trade and max_date and str(max_date) < str(last_trade):
-                report["warnings"].append(f"{table} lagging: {max_date} < {last_trade}")
-            if distinct_dates and max_date and max_date not in distinct_dates[:3]:
-                report["warnings"].append(f"{table} not updated in last 3 trading days")
-    finally:
-        conn.close()
-
-    # 进化指标异常提示
-    try:
-        evo_path = os.path.join(os.path.dirname(__file__), "evolution", "last_run.json")
-        if os.path.exists(evo_path):
-            with open(evo_path, "r", encoding="utf-8") as f:
-                evo = json.load(f)
-            stats = evo.get("stats", {})
-            win_rate = stats.get("win_rate")
-            max_dd = stats.get("max_drawdown")
-            if win_rate is not None and win_rate < 40:
-                report["warnings"].append(f"win_rate low: {win_rate}")
-            if max_dd is not None and max_dd < -30:
-                report["warnings"].append(f"max_drawdown high: {max_dd}")
+        from risk.summary import compute_health_report as _compute_health_report_v2  # type: ignore
+        return _compute_health_report_v2(
+            db_path=db_path,
+            enable_fund_bonus=_fund_bonus_enabled(),
+            fund_portfolio_funds=os.getenv("FUND_PORTFOLIO_FUNDS", ""),
+            evolution_last_run_path=os.path.join(os.path.dirname(__file__), "evolution", "last_run.json"),
+        )
     except Exception as e:
-        report["warnings"].append(f"evolution stats read failed: {e}")
-
-    # v9负分已在算法内修正，此处不再告警
-
-    if report["warnings"]:
-        report["ok"] = False
-
-    return report
+        return {
+            "run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": False,
+            "warnings": [f"health report unavailable: {e}"],
+            "stats": {},
+        }
 
 
 def _run_funding_repair(db_path: str) -> Dict[str, Dict]:
@@ -7086,8 +8681,6 @@ def main():
                 st.error(f"系统初始化失败: {e}")
                 return
 
-    if "enable_fund_bonus" not in st.session_state:
-        st.session_state["enable_fund_bonus"] = DEFAULT_ENABLE_FUND_BONUS
     
     vp_analyzer = st.session_state.vp_analyzer
     optimizer = st.session_state.optimizer
@@ -7099,6 +8692,7 @@ def main():
         st.header("系统状态")
         
         status = db_manager.get_database_status()
+        st.caption(f"当前数据库：`{getattr(db_manager, 'db_path', PERMANENT_DB_PATH)}`")
         
         if 'error' not in status:
             st.metric("活跃股票", f"{status.get('active_stocks', 0):,} 只")
@@ -7124,7 +8718,10 @@ def main():
             if os.path.exists(report_path):
                 with open(report_path, "r", encoding="utf-8") as f:
                     report = json.load(f)
-                if report and not report.get("ok", True):
+                report_db_path = (((report or {}).get("stats") or {}).get("db_path") or "").strip()
+                current_db_path = str(getattr(db_manager, "db_path", "") or "").strip()
+                same_db = (not report_db_path) or (report_db_path == current_db_path)
+                if report and same_db and not report.get("ok", True):
                     warnings = report.get("warnings", [])
                     preview = "\n".join(warnings[:3]) if warnings else "存在异常"
                     st.warning(f"健康警报\n{preview}")
@@ -7133,32 +8730,30 @@ def main():
         
         st.divider()
         
-        st.markdown("###  v46.5强势猎手优化版")
+        st.markdown("###  v49.0长期稳健版（当前）")
         st.markdown("""
-        **核心升级：**
-        -  区分放量上涨vs放量下跌
-        -  十维专业评分系统
-        -  识别主力吸筹vs出货
-        -  K线形态+MACD分析
-        -  涨停基因+洗盘识别
-        
-        **五重风控：**  新增！
-        -  放量下跌=主力出货，直接排除
-        -  ST/*股，直接排除
-        -  近5日跌停，排除
-        -  高位回落，排除
-        -  短期均线向下，排除
-        
-        **评分标准：**
-        - 精选级：≥70分（更严格！）
-        - 高潜力：≥85分
-        - 高潜力：75-85分
-        - 稳健型：70-75分
-        
-        **使用方法：**
-        1. Tab1: 强势猎手（十维专业分析）
-        2. Tab2: 一键智能推荐（v46.1）
-        3. 其他模块：回测/优化/板块扫描
+        **系统特征：**
+        -  四大实战策略协同：v4.0 / v5.0 / v6.0 / v7.0
+        -  量价关系+趋势节奏+热点轮动的组合决策
+        -  真实评分器与回测链路一致，减少实盘偏差
+        -  板块热点分析 + AI辅助选股 + 智能交易助手联动
+        -  数据状态与参数管理可视化，支持持续迭代
+
+        **风控框架：**
+        -  放量下跌、ST/*、近期跌停、高位回落等风险过滤
+        -  短期均线走弱过滤 + 多维评分风险扣分
+        -  回测验证与实盘阈值分层结合，控制回撤
+
+        **评分分层：**
+        - S级精选：≥85分
+        - A级关注：75-84分
+        - B级观察：70-74分
+
+        **使用路径：**
+        1. Tab1: 核心策略中心（v4/v5/v6/v7）
+        2. Tab2: 板块热点分析
+        3. Tab3: 回测系统
+        4. Tab4+: AI选股 / 交易助手 / 数据与参数管理
         """)
     
     # 【核心架构】v50.0 极简至尊版 - 6大核心功能区
@@ -7171,7 +8766,11 @@ def main():
         " 数据与参数管理",
         " 实战指南",
     ]
+    _enable_tab_persistence()
     tab_core, tab_sector, tab_backtest, tab_ai, tab_assistant, tab_data, tab_guide = st.tabs([t.strip() for t in _tabs])
+    desired_main_tab = st.session_state.pop("desired_main_tab", "")
+    if desired_main_tab:
+        _focus_tab_by_text(desired_main_tab)
     
     # ==================== Tab 1:  核心策略中心 ====================
     with tab_core:
@@ -7335,6 +8934,7 @@ def main():
                 enable_consistency_v4 = st.checkbox("启用多周期一致性过滤", value=True, key="v4_consistency")
             with filter_col4_v4:
                 min_align_v4 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v4_consistency_min")
+            use_cache_v4 = st.checkbox("优先使用离线缓存结果", value=True, key="v4_cache")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -7368,19 +8968,56 @@ def main():
             if st.button("开始扫描（v4.0潜伏策略）", type="primary", use_container_width=True, key="scan_btn_v4"):
                 with st.spinner(f"正在扫描全市场股票..."):
                     try:
+                        cache_params = {
+                            "score_threshold": score_threshold_v4,
+                            "top_percent": top_percent_v4,
+                            "select_mode": select_mode_v4,
+                            "scan_all": bool(scan_all_v4),
+                            "cap_min": float(cap_min_v4),
+                            "cap_max": float(cap_max_v4),
+                            "enable_consistency": bool(enable_consistency_v4),
+                            "min_align": int(min_align_v4),
+                        }
+                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+                        if use_cache_v4:
+                            cached_df, cached_meta = _load_scan_cache("v4_scan", cache_params, db_last)
+                            if cached_df is not None and not cached_df.empty:
+                                created_at = cached_meta.get("created_at", "未知")
+                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
+                                _render_cached_scan_results(
+                                    "扫描结果（v4.0潜伏策略）",
+                                    cached_df,
+                                    score_col="综合评分",
+                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
+                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
+                                    select_mode=select_mode_v4,
+                                    threshold=score_threshold_v4,
+                                    top_percent=top_percent_v4,
+                                )
+                                st.session_state['v4_scan_results'] = cached_df
+                                st.stop()
+
                         # 获取数据
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+                        conn = _connect_permanent_db()
+                        bonus_global = 0.0
+                        bonus_stock_map = {}
+                        top_list_set = set()
+                        top_inst_set = set()
+                        bonus_industry_map = {}
+                        try:
+                            bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+                        except Exception:
+                            pass
                         
                         #  构建查询条件（对齐v6.0逻辑）
                         if scan_all_v4 and cap_min_v4 == 0 and cap_max_v4 == 0:
                             # 真正的全市场扫描（无市值限制）
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn)
+                            stocks_df = _load_candidate_stocks(
+                                conn,
+                                scan_all=True,
+                                cap_min_yi=0,
+                                cap_max_yi=0,
+                            )
                             st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
                         else:
                             # 按市值筛选
@@ -7398,14 +9035,12 @@ def main():
                             """
                             total_stats = pd.read_sql_query(total_query, conn)
                             
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.circ_mv >= ?
-                                AND sb.circ_mv <= ?
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                            stocks_df = _load_candidate_stocks(
+                                conn,
+                                scan_all=False,
+                                cap_min_yi=cap_min_v4,
+                                cap_max_yi=cap_max_v4,
+                            )
                             
                             # 显示详细的统计信息
                             with st.expander("数据库统计信息", expanded=False):
@@ -7435,9 +9070,16 @@ def main():
                             # 评分结果列表
                             results = []
                             
-                            # 进度条
+                            # 批量加载历史数据（一次查询替代数千次）
                             progress_bar = st.progress(0)
                             status_text = st.empty()
+                            status_text.text("正在批量加载历史数据...")
+                            all_codes = stocks_df['ts_code'].tolist()
+                            histories = _batch_load_stock_histories(
+                                conn, all_codes, limit=120,
+                                columns="ts_code, trade_date, close_price, vol, pct_chg",
+                            )
+                            status_text.text(f"数据加载完成，开始评分 {len(stocks_df)} 只股票...")
                             
                             for idx, row in stocks_df.iterrows():
                                 ts_code = row['ts_code']
@@ -7446,18 +9088,16 @@ def main():
                                 # 更新进度
                                 progress = (idx + 1) / len(stocks_df)
                                 progress_bar.progress(progress)
-                                status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
+                                if (idx + 1) % 50 == 0 or idx == 0:
+                                    status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
                                 
                                 try:
-                                    # 获取该股票的历史数据
-                                    data_query = """
-                                        SELECT trade_date, close_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                    """
-                                    stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                    stock_data = histories.get(ts_code)
+                                    if stock_data is None or stock_data.empty:
+                                        stock_data = _load_stock_history(
+                                            conn, ts_code, 120,
+                                            "trade_date, close_price, vol, pct_chg",
+                                        )
                                     
                                     if len(stock_data) >= 60:
                                         # 添加name列用于ST检查
@@ -7546,6 +9186,14 @@ def main():
                                 _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
                                 msg, level = _signal_density_hint(len(results_df), len(stocks_df))
                                 getattr(st, level)(msg)
+                                
+                                _save_scan_cache(
+                                    "v4_scan",
+                                    cache_params,
+                                    db_last,
+                                    results_df,
+                                    {"candidate_count": len(stocks_df), "filter_failed": 0},
+                                )
                                 
                                 # 保存到session_state
                                 st.session_state['v4_scan_results'] = results_df
@@ -7869,6 +9517,7 @@ def main():
                 enable_consistency_v5 = st.checkbox("启用多周期一致性过滤", value=True, key="v5_consistency")
             with filter_col4_v5:
                 min_align_v5 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v5_consistency_min")
+            use_cache_v5 = st.checkbox("优先使用离线缓存结果", value=True, key="v5_cache")
             
             st.info("v5.0策略将扫描所有符合市值条件的股票（无数量限制）")
             evo_hold = evolve_v5_core.get("params", {}).get("holding_days")
@@ -7881,21 +9530,44 @@ def main():
             if st.button("开始扫描（v5.0启动确认型）", type="primary", use_container_width=True, key="scan_btn_v5"):
                 with st.spinner("正在扫描..."):
                     try:
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        
-                        # 市值转换（用户输入的是亿元，数据库中是万元）
-                        cap_min_wan = cap_min_v5 * 10000  # 转换为万元
-                        cap_max_wan = cap_max_v5 * 10000  # 转换为万元
+                        cache_params = {
+                            "score_threshold": score_threshold_v5,
+                            "top_percent": top_percent_v5,
+                            "select_mode": select_mode_v5,
+                            "cap_min": float(cap_min_v5),
+                            "cap_max": float(cap_max_v5),
+                            "enable_consistency": bool(enable_consistency_v5),
+                            "min_align": int(min_align_v5),
+                        }
+                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+                        if use_cache_v5:
+                            cached_df, cached_meta = _load_scan_cache("v5_scan", cache_params, db_last)
+                            if cached_df is not None and not cached_df.empty:
+                                created_at = cached_meta.get("created_at", "未知")
+                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
+                                _render_cached_scan_results(
+                                    "扫描结果（v5.0启动确认型）",
+                                    cached_df,
+                                    score_col="综合评分",
+                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
+                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
+                                    select_mode=select_mode_v5,
+                                    threshold=score_threshold_v5,
+                                    top_percent=top_percent_v5,
+                                )
+                                st.session_state['v5_scan_results'] = cached_df
+                                st.stop()
+
+                        conn = _connect_permanent_db()
                         
                         # 查询符合市值条件的股票（扫描全市场）
-                        query = """
-                            SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                            FROM stock_basic sb
-                            WHERE sb.circ_mv >= ?
-                            AND sb.circ_mv <= ?
-                            ORDER BY RANDOM()
-                        """
-                        stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                        stocks_df = _load_candidate_stocks(
+                            conn,
+                            scan_all=False,
+                            cap_min_yi=cap_min_v5,
+                            cap_max_yi=cap_max_v5,
+                            random_order=True,
+                        )
                         
                         if stocks_df.empty:
                             st.error(f"未找到符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，请检查是否已更新市值数据")
@@ -7903,6 +9575,15 @@ def main():
                             conn.close()
                         else:
                             st.success(f"找到 {len(stocks_df)} 只符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，开始评分...")
+                            bonus_global = 0.0
+                            bonus_stock_map = {}
+                            top_list_set = set()
+                            top_inst_set = set()
+                            bonus_industry_map = {}
+                            try:
+                                bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+                            except Exception:
+                                pass
                             
                             # 显示市值范围确认
                             if len(stocks_df) > 0:
@@ -7928,14 +9609,12 @@ def main():
                                 
                                 try:
                                     # 获取该股票的历史数据
-                                    data_query = """
-                                        SELECT trade_date, close_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                    """
-                                    stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                    stock_data = _load_stock_history(
+                                        conn,
+                                        ts_code,
+                                        120,
+                                        "trade_date, close_price, vol, pct_chg",
+                                    )
                                     
                                     if len(stock_data) >= 60:
                                         # 添加name列用于ST检查
@@ -8023,6 +9702,14 @@ def main():
                                 results_df = results_df.reset_index(drop=True)
                                 msg, level = _signal_density_hint(len(results_df), len(stocks_df))
                                 getattr(st, level)(msg)
+                                
+                                _save_scan_cache(
+                                    "v5_scan",
+                                    cache_params,
+                                    db_last,
+                                    results_df,
+                                    {"candidate_count": len(stocks_df), "filter_failed": 0},
+                                )
                                 
                                 # 保存到session_state
                                 st.session_state['v5_scan_results'] = results_df
@@ -8286,38 +9973,39 @@ def main():
                 with st.spinner("v6.0专业版全市场扫描中...（三级过滤+严格评分）"):
                     try:
                         # 获取股票列表
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                        conn = _connect_permanent_db()
                         
                         # 构建查询条件
                         if scan_all_stocks:
                             # 全市场扫描
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn)
+                            stocks_df = _load_candidate_stocks(conn, scan_all=True)
                             st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
                         else:
                             # 按市值筛选
                             cap_min_wan = cap_min_v6_tab1 * 10000 if cap_min_v6_tab1 > 0 else 0
                             cap_max_wan = cap_max_v6_tab1 * 10000 if cap_max_v6_tab1 > 0 else 999999999
                             
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.circ_mv >= ?
-                                AND sb.circ_mv <= ?
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                            stocks_df = _load_candidate_stocks(
+                                conn,
+                                scan_all=False,
+                                cap_min_yi=cap_min_v6_tab1,
+                                cap_max_yi=cap_max_v6_tab1,
+                            )
                         
                         if len(stocks_df) == 0:
                             st.error(f"未找到符合市值条件（{cap_min_v6_tab1}-{cap_max_v6_tab1}亿）的股票")
                             conn.close()
                         else:
                             st.info(f"找到 {len(stocks_df)} 只符合市值条件的股票，开始三级过滤...")
-                            bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+                            bonus_global = 0.0
+                            bonus_stock_map = {}
+                            top_list_set = set()
+                            top_inst_set = set()
+                            bonus_industry_map = {}
+                            try:
+                                bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+                            except Exception:
+                                pass
                             
                             # 进度条
                             progress_bar = st.progress(0)
@@ -8337,14 +10025,12 @@ def main():
                                 
                                 try:
                                     # 获取该股票的历史数据
-                                    data_query = """
-                                        SELECT trade_date, close_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                    """
-                                    stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                    stock_data = _load_stock_history(
+                                        conn,
+                                        ts_code,
+                                        120,
+                                        "trade_date, close_price, vol, pct_chg",
+                                    )
                                     
                                     if len(stock_data) >= 60:
                                         # 添加name列用于ST检查
@@ -8530,12 +10216,12 @@ def main():
                                 # 导出功能
                                 st.markdown("---")
                                 export_df = results_df.drop('原始数据', axis=1)
-                                csv = export_df.to_csv(index=False, encoding='utf-8-sig')
+                                csv = _df_to_csv_bytes(export_df)
                                 st.download_button(
                                     label=" 导出结果（CSV）",
                                     data=csv,
                                     file_name=f"v6.0_专业版_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv"
+                                    mime="text/csv; charset=utf-8"
                                 )
                                 
                             else:
@@ -8653,6 +10339,7 @@ def main():
                 enable_consistency_v7 = st.checkbox("启用多周期一致性过滤", value=True, key="v7_consistency_tab1")
             with filter_col4_v7:
                 min_align_v7 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v7_consistency_min_tab1")
+            use_cache_v7 = st.checkbox("优先使用离线缓存结果", value=True, key="v7_cache_tab1")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -8682,43 +10369,81 @@ def main():
             if st.button("开始智能扫描（v7.0）", type="primary", use_container_width=True, key="scan_v7_tab1"):
                 with st.spinner("v7.0智能系统扫描中...（识别环境→计算情绪→分析行业→动态评分→三层过滤）"):
                     try:
+                        cache_params = {
+                            "score_threshold": score_threshold_v7,
+                            "top_percent": top_percent_v7,
+                            "select_mode": select_mode_v7,
+                            "scan_all": bool(scan_all_v7),
+                            "cap_min": float(cap_min_v7),
+                            "cap_max": float(cap_max_v7),
+                            "enable_consistency": bool(enable_consistency_v7),
+                            "min_align": int(min_align_v7),
+                        }
+                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+                        if use_cache_v7:
+                            cached_df, cached_meta = _load_v7_cache(cache_params, db_last)
+                            if cached_df is not None and not cached_df.empty:
+                                created_at = cached_meta.get("created_at", "未知")
+                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
+                                candidate_count = int(cached_meta.get("candidate_count", len(cached_df)))
+                                filter_failed = int(cached_meta.get("filter_failed", 0))
+                                _render_v7_results(
+                                    cached_df,
+                                    candidate_count=candidate_count,
+                                    filter_failed=filter_failed,
+                                    score_threshold_v7=score_threshold_v7,
+                                    select_mode_v7=select_mode_v7,
+                                    top_percent_v7=top_percent_v7,
+                                )
+                                st.markdown("---")
+                                st.subheader("智能结果列表（v7.0·缓存）")
+                                v7_cached_display_df = cached_df.drop(columns=["原始数据"], errors="ignore")
+                                st.dataframe(v7_cached_display_df, use_container_width=True, hide_index=True)
+                                st.session_state['v7_scan_results_tab1'] = cached_df
+                                st.stop()
+
                         # 重置v7.0缓存
                         if hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
                             vp_analyzer.evaluator_v7.reset_cache()
                         
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                        conn = _connect_permanent_db()
                         
                         # 构建查询条件
                         if scan_all_v7 and cap_min_v7 == 0 and cap_max_v7 == 0:
                             # 真正的全市场扫描
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn)
+                            stocks_df = _load_candidate_stocks(
+                                conn,
+                                scan_all=True,
+                                require_industry=True,
+                            )
                             st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
                         else:
                             # 按市值筛选
                             cap_min_wan = cap_min_v7 * 10000 if cap_min_v7 > 0 else 0
                             cap_max_wan = cap_max_v7 * 10000 if cap_max_v7 > 0 else 999999999
                             
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                AND sb.circ_mv >= ?
-                                AND sb.circ_mv <= ?
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                            stocks_df = _load_candidate_stocks(
+                                conn,
+                                scan_all=False,
+                                cap_min_yi=cap_min_v7,
+                                cap_max_yi=cap_max_v7,
+                                require_industry=True,
+                            )
                         
                         if len(stocks_df) == 0:
                             st.error(f"未找到符合条件的股票")
                             conn.close()
                         else:
                             st.info(f"找到 {len(stocks_df)} 只候选股票，开始智能评分...")
+                            bonus_global = 0.0
+                            bonus_stock_map = {}
+                            top_list_set = set()
+                            top_inst_set = set()
+                            bonus_industry_map = {}
+                            try:
+                                bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+                            except Exception:
+                                pass
                             
                             # 显示市场环境信息
                             if show_details and hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
@@ -8747,6 +10472,15 @@ def main():
                             results = []
                             filter_failed = 0
                             
+                            history_cache = {}
+                            if len(stocks_df) <= BULK_HISTORY_LIMIT:
+                                history_cache = _load_stock_history_bulk(
+                                    conn,
+                                    stocks_df["ts_code"].tolist(),
+                                    120,
+                                    "ts_code, trade_date, close_price, vol, pct_chg",
+                                )
+
                             for idx, row in stocks_df.iterrows():
                                 ts_code = row['ts_code']
                                 stock_name = row['name']
@@ -8758,15 +10492,15 @@ def main():
                                 status_text.text(f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}")
                                 
                                 try:
-                                    # 获取该股票的历史数据
-                                    data_query = """
-                                        SELECT trade_date, close_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                    """
-                                    stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                    # 获取该股票的历史数据（统一清洗口径）
+                                    stock_data = history_cache.get(ts_code)
+                                    if stock_data is None:
+                                        stock_data = _load_stock_history(
+                                            conn,
+                                            ts_code,
+                                            120,
+                                            "trade_date, close_price, vol, pct_chg",
+                                        )
                                     
                                     if len(stock_data) >= 60:
                                         # 添加name列用于ST检查
@@ -8822,19 +10556,6 @@ def main():
                             conn.close()
                             
                             # 显示结果
-                            st.markdown("---")
-                            st.markdown(f"###  智能扫描结果")
-                            
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("候选股票", f"{len(stocks_df)}只")
-                            with col2:
-                                st.metric("过滤淘汰", f"{filter_failed}只", 
-                                         delta=f"{filter_failed/len(stocks_df)*100:.1f}%")
-                            with col3:
-                                st.metric("最终推荐", f"{len(results)}只",
-                                         delta=f"{len(results)/len(stocks_df)*100:.2f}%")
-                            
                             if results:
                                 results_df = pd.DataFrame(results)
                                 results_df = _apply_filter_mode(
@@ -8855,18 +10576,22 @@ def main():
                                     st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
                                     st.stop()
 
-                                if select_mode_v7 == "阈值筛选":
-                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v7}分）")
-                                elif select_mode_v7 == "双重筛选(阈值+Top%)":
-                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v7}分，Top {top_percent_v7}%（{len(results_df)} 只）")
-                                else:
-                                    st.success(f"选出 Top {top_percent_v7}%（{len(results_df)} 只）")
-                                
-                                results_df = results_df.reset_index(drop=True)
-                                _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
-                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
-                                getattr(st, level)(msg)
-                            
+                                _render_v7_results(
+                                    results_df,
+                                    candidate_count=len(stocks_df),
+                                    filter_failed=filter_failed,
+                                    score_threshold_v7=score_threshold_v7,
+                                    select_mode_v7=select_mode_v7,
+                                    top_percent_v7=top_percent_v7,
+                                )
+
+                                _save_v7_cache(
+                                    cache_params,
+                                    db_last,
+                                    results_df,
+                                    {"candidate_count": len(stocks_df), "filter_failed": filter_failed},
+                                )
+
                                 # 保存到session_state
                                 st.session_state['v7_scan_results_tab1'] = results_df
                                 
@@ -9068,6 +10793,7 @@ def main():
                 enable_consistency_v8 = st.checkbox("启用多周期一致性过滤", value=True, key="v8_consistency_tab1")
             with filter_col4_v8:
                 min_align_v8 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v8_consistency_min_tab1")
+            use_cache_v8 = st.checkbox("优先使用离线缓存结果", value=True, key="v8_cache_tab1")
             
             # 高级选项（折叠）
             with st.expander("高级筛选选项（可选）"):
@@ -9097,47 +10823,63 @@ def main():
             if st.button("开始扫描（v8.0）", type="primary", use_container_width=True, key="scan_v8_tab1"):
                 with st.spinner("v8.0进阶版扫描中...（三级市场过滤→18维度评分→ATR风控→凯利仓位）"):
                     try:
+                        cache_params = {
+                            "score_threshold": list(score_threshold_v8),
+                            "top_percent": top_percent_v8,
+                            "select_mode": select_mode_v8,
+                            "scan_all": bool(scan_all_v8),
+                            "cap_min": float(cap_min_v8),
+                            "cap_max": float(cap_max_v8),
+                            "enable_consistency": bool(enable_consistency_v8),
+                            "min_align": int(min_align_v8),
+                            "enable_kelly": bool(enable_kelly),
+                        }
+                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+                        if use_cache_v8:
+                            cached_df, cached_meta = _load_scan_cache("v8_scan", cache_params, db_last)
+                            if cached_df is not None and not cached_df.empty:
+                                created_at = cached_meta.get("created_at", "未知")
+                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
+                                _render_cached_scan_results(
+                                    "扫描结果（v8.0进阶版）",
+                                    cached_df,
+                                    score_col="综合评分",
+                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
+                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
+                                    select_mode=select_mode_v8,
+                                    threshold=float(score_threshold_v8[0]),
+                                    top_percent=top_percent_v8,
+                                )
+                                st.session_state['v8_scan_results_tab1'] = cached_df
+                                st.stop()
+
                         # 重置v8.0缓存
                         if hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
                             vp_analyzer.evaluator_v8.reset_cache()
                         
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                        conn = _connect_permanent_db()
                         
                         #  先进行三级市场过滤
                         st.info("正在进行三级市场过滤（择时系统）...")
                         
                         # 获取大盘指数数据（上证指数）
-                        # 优先使用 daily_trading_history，如不存在则回退 daily_trading_data
-                        index_queries = [
-                            """
-                            SELECT trade_date, close_price as close, vol as volume
-                            FROM daily_trading_history
-                            WHERE ts_code = '000001.SH'
-                            ORDER BY trade_date DESC
-                            LIMIT 120
-                            """,
-                            """
-                            SELECT trade_date, close_price as close, vol as volume
-                            FROM daily_trading_data
-                            WHERE ts_code = '000001.SH'
-                            ORDER BY trade_date DESC
-                            LIMIT 120
-                            """
-                        ]
-                        index_data = pd.DataFrame()
-                        last_err = None
-                        for iq in index_queries:
-                            try:
-                                index_data = pd.read_sql_query(iq, conn)
-                                if len(index_data) > 0:
-                                    break
-                            except Exception as e:
-                                last_err = e
-                                continue
+                        # 统一走数据层，按 history -> trading_data -> daily_data 回退
+                        try:
+                            from data.history import load_history_full as _load_history_full_v2  # type: ignore
+                            index_data = _load_history_full_v2(
+                                db_path=PERMANENT_DB_PATH,
+                                ts_code="000001.SH",
+                                start_date=(datetime.now() - timedelta(days=420)).strftime('%Y%m%d'),
+                                end_date=datetime.now().strftime('%Y%m%d'),
+                                columns="trade_date, close_price AS close, vol AS volume",
+                                table_candidates=("daily_trading_history", "daily_trading_data", "daily_data"),
+                                normalize_fn=_normalize_stock_df,
+                            )
+                            if index_data is not None and len(index_data) > 120:
+                                index_data = index_data.tail(120).reset_index(drop=True)
+                        except Exception:
+                            index_data = pd.DataFrame()
                         if len(index_data) >= 60:
-                            # 确保按时间正序，避免ATR/均线等计算错位
-                            if 'trade_date' in index_data.columns:
-                                index_data = index_data.sort_values('trade_date').reset_index(drop=True)
                             market_filter = vp_analyzer.evaluator_v8.market_filter
                             market_status = market_filter.comprehensive_filter(index_data)
                             
@@ -9157,10 +10899,7 @@ def main():
                                 st.metric("市场热度", 
                                          f"{volume_status.get('volume_status', '未知')}")
                         else:
-                            if last_err:
-                                st.warning(f"大盘数据不足或表不存在，跳过市场过滤（{last_err}）")
-                            else:
-                                st.warning("大盘数据不足，跳过市场过滤")
+                            st.warning("大盘数据不足，跳过市场过滤")
                             market_status = {'can_trade': True, 'position_multiplier': 1.0, 'reason': '数据不足，默认可交易'}
                         
                         if not market_status['can_trade']:
@@ -9187,34 +10926,39 @@ def main():
                         # 构建查询条件
                         if scan_all_v8 and cap_min_v8 == 0 and cap_max_v8 == 0:
                             # 真正的全市场扫描
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn)
+                            stocks_df = _load_candidate_stocks(
+                                conn,
+                                scan_all=True,
+                                require_industry=True,
+                            )
                             st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
                         else:
                             # 按市值筛选
                             cap_min_wan = cap_min_v8 * 10000 if cap_min_v8 > 0 else 0
                             cap_max_wan = cap_max_v8 * 10000 if cap_max_v8 > 0 else 999999999
                             
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                AND sb.circ_mv >= ?
-                                AND sb.circ_mv <= ?
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                            stocks_df = _load_candidate_stocks(
+                                conn,
+                                scan_all=False,
+                                cap_min_yi=cap_min_v8,
+                                cap_max_yi=cap_max_v8,
+                                require_industry=True,
+                            )
                         
                         if len(stocks_df) == 0:
                             st.error(f"未找到符合条件的股票")
                             conn.close()
                         else:
                             st.info(f"找到 {len(stocks_df)} 只候选股票，开始18维度智能评分...")
+                            bonus_global = 0.0
+                            bonus_stock_map = {}
+                            top_list_set = set()
+                            top_inst_set = set()
+                            bonus_industry_map = {}
+                            try:
+                                bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
+                            except Exception:
+                                pass
                             
                             # 进度条
                             progress_bar = st.progress(0)
@@ -9234,38 +10978,15 @@ def main():
                                 status_text.text(f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}")
                                 
                                 try:
-                                    # 获取该股票的历史数据
-                                    data_queries = [
-                                        """
-                                        SELECT trade_date, close_price, high_price, low_price, vol, pct_chg
-                                        FROM daily_trading_history
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                        """,
-                                        """
-                                        SELECT trade_date, close_price, high_price, low_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                        """
-                                    ]
-                                    stock_data = pd.DataFrame()
-                                    last_stock_err = None
-                                    for dq in data_queries:
-                                        try:
-                                            stock_data = pd.read_sql_query(dq, conn, params=(ts_code,))
-                                            if len(stock_data) > 0:
-                                                break
-                                        except Exception as e:
-                                            last_stock_err = e
-                                            continue
+                                    # 获取该股票的历史数据（优先history，统一清洗）
+                                    stock_data = _load_stock_history_fallback(
+                                        conn,
+                                        ts_code,
+                                        120,
+                                        "trade_date, close_price, high_price, low_price, vol, pct_chg",
+                                    )
                                     
                                     if len(stock_data) >= 60:
-                                        # 确保按时间正序，避免ATR/止损止盈错位
-                                        if 'trade_date' in stock_data.columns:
-                                            stock_data = stock_data.sort_values('trade_date').reset_index(drop=True)
                                         # 添加name列用于ST检查
                                         stock_data['name'] = stock_name
                                         
@@ -9452,6 +11173,14 @@ def main():
                                 msg, level = _signal_density_hint(len(results_df), len(stocks_df))
                                 getattr(st, level)(msg)
                                 
+                                _save_scan_cache(
+                                    "v8_scan",
+                                    cache_params,
+                                    db_last,
+                                    results_df,
+                                    {"candidate_count": len(stocks_df), "filter_failed": filter_failed},
+                                )
+
                                 # 保存到session_state
                                 st.session_state['v8_scan_results_tab1'] = results_df
                                 
@@ -9613,19 +11342,17 @@ def main():
                 exp_v9.caption(f"推荐阈值: {evo_params_v9.get('score_threshold')} | 持仓: {evo_params_v9.get('holding_days')} | 窗口: {evo_params_v9.get('lookback_days')} | 最低成交额(亿): {evo_params_v9.get('min_turnover')}")
 
             def _load_history_full_fallback(ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-                if not os.path.exists(PERMANENT_DB_PATH):
-                    return pd.DataFrame()
-                conn = sqlite3.connect(PERMANENT_DB_PATH)
-                query = """
-                    SELECT trade_date, close_price, vol, amount, pct_chg, turnover_rate
-                    FROM daily_trading_data
-                    WHERE ts_code = ? AND trade_date >= ? AND trade_date <= ?
-                    ORDER BY trade_date
-                """
                 try:
-                    return pd.read_sql_query(query, conn, params=(ts_code, start_date, end_date))
-                finally:
-                    conn.close()
+                    from data.history import load_history_full as _load_history_full_v2  # type: ignore
+                    return _load_history_full_v2(
+                        db_path=PERMANENT_DB_PATH,
+                        ts_code=ts_code,
+                        start_date=start_date,
+                        end_date=end_date,
+                        columns="trade_date, close_price, vol, amount, pct_chg, turnover_rate",
+                    )
+                except Exception:
+                    return pd.DataFrame()
 
             load_history_full = getattr(vp_analyzer, "_load_history_full", None)
             if not callable(load_history_full):
@@ -9690,6 +11417,7 @@ def main():
                 enable_consistency_v9 = st.checkbox("启用多周期一致性过滤", value=True, key="v9_consistency")
             with col_mode5:
                 min_align_v9 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v9_consistency_min")
+            use_cache_v9 = st.checkbox("优先使用离线缓存结果", value=True, key="v9_cache")
 
             col7, col8 = st.columns(2)
             with col7:
@@ -9700,33 +11428,53 @@ def main():
             if st.button("开始扫描（v9.0中线均衡版）", type="primary", use_container_width=True, key="scan_v9"):
                 with st.spinner("v9.0 中线均衡版扫描中..."):
                     try:
+                        cache_params = {
+                            "score_threshold": score_threshold_v9,
+                            "top_percent": top_percent_v9,
+                            "select_mode": select_mode_v9,
+                            "scan_all": bool(scan_all_v9),
+                            "cap_min": float(cap_min_v9),
+                            "cap_max": float(cap_max_v9),
+                            "enable_consistency": bool(enable_consistency_v9),
+                            "min_align": int(min_align_v9),
+                            "holding_days": int(holding_days_v9),
+                            "lookback_days": int(lookback_days_v9),
+                            "min_turnover": float(min_turnover_v9),
+                            "candidate_count": int(candidate_count_v9),
+                        }
+                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+                        if use_cache_v9:
+                            cached_df, cached_meta = _load_scan_cache("v9_scan", cache_params, db_last)
+                            if cached_df is not None and not cached_df.empty:
+                                created_at = cached_meta.get("created_at", "未知")
+                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
+                                _render_cached_scan_results(
+                                    "扫描结果（v9.0中线均衡版）",
+                                    cached_df,
+                                    score_col="综合评分",
+                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
+                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
+                                    select_mode=select_mode_v9,
+                                    threshold=score_threshold_v9,
+                                    top_percent=top_percent_v9,
+                                )
+                                st.session_state["v9_scan_results_tab1"] = cached_df
+                                st.stop()
+
                         # 弱市空仓保护
                         if weak_market_filter_v9 and market_env == "bear":
                             st.warning(f"当前市场环境：{env_label}，建议空仓观望。")
                             if not st.checkbox("我理解风险，仍要继续扫描", key="force_scan_v9"):
                                 st.stop()
 
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        if scan_all_v9 and cap_min_v9 == 0 and cap_max_v9 == 0:
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn)
-                        else:
-                            cap_min_wan = cap_min_v9 * 10000 if cap_min_v9 > 0 else 0
-                            cap_max_wan = cap_max_v9 * 10000 if cap_max_v9 > 0 else 999999999
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                AND sb.circ_mv >= ?
-                                AND sb.circ_mv <= ?
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                        conn = _connect_permanent_db()
+                        stocks_df = _load_candidate_stocks(
+                            conn,
+                            scan_all=bool(scan_all_v9),
+                            cap_min_yi=cap_min_v9,
+                            cap_max_yi=cap_max_v9,
+                            require_industry=True,
+                        )
 
                         if stocks_df.empty:
                             st.error("未找到符合条件的股票")
@@ -9743,9 +11491,21 @@ def main():
                         end_date = datetime.now().strftime("%Y%m%d")
                         start_date = (datetime.now() - timedelta(days=lookback_days_v9 + 30)).strftime("%Y%m%d")
 
+                        history_cache = {}
+                        if len(stocks_df) <= BULK_HISTORY_LIMIT:
+                            history_cache = _load_history_range_bulk(
+                                conn,
+                                stocks_df["ts_code"].tolist(),
+                                start_date,
+                                end_date,
+                                "ts_code, trade_date, close_price, vol, amount, pct_chg, turnover_rate",
+                            )
+
                         for _, row in stocks_df.iterrows():
                             ts_code = row["ts_code"]
-                            hist = load_history_full(ts_code, start_date, end_date)
+                            hist = history_cache.get(ts_code)
+                            if hist is None:
+                                hist = load_history_full(ts_code, start_date, end_date)
                             if hist is None or len(hist) < 21:
                                 continue
                             close = pd.to_numeric(hist["close_price"], errors="coerce").ffill()
@@ -9766,7 +11526,9 @@ def main():
                             status_text.text(f"正在评分: {row['name']} ({idx+1}/{len(stocks_df)})")
                             progress_bar.progress((idx + 1) / len(stocks_df))
 
-                            hist = load_history_full(ts_code, start_date, end_date)
+                            hist = history_cache.get(ts_code)
+                            if hist is None:
+                                hist = load_history_full(ts_code, start_date, end_date)
                             if hist is None or len(hist) < 80:
                                 continue
 
@@ -9846,6 +11608,14 @@ def main():
                                     min_align=min_align_v9
                                 )
                             results_df = _add_reason_summary(results_df, score_col="综合评分")
+
+                            _save_scan_cache(
+                                "v9_scan",
+                                cache_params,
+                                db_last,
+                                results_df,
+                                {"candidate_count": len(stocks_df), "filter_failed": 0},
+                            )
 
                             st.session_state["v9_scan_results_tab1"] = results_df
                             if select_mode_v9 == "阈值筛选":
@@ -9941,6 +11711,7 @@ def main():
                 enable_consistency_combo = st.checkbox("启用多周期一致性过滤", value=True, key="combo_consistency")
             with col_n:
                 min_align_combo = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="combo_consistency_min")
+            use_cache_combo = st.checkbox("优先使用离线缓存结果", value=True, key="combo_cache")
 
             st.markdown("---")
             st.subheader("权重设置（总和自动归一化）")
@@ -9993,45 +11764,76 @@ def main():
                 thr_v9 = st.slider("v9阈值", 50, 90, 60, 5, key="thr_v9")
 
             def _load_history_full_combo(ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-                if not os.path.exists(PERMANENT_DB_PATH):
-                    return pd.DataFrame()
-                conn = sqlite3.connect(PERMANENT_DB_PATH)
-                query = """
-                    SELECT trade_date, close_price, high_price, low_price, vol, amount, pct_chg, turnover_rate
-                    FROM daily_trading_data
-                    WHERE ts_code = ? AND trade_date >= ? AND trade_date <= ?
-                    ORDER BY trade_date
-                """
                 try:
-                    return pd.read_sql_query(query, conn, params=(ts_code, start_date, end_date))
-                finally:
-                    conn.close()
+                    from data.history import load_history_full as _load_history_full_v2  # type: ignore
+                    return _load_history_full_v2(
+                        db_path=PERMANENT_DB_PATH,
+                        ts_code=ts_code,
+                        start_date=start_date,
+                        end_date=end_date,
+                        columns="trade_date, close_price, high_price, low_price, vol, amount, pct_chg, turnover_rate",
+                        normalize_fn=_normalize_stock_df,
+                    )
+                except Exception:
+                    return pd.DataFrame()
 
             if st.button("开始扫描（组合共识）", type="primary", use_container_width=True, key="scan_combo"):
                 with st.spinner("组合共识评分计算中..."):
                     try:
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                        cache_params = {
+                            "candidate_count": int(candidate_count),
+                            "min_turnover": float(min_turnover),
+                            "min_agree": int(min_agree),
+                            "cap_min": float(cap_min_combo),
+                            "cap_max": float(cap_max_combo),
+                            "select_mode": select_mode_combo,
+                            "combo_threshold": float(combo_threshold),
+                            "top_percent": int(top_percent_combo),
+                            "lookback_days": int(lookback_days_combo),
+                            "disagree_std_weight": float(disagree_std_weight),
+                            "disagree_count_weight": float(disagree_count_weight),
+                            "market_adjust_strength": float(market_adjust_strength),
+                            "enable_consistency": bool(enable_consistency_combo),
+                            "min_align": int(min_align_combo),
+                            "auto_weights": bool(auto_weights),
+                            "w_v4": float(w_v4),
+                            "w_v5": float(w_v5),
+                            "w_v7": float(w_v7),
+                            "w_v8": float(w_v8),
+                            "w_v9": float(w_v9),
+                            "thr_v4": float(thr_v4),
+                            "thr_v5": float(thr_v5),
+                            "thr_v7": float(thr_v7),
+                            "thr_v8": float(thr_v8),
+                            "thr_v9": float(thr_v9),
+                        }
+                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+                        if use_cache_combo:
+                            cached_df, cached_meta = _load_scan_cache("combo_scan", cache_params, db_last)
+                            if cached_df is not None and not cached_df.empty:
+                                created_at = cached_meta.get("created_at", "未知")
+                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
+                                _render_cached_scan_results(
+                                    "组合策略结果概览",
+                                    cached_df,
+                                    score_col="共识评分",
+                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
+                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
+                                    select_mode=select_mode_combo,
+                                    threshold=combo_threshold,
+                                    top_percent=top_percent_combo,
+                                )
+                                st.session_state["combo_scan_results"] = cached_df
+                                st.stop()
 
-                        if cap_min_combo == 0 and cap_max_combo == 0:
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn)
-                        else:
-                            cap_min_wan = cap_min_combo * 10000 if cap_min_combo > 0 else 0
-                            cap_max_wan = cap_max_combo * 10000 if cap_max_combo > 0 else 999999999
-                            query = """
-                                SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                                FROM stock_basic sb
-                                WHERE sb.industry IS NOT NULL
-                                  AND sb.circ_mv >= ?
-                                  AND sb.circ_mv <= ?
-                                ORDER BY sb.circ_mv DESC
-                            """
-                            stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                        conn = _connect_permanent_db()
+                        stocks_df = _load_candidate_stocks(
+                            conn,
+                            scan_all=True,
+                            cap_min_yi=cap_min_combo,
+                            cap_max_yi=cap_max_combo,
+                            require_industry=True,
+                        )
 
                         if stocks_df.empty:
                             st.error("未找到符合条件的股票")
@@ -10043,44 +11845,46 @@ def main():
                         bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
 
                         # 加载指数数据（供v8评分使用）
-                        index_data = pd.DataFrame()
-                        index_queries = [
-                            """
-                            SELECT trade_date, close_price as close, vol as volume
-                            FROM daily_trading_history
-                            WHERE ts_code = '000001.SH'
-                            ORDER BY trade_date DESC
-                            LIMIT 120
-                            """,
-                            """
-                            SELECT trade_date, close_price as close, vol as volume
-                            FROM daily_trading_data
-                            WHERE ts_code = '000001.SH'
-                            ORDER BY trade_date DESC
-                            LIMIT 120
-                            """
-                        ]
-                        for iq in index_queries:
-                            try:
-                                index_data = pd.read_sql_query(iq, conn)
-                                if len(index_data) > 0:
-                                    break
-                            except Exception:
-                                continue
+                        try:
+                            from data.history import load_history_full as _load_history_full_v2  # type: ignore
+                            index_data = _load_history_full_v2(
+                                db_path=PERMANENT_DB_PATH,
+                                ts_code="000001.SH",
+                                start_date=(datetime.now() - timedelta(days=420)).strftime("%Y%m%d"),
+                                end_date=datetime.now().strftime("%Y%m%d"),
+                                columns="trade_date, close_price AS close, vol AS volume",
+                                table_candidates=("daily_trading_history", "daily_trading_data", "daily_data"),
+                                normalize_fn=_normalize_stock_df,
+                            )
+                            if index_data is not None and len(index_data) > 120:
+                                index_data = index_data.tail(120).reset_index(drop=True)
+                        except Exception:
+                            index_data = pd.DataFrame()
                         if len(index_data) >= 60 and 'trade_date' in index_data.columns:
-                            index_data = index_data.sort_values('trade_date').reset_index(drop=True)
+                            index_data = index_data
                         else:
                             index_data = None
-
-                        conn.close()
 
                         end_date = datetime.now().strftime("%Y%m%d")
                         start_date = (datetime.now() - timedelta(days=lookback_days_combo + 30)).strftime("%Y%m%d")
 
+                        history_cache = {}
+                        if len(stocks_df) <= BULK_HISTORY_LIMIT:
+                            history_cache = _load_history_range_bulk(
+                                conn,
+                                stocks_df["ts_code"].tolist(),
+                                start_date,
+                                end_date,
+                                "ts_code, trade_date, close_price, high_price, low_price, vol, amount, pct_chg, turnover_rate",
+                            )
+                        conn.close()
+
                         # 预计算行业强度（20日动量均值）
                         ind_vals = {}
                         for _, row in stocks_df.iterrows():
-                            hist = _load_history_full_combo(row["ts_code"], start_date, end_date)
+                            hist = history_cache.get(row["ts_code"])
+                            if hist is None:
+                                hist = _load_history_full_combo(row["ts_code"], start_date, end_date)
                             if hist is None or len(hist) < 21:
                                 continue
                             close = pd.to_numeric(hist["close_price"], errors="coerce").ffill()
@@ -10109,7 +11913,9 @@ def main():
                             progress_bar.progress((idx + 1) / len(stocks_df))
                             status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
 
-                            hist = _load_history_full_combo(ts_code, start_date, end_date)
+                            hist = history_cache.get(ts_code)
+                            if hist is None:
+                                hist = _load_history_full_combo(ts_code, start_date, end_date)
                             if hist is None or len(hist) < 80:
                                 continue
 
@@ -10275,6 +12081,14 @@ def main():
                                 )
                             results_df = _add_reason_summary(results_df, score_col="共识评分")
 
+                            _save_scan_cache(
+                                "combo_scan",
+                                cache_params,
+                                db_last,
+                                results_df,
+                                {"candidate_count": len(stocks_df), "filter_failed": 0},
+                            )
+
                             st.session_state["combo_scan_results"] = results_df
                             if select_mode_combo == "阈值筛选":
                                 st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{combo_threshold}分）")
@@ -10367,6 +12181,7 @@ def main():
                 enable_consistency_v6b = st.checkbox("启用多周期一致性过滤", value=True, key="v6_consistency")
             with filter_col4_v6b:
                 min_align_v6b = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v6_consistency_min")
+            use_cache_v6b = st.checkbox("优先使用离线缓存结果", value=True, key="v6_cache")
             
             # v6.0数据依赖说明
             st.warning("""
@@ -10387,21 +12202,44 @@ def main():
             if st.button("开始扫描（v6.0超短线）", type="primary", use_container_width=True, key="scan_btn_v6"):
                 with st.spinner("正在扫描..."):
                     try:
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
-                        
-                        # 市值转换（用户输入的是亿元，数据库中是万元）
-                        cap_min_wan = cap_min_v6 * 10000  # 转换为万元
-                        cap_max_wan = cap_max_v6 * 10000  # 转换为万元
+                        cache_params = {
+                            "score_threshold": score_threshold_v6,
+                            "top_percent": top_percent_v6b,
+                            "select_mode": select_mode_v6b,
+                            "cap_min": float(cap_min_v6),
+                            "cap_max": float(cap_max_v6),
+                            "enable_consistency": bool(enable_consistency_v6b),
+                            "min_align": int(min_align_v6b),
+                        }
+                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
+                        if use_cache_v6b:
+                            cached_df, cached_meta = _load_scan_cache("v6_scan", cache_params, db_last)
+                            if cached_df is not None and not cached_df.empty:
+                                created_at = cached_meta.get("created_at", "未知")
+                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
+                                _render_cached_scan_results(
+                                    "扫描结果（v6.0超短线）",
+                                    cached_df,
+                                    score_col="综合评分",
+                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
+                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
+                                    select_mode=select_mode_v6b,
+                                    threshold=score_threshold_v6,
+                                    top_percent=top_percent_v6b,
+                                )
+                                st.session_state['v6_scan_results'] = cached_df
+                                st.stop()
+
+                        conn = _connect_permanent_db()
                         
                         # 查询符合市值条件的股票（扫描全市场）
-                        query = """
-                            SELECT DISTINCT sb.ts_code, sb.name, sb.industry, sb.circ_mv
-                            FROM stock_basic sb
-                            WHERE sb.circ_mv >= ?
-                            AND sb.circ_mv <= ?
-                            ORDER BY RANDOM()
-                        """
-                        stocks_df = pd.read_sql_query(query, conn, params=(cap_min_wan, cap_max_wan))
+                        stocks_df = _load_candidate_stocks(
+                            conn,
+                            scan_all=False,
+                            cap_min_yi=cap_min_v6,
+                            cap_max_yi=cap_max_v6,
+                            random_order=True,
+                        )
                         
                         if stocks_df.empty:
                             st.error(f"未找到符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，请检查是否已更新市值数据")
@@ -10434,14 +12272,12 @@ def main():
                                 
                                 try:
                                     # 获取该股票的历史数据
-                                    data_query = """
-                                        SELECT trade_date, close_price, vol, pct_chg
-                                        FROM daily_trading_data
-                                        WHERE ts_code = ?
-                                        ORDER BY trade_date DESC
-                                        LIMIT 120
-                                    """
-                                    stock_data = pd.read_sql_query(data_query, conn, params=(ts_code,))
+                                    stock_data = _load_stock_history(
+                                        conn,
+                                        ts_code,
+                                        120,
+                                        "trade_date, close_price, vol, pct_chg",
+                                    )
                                     
                                     if len(stock_data) >= 60:
                                         # 添加name列用于ST检查
@@ -10530,6 +12366,14 @@ def main():
                                 msg, level = _signal_density_hint(len(results_df), len(stocks_df))
                                 getattr(st, level)(msg)
                                 
+                                _save_scan_cache(
+                                    "v6_scan",
+                                    cache_params,
+                                    db_last,
+                                    results_df,
+                                    {"candidate_count": len(stocks_df), "filter_failed": 0},
+                                )
+
                                 # 保存到session_state
                                 st.session_state['v6_scan_results'] = results_df
                                 
@@ -10854,14 +12698,23 @@ def main():
                 with st.spinner("正在对比六大策略表现（包含v9.0！）...这可能需要几分钟..."):
                     try:
                         # 获取历史数据
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                        from data.dao import DataAccessError, detect_daily_table  # type: ignore
+
+                        conn = _connect_permanent_db()
                         start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-                        
-                        query = """
+
+                        try:
+                            daily_table = detect_daily_table(conn)
+                        except DataAccessError:
+                            conn.close()
+                            st.error("无法识别日线数据表（daily_trading_data/daily_data）")
+                            st.stop()
+
+                        query = f"""
                             SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
                                    dtd.open_price, dtd.high_price, dtd.low_price, 
                                    dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
-                            FROM daily_trading_data dtd
+                            FROM {daily_table} dtd
                             INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
                             WHERE dtd.trade_date >= ?
                             ORDER BY dtd.ts_code, dtd.trade_date
@@ -12087,14 +13940,23 @@ def main():
             if st.button("开始回测", type="primary", use_container_width=True, key="single_backtest"):
                 with st.spinner(f"正在回测 {selected_strategy}..."):
                     try:
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                        from data.dao import DataAccessError, detect_daily_table  # type: ignore
+
+                        conn = _connect_permanent_db()
                         start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-                        
-                        query = """
+
+                        try:
+                            daily_table = detect_daily_table(conn)
+                        except DataAccessError:
+                            conn.close()
+                            st.error("无法识别日线数据表（daily_trading_data/daily_data）")
+                            st.stop()
+
+                        query = f"""
                             SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
                                    dtd.open_price, dtd.high_price, dtd.low_price, 
                                    dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
-                            FROM daily_trading_data dtd
+                            FROM {daily_table} dtd
                             INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
                             WHERE dtd.trade_date >= ?
                             ORDER BY dtd.ts_code, dtd.trade_date
@@ -12424,14 +14286,23 @@ def main():
             if st.button("开始优化", type="primary", use_container_width=True, key="start_optimization"):
                 with st.spinner("正在优化参数...这可能需要几分钟..."):
                     try:
-                        conn = sqlite3.connect(PERMANENT_DB_PATH)
+                        from data.dao import DataAccessError, detect_daily_table  # type: ignore
+
+                        conn = _connect_permanent_db()
                         start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-                        
-                        query = """
+
+                        try:
+                            daily_table = detect_daily_table(conn)
+                        except DataAccessError:
+                            conn.close()
+                            st.error("无法识别日线数据表（daily_trading_data/daily_data）")
+                            st.stop()
+
+                        query = f"""
                             SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
                                    dtd.open_price, dtd.high_price, dtd.low_price, 
                                    dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
-                            FROM daily_trading_data dtd
+                            FROM {daily_table} dtd
                             INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
                             WHERE dtd.trade_date >= ?
                             ORDER BY dtd.ts_code, dtd.trade_date
@@ -12660,12 +14531,22 @@ def main():
         if st.button(button_text, type="primary", use_container_width=True):
             with st.spinner(f"AI 正在全市场扫描 {'V5.0 稳健月度目标' if use_v3 else 'V2.0 高收益标的'}..."):
                 try:
-                    conn = sqlite3.connect(PERMANENT_DB_PATH)
+                    from data.dao import DataAccessError, detect_daily_table  # type: ignore
+
+                    conn = _connect_permanent_db()
                     start_date = (datetime.now() - timedelta(days=150)).strftime('%Y%m%d')
-                    query = """
+
+                    try:
+                        daily_table = detect_daily_table(conn)
+                    except DataAccessError:
+                        conn.close()
+                        st.error("无法识别日线数据表（daily_trading_data/daily_data）")
+                        st.stop()
+
+                    query = f"""
                         SELECT dtd.ts_code, sb.name, sb.industry, sb.circ_mv,
                                dtd.trade_date, dtd.close_price, dtd.vol, dtd.amount, dtd.pct_chg
-                        FROM daily_trading_data dtd
+                        FROM {daily_table} dtd
                         INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
                         WHERE dtd.trade_date >= ?
                         ORDER BY dtd.ts_code, dtd.trade_date
@@ -12868,20 +14749,32 @@ def main():
         # 数据库状态
         with st.expander("数据库状态", expanded=True):
             try:
-                conn = sqlite3.connect(PERMANENT_DB_PATH)
+                from data.dao import DataAccessError, detect_daily_table  # type: ignore
+
+                conn = _connect_permanent_db()
                 cursor = conn.cursor()
                 
                 cursor.execute("SELECT COUNT(*) FROM stock_basic")
                 stock_count = cursor.fetchone()[0]
-                
-                cursor.execute("SELECT COUNT(DISTINCT ts_code) FROM daily_trading_data")
-                data_stock_count = cursor.fetchone()[0]
-                
-                cursor.execute("SELECT COUNT(*) FROM daily_trading_data")
-                total_records = cursor.fetchone()[0]
-                
-                cursor.execute("SELECT MIN(trade_date), MAX(trade_date) FROM daily_trading_data")
-                date_range = cursor.fetchone()
+
+                try:
+                    daily_table = detect_daily_table(conn)
+                except DataAccessError:
+                    daily_table = ""
+
+                if daily_table:
+                    cursor.execute(f"SELECT COUNT(DISTINCT ts_code) FROM {daily_table}")
+                    data_stock_count = cursor.fetchone()[0]
+
+                    cursor.execute(f"SELECT COUNT(*) FROM {daily_table}")
+                    total_records = cursor.fetchone()[0]
+
+                    cursor.execute(f"SELECT MIN(trade_date), MAX(trade_date) FROM {daily_table}")
+                    date_range = cursor.fetchone()
+                else:
+                    data_stock_count = 0
+                    total_records = 0
+                    date_range = (None, None)
                 
                 conn.close()
                 
@@ -12978,12 +14871,30 @@ def main():
                 run_now = st.button("立即检测", use_container_width=True, key="health_check_now")
             with col_h2:
                 st.caption("说明：后台每日自动生成健康报告，手动检测会立即刷新报告。")
+
+        # 交易日历检测（来自 Tushare trade_cal）
+        with st.expander("交易日历检测", expanded=False):
+            cal_date = _get_last_trade_date_from_tushare()
+            if cal_date:
+                st.metric("交易日历最新交易日", cal_date)
+                try:
+                    db_max = status.get("max_date")
+                    if db_max and db_max != 'N/A':
+                        st.caption(f"数据库最新交易日：{db_max}")
+                        if str(db_max) < str(cal_date):
+                            st.warning("数据库落后于交易日历，建议更新数据")
+                        else:
+                            st.success("数据库与交易日历一致或领先")
+                except Exception:
+                    pass
+            else:
+                st.warning("交易日历获取失败（trade_cal），请检查 Tushare 连接")
             with col_h3:
                 repair_now = st.button("一键修复资金表", use_container_width=True, key="health_repair_now")
 
             report = None
             if run_now:
-                report = _compute_health_report(PERMANENT_DB_PATH)
+                report = _compute_health_report(getattr(db_manager, "db_path", PERMANENT_DB_PATH))
                 try:
                     os.makedirs(os.path.dirname(report_path), exist_ok=True)
                     with open(report_path, "w", encoding="utf-8") as f:
@@ -13001,7 +14912,7 @@ def main():
                         st.success(f"修复完成：成功 {ok_count}/{len(repair)}")
                         st.json(repair)
                 # 修复后立即刷新健康报告
-                report = _compute_health_report(PERMANENT_DB_PATH)
+                report = _compute_health_report(getattr(db_manager, "db_path", PERMANENT_DB_PATH))
                 try:
                     os.makedirs(os.path.dirname(report_path), exist_ok=True)
                     with open(report_path, "w", encoding="utf-8") as f:
@@ -13081,6 +14992,8 @@ def main():
                         - 失败天数：{result.get('failed_days', 0)}天
                         - 总记录数：{result['total_records']:,}条
                         """)
+                        if result.get('calendar_warning'):
+                            st.warning(result.get('calendar_warning'))
                         time.sleep(1)
                         st.rerun()
                     else:
@@ -13195,8 +15108,241 @@ def main():
             assistant = st.session_state.trading_assistant
             
             # 创建子标签页
-            _assistant_tabs = [" 每日选股", " 持仓管理", " 交易记录", " 每日报告", " 配置设置", " 模拟交易"]
-            sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5, sub_tab6 = st.tabs([t.strip() for t in _assistant_tabs])
+            _assistant_tabs = [" OpenClaw问答", " 每日选股", " 持仓管理", " 交易记录", " 每日报告", " 配置设置", " 模拟交易"]
+            qa_tab, sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5, sub_tab6 = st.tabs([t.strip() for t in _assistant_tabs])
+            desired_assistant_tab = st.session_state.pop("desired_assistant_tab", "")
+            if desired_assistant_tab:
+                _focus_tab_by_text(desired_assistant_tab)
+
+            # ========== 子Tab 0: OpenClaw问答 ==========
+            with qa_tab:
+                st.subheader("ClawAlpha 智能体 v2.0")
+                st.markdown(
+                    """
+                    <style>
+                    /* QA chat visual polish */
+                    div[data-testid="stChatMessage"] {
+                        border: 1px solid #e8edf4;
+                        border-radius: 12px;
+                        padding: 6px 10px;
+                        margin-bottom: 8px;
+                        background: #ffffff;
+                    }
+                    div[data-testid="stChatMessageContent"] p,
+                    div[data-testid="stChatMessageContent"] li {
+                        font-size: 16px !important;
+                        line-height: 1.75 !important;
+                    }
+                    div[data-testid="stChatInput"] {
+                        margin-top: 10px;
+                    }
+                    div[data-testid="stChatInput"] input {
+                        min-height: 48px !important;
+                        border-radius: 12px !important;
+                        border: 1.5px solid #cfd8e6 !important;
+                        padding: 10px 14px !important;
+                        font-size: 15px !important;
+                    }
+                    div[data-testid="stChatInput"] input:focus {
+                        border-color: #2b6cb0 !important;
+                        box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.16) !important;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.info("可提问示例：你是谁？| 600519可以买吗？| 量化交易的哲学本质 | 博弈论在投资中的应用")
+                _llm_on = os.getenv("OPENCLAW_QA_USE_LLM", "0") == "1"
+                _model_name = os.getenv("OPENAI_MODEL", "规则引擎")
+                if _llm_on:
+                    st.caption(f"当前模式：Kimi LLM 增强（{_model_name}）+ 本地量化规则引擎")
+                else:
+                    st.caption("当前模式：本地量化规则引擎（可在 .env 中开启 LLM）")
+
+                from openclaw.assistant import OpenClawStockAssistant
+
+                _QA_VERSION = "v2.2"
+                if st.session_state.get("_qa_engine_version") != _QA_VERSION:
+                    st.session_state.pop("openclaw_qa_assistant", None)
+                    st.session_state.pop("openclaw_qa_messages", None)
+                    st.session_state.pop("openclaw_qa_session_id", None)
+                    st.session_state["_qa_engine_version"] = _QA_VERSION
+
+                if "openclaw_qa_assistant" not in st.session_state:
+                    st.session_state.openclaw_qa_assistant = OpenClawStockAssistant(
+                        log_dir="logs/openclaw",
+                        db_path=PERMANENT_DB_PATH,
+                    )
+                if "openclaw_qa_messages" not in st.session_state:
+                    st.session_state.openclaw_qa_messages = [
+                        {
+                            "role": "assistant",
+                            "content": "我是 ClawAlpha v2.0 — 由 Kimi LLM 驱动的超级智能体。\n\n我擅长：股票投研、量化策略、风控分析、哲学/历史/概率/博弈论等跨学科思维。\n\n试试问我：**你是谁？** 或 **600519可以买吗？**",
+                        }
+                    ]
+                if "openclaw_qa_session_id" not in st.session_state:
+                    st.session_state.openclaw_qa_session_id = f"stock-web-{uuid.uuid4().hex[:10]}"
+                if st.button("清空对话", key="openclaw_qa_clear_history"):
+                    st.session_state.openclaw_qa_messages = [
+                        {
+                            "role": "assistant",
+                            "content": "对话已清空。你可以继续问我策略、回测、个股问题。",
+                        }
+                    ]
+                    st.session_state.openclaw_qa_session_id = f"stock-web-{uuid.uuid4().hex[:10]}"
+                    st.session_state.pop("openclaw_qa_assistant", None)
+                    _set_focus_once(main_tab="智能交易助手", assistant_tab="OpenClaw问答")
+                    st.rerun()
+
+                chat_history_box = st.container(height=520, border=False)
+                with chat_history_box:
+                    for msg in st.session_state.openclaw_qa_messages[-30:]:
+                        with st.chat_message(msg["role"]):
+                            st.markdown(msg["content"])
+
+                with st.expander("ClawAlpha 自学习看板", expanded=False):
+                    col_brief_left, col_snapshot_left, col_snapshot_right = st.columns([1, 1, 1])
+                    with col_brief_left:
+                        if st.button("生成今日陪伴简报", key="openclaw_companion_brief"):
+                            try:
+                                brief_text = st.session_state.openclaw_qa_assistant.get_daily_companion_brief()
+                            except Exception as e:
+                                brief_text = f"今日简报暂时生成失败：{e}"
+                            st.session_state.openclaw_qa_messages.append(
+                                {"role": "assistant", "content": brief_text}
+                            )
+                            _set_focus_once(main_tab="智能交易助手", assistant_tab="OpenClaw问答")
+                            st.rerun()
+                    with col_snapshot_left:
+                        if st.button("创建策略快照", key="openclaw_create_snapshot"):
+                            try:
+                                snap = st.session_state.openclaw_qa_assistant.create_strategy_snapshot()
+                                if snap.get("ok"):
+                                    st.success(f"已创建快照，ID={snap.get('snapshot_id')}")
+                                else:
+                                    st.warning(f"创建快照失败：{snap.get('error', 'unknown')}")
+                            except Exception as e:
+                                st.warning(f"创建快照失败：{e}")
+                    with col_snapshot_right:
+                        restore_id = st.text_input("回滚快照ID", key="openclaw_restore_snapshot_id", placeholder="例如 12")
+                        if st.button("执行回滚", key="openclaw_restore_snapshot"):
+                            try:
+                                sid = int(str(restore_id).strip())
+                                rst = st.session_state.openclaw_qa_assistant.restore_strategy_snapshot(sid)
+                                if rst.get("ok"):
+                                    st.success(f"回滚成功：恢复 {rst.get('restored_keys', 0)} 项配置")
+                                else:
+                                    st.warning(f"回滚失败：{rst.get('error', 'snapshot_not_found')}")
+                            except Exception as e:
+                                st.warning(f"回滚失败：{e}")
+                    try:
+                        dashboard = st.session_state.openclaw_qa_assistant.get_learning_dashboard()
+                    except Exception:
+                        dashboard = {}
+                    try:
+                        h_dashboard = st.session_state.openclaw_qa_assistant.get_humanlike_dashboard()
+                    except Exception:
+                        h_dashboard = {}
+                    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                    with col_m1:
+                        st.metric("学习卡片", int(dashboard.get("total_cards", 0)))
+                    with col_m2:
+                        st.metric("待补结果", int(dashboard.get("pending_cards", 0)))
+                    with col_m3:
+                        st.metric("硬规则", int(dashboard.get("hard_rules", 0)))
+                    with col_m4:
+                        st.metric("软规则", int(dashboard.get("soft_rules", 0)))
+                    if h_dashboard:
+                        col_h1, col_h2, col_h3 = st.columns(3)
+                        with col_h1:
+                            st.metric("工具栈状态", "OK" if h_dashboard.get("ok", False) else "ERR")
+                        with col_h2:
+                            st.metric("审计日志", int(h_dashboard.get("audit_count", 0)))
+                        with col_h3:
+                            st.metric("结果回填", int(h_dashboard.get("outcome_count", 0)))
+
+                    run_weekly = st.checkbox("同时执行周评估", value=False, key="openclaw_selflearn_weekly")
+                    if st.button("执行自学习评估", key="openclaw_selflearn_run"):
+                        with st.spinner("正在执行自学习评估..."):
+                            cycle = st.session_state.openclaw_qa_assistant.run_self_learning_cycle(
+                                force_weekly=run_weekly
+                            )
+                        daily_score = ((cycle.get("daily") or {}).get("overall_score"))
+                        st.success(f"评估完成：日评估总分={daily_score if daily_score is not None else 'N/A'}")
+                        st.session_state["openclaw_last_cycle"] = cycle
+
+                    last_daily = dashboard.get("last_daily") or {}
+                    if last_daily:
+                        st.caption(
+                            f"最近日评估：overall={last_daily.get('overall_score', 'N/A')} | "
+                            f"evaluated_cards={last_daily.get('evaluated_cards', 'N/A')}"
+                        )
+                    last_weekly = dashboard.get("last_weekly") or {}
+                    if last_weekly:
+                        st.caption(
+                            f"最近周评估：promoted={last_weekly.get('promoted_rules', 0)} | "
+                            f"downgraded={last_weekly.get('downgraded_rules', 0)}"
+                        )
+                    last_tracking = dashboard.get("last_tracking") or {}
+                    if last_tracking:
+                        st.caption(
+                            f"最近结果回填：processed={last_tracking.get('processed_cards', 0)} | "
+                            f"closed={last_tracking.get('closed_cards', 0)} | "
+                            f"skipped={last_tracking.get('skipped_cards', 0)}"
+                        )
+
+                user_q = st.chat_input("输入问题（如：688608还能加仓吗？给我仓位与风控计划）")
+                if user_q:
+                    # Keep focus on assistant tabs after Streamlit rerun.
+                    _set_focus_once(main_tab="智能交易助手", assistant_tab="OpenClaw问答")
+                    st.session_state.openclaw_qa_messages.append({"role": "user", "content": user_q})
+
+                    with st.spinner("ClawAlpha 正在思考..."):
+                        # 第一优先：本地智能体（Kimi LLM + 规则引擎）
+                            qa_result = st.session_state.openclaw_qa_assistant.answer(
+                                user_q,
+                                st.session_state.openclaw_qa_messages[-12:],
+                            )
+                    answer_text = qa_result.get("answer", "暂无回答")
+                    sources = qa_result.get("sources", [])
+                    route_used = qa_result.get("mode") or qa_result.get("route") or "unknown"
+                    conf_used = qa_result.get("confidence")
+                    agent_hits = qa_result.get("agent_hits") if isinstance(qa_result, dict) else []
+                    agent_ver = qa_result.get("agent_version") if isinstance(qa_result, dict) else ""
+                    show_meta = os.getenv("OPENCLAW_QA_SHOW_META", "0") == "1"
+                    if sources and show_meta:
+                        answer_text = f"{answer_text}\n\n参考数据源：{len(sources)}项"
+                    if show_meta:
+                        if conf_used is not None:
+                            answer_text += f"\n\n路由：`{route_used}` ｜ 置信度：`{conf_used}`"
+                        else:
+                            answer_text += f"\n\n路由：`{route_used}`"
+                        if agent_ver:
+                            answer_text += f"\n智能体网格：`{agent_ver}`"
+                        if isinstance(agent_hits, list) and agent_hits:
+                            answer_text += f"\n命中智能体：`{', '.join(agent_hits[:8])}`"
+                    learning_card_id = qa_result.get("learning_card_id")
+                    self_eval = qa_result.get("self_eval") if isinstance(qa_result, dict) else {}
+                    eval_score = (self_eval or {}).get("overall_score")
+                    eval_flag = (self_eval or {}).get("reflection_required")
+                    if show_meta:
+                        if learning_card_id:
+                            answer_text += f"\n\n学习卡片：`{learning_card_id}`"
+                        if eval_score is not None:
+                            answer_text += f"\n自评得分：{eval_score}"
+                        if eval_flag:
+                            answer_text += "\n自我反思：已触发规则修正。"
+
+                    st.session_state.openclaw_qa_messages.append(
+                        {"role": "assistant", "content": answer_text}
+                    )
+                    st.session_state.openclaw_last_qa_meta = {
+                        "learning_card_id": qa_result.get("learning_card_id"),
+                        "route": qa_result.get("route"),
+                        "confidence": qa_result.get("confidence"),
+                        "self_eval": qa_result.get("self_eval"),
+                    }
+                    st.rerun()
             
             # ========== 子Tab 1: 每日选股 ==========
             with sub_tab1:
@@ -13521,6 +15667,325 @@ def main():
                         file_name=filename,
                         mime="text/plain"
                     )
+
+                st.markdown("---")
+                st.markdown("### OC 执行追踪（partner_execution）")
+                st.caption("展示 oc daily 产物中的 tracking.record / tracking.refresh / tracking.scoreboard")
+
+                try:
+                    from pathlib import Path
+                    import json as _json
+                    import subprocess as _sp
+                    import sys as _sys
+                    _oc_log_dir = Path("logs/openclaw")
+                    _sum_files = sorted(_oc_log_dir.glob("run_summary_*.json"), reverse=True)
+                    col_a, col_b = st.columns([1, 2])
+                    with col_a:
+                        if st.button("补跑追踪（非交易日可用）", key="assistant_tracking_rerun"):
+                            if not _sum_files:
+                                st.warning("未找到 run_summary 文件，无法补跑。请先执行一次 oc daily。")
+                            else:
+                                _latest_sum = str(_sum_files[0])
+                                for _spth in _sum_files[:20]:
+                                    try:
+                                        _sobj = _json.loads(_spth.read_text(encoding="utf-8"))
+                                        _scan_picks = (((_sobj.get("scan") or {}).get("result") or {}).get("picks") or [])
+                                        _opps = _sobj.get("opportunities") or []
+                                        if (isinstance(_scan_picks, list) and len(_scan_picks) > 0) or (isinstance(_opps, list) and len(_opps) > 0):
+                                            _latest_sum = str(_spth)
+                                            break
+                                    except Exception:
+                                        pass
+                                _cmd = [
+                                    _sys.executable,
+                                    "openclaw/strategy_tracking_cli.py",
+                                    "run-all",
+                                    "--run-summary",
+                                    _latest_sum,
+                                    "--output-dir",
+                                    str(_oc_log_dir),
+                                ]
+                                try:
+                                    _res = _sp.run(_cmd, capture_output=True, text=True, timeout=90)
+                                    if _res.returncode == 0:
+                                        _obj = _json.loads((_res.stdout or "").strip() or "{}")
+                                        st.session_state["assistant_tracking_rerun_result"] = _obj
+                                        st.success("补跑完成。已刷新 tracking 看板。")
+                                    else:
+                                        st.warning(f"补跑失败：{(_res.stderr or _res.stdout or '').strip()[:500]}")
+                                except Exception as _e:
+                                    st.warning(f"补跑异常：{_e}")
+                    with col_b:
+                        _latest_sum_text = str(_sum_files[0]) if _sum_files else "N/A"
+                        st.caption(f"最新 run_summary：{_latest_sum_text}")
+
+                    if "assistant_tracking_rerun_result" in st.session_state:
+                        with st.expander("最近一次补跑结果", expanded=False):
+                            st.json(st.session_state["assistant_tracking_rerun_result"])
+
+                    _exec_files = sorted(_oc_log_dir.glob("partner_execution_*.json"), reverse=True)
+                    if not _exec_files:
+                        st.info("未找到 partner_execution 日志。请先执行一次 oc daily。")
+                    else:
+                        import ast as _ast
+                        import pandas as _pd
+
+                        def _oc_abs_path(_p):
+                            if not _p:
+                                return None
+                            _path = Path(str(_p))
+                            if _path.is_absolute():
+                                return _path
+                            return Path.cwd() / _path
+
+                        def _extract_non_empty_result(_exec_obj):
+                            def _normalize_result_df(_df):
+                                if _df is None or _df.empty:
+                                    return _df
+                                _out = _df.copy()
+                                if "strategies" in _out.columns and "strategy" not in _out.columns:
+                                    _out["strategy"] = _out["strategies"].apply(
+                                        lambda _x: ",".join(_x) if isinstance(_x, list) else str(_x or "")
+                                    )
+                                if "reasons" in _out.columns and "reason" not in _out.columns:
+                                    _out["reason"] = _out["reasons"].apply(
+                                        lambda _x: ",".join(_x) if isinstance(_x, list) else str(_x or "")
+                                    )
+                                return _out
+
+                            def _has_rich_detail(_df):
+                                if _df is None or _df.empty:
+                                    return False
+                                _detail_cols = ["strategy", "reason", "weighted_score", "score", "strategies", "reasons"]
+                                for _col in _detail_cols:
+                                    if _col not in _df.columns:
+                                        continue
+                                    _s = _df[_col].astype(str).str.strip()
+                                    _s = _s.replace({"": "nan", "None": "nan", "none": "nan", "nan": "nan", "NaN": "nan"})
+                                    if (_s != "nan").any():
+                                        return True
+                                return False
+
+                            _artifacts = _exec_obj.get("artifacts") or {}
+                            _csv_candidates = []
+                            _report_csv_paths = _artifacts.get("report_csv_paths") or []
+                            if isinstance(_report_csv_paths, list):
+                                _csv_candidates.extend(_report_csv_paths)
+                            elif isinstance(_report_csv_paths, str) and _report_csv_paths:
+                                _csv_candidates.append(_report_csv_paths)
+
+                            for _csv in _csv_candidates:
+                                _csv_path = _oc_abs_path(_csv)
+                                if not _csv_path or not _csv_path.exists():
+                                    continue
+                                try:
+                                    _df_csv = _pd.read_csv(_csv_path)
+                                    if not _df_csv.empty and "ts_code" in _df_csv.columns and _has_rich_detail(_df_csv):
+                                        return {
+                                            "kind": "csv",
+                                            "artifact": str(_csv_path),
+                                            "df": _normalize_result_df(_df_csv),
+                                        }
+                                except Exception:
+                                    pass
+
+                            _md_path = _oc_abs_path(_artifacts.get("report_markdown"))
+                            if _md_path and _md_path.exists():
+                                try:
+                                    _rows = []
+                                    _in_opp = False
+                                    for _raw_line in _md_path.read_text(encoding="utf-8").splitlines():
+                                        _line = _raw_line.strip()
+                                        if _line.startswith("## Opportunities"):
+                                            _in_opp = True
+                                            continue
+                                        if _in_opp and _line.startswith("## "):
+                                            break
+                                        if _in_opp and _line.startswith("- {"):
+                                            _obj = _ast.literal_eval(_line[2:].strip())
+                                            if isinstance(_obj, dict):
+                                                _rows.append(_obj)
+                                    if _rows:
+                                        return {
+                                            "kind": "markdown",
+                                            "artifact": str(_md_path),
+                                            "df": _normalize_result_df(_pd.DataFrame(_rows)),
+                                        }
+                                except Exception:
+                                    pass
+
+                            for _csv in _csv_candidates:
+                                _csv_path = _oc_abs_path(_csv)
+                                if not _csv_path or not _csv_path.exists():
+                                    continue
+                                try:
+                                    _df_csv = _pd.read_csv(_csv_path)
+                                    if not _df_csv.empty and "ts_code" in _df_csv.columns:
+                                        return {
+                                            "kind": "csv",
+                                            "artifact": str(_csv_path),
+                                            "df": _normalize_result_df(_df_csv),
+                                        }
+                                except Exception:
+                                    pass
+
+                            return None
+
+                        _options = [str(p) for p in _exec_files[:30]]
+                        _default_idx = 0
+                        _exec_obj_cache = {}
+                        _latest_non_empty = None
+                        for _idx, _opt in enumerate(_options):
+                            try:
+                                _obj = _json.loads(Path(_opt).read_text(encoding="utf-8"))
+                                _exec_obj_cache[_opt] = _obj
+                                _non_empty = _extract_non_empty_result(_obj)
+                                if _latest_non_empty is None and _non_empty is not None:
+                                    _default_idx = _idx
+                                    _latest_non_empty = {
+                                        "exec": _opt,
+                                        "kind": _non_empty["kind"],
+                                        "artifact": _non_empty["artifact"],
+                                        "df": _non_empty["df"],
+                                    }
+                            except Exception:
+                                continue
+
+                        _selected_exec = st.selectbox(
+                            "选择执行文件",
+                            options=_options,
+                            index=_default_idx,
+                            key="assistant_partner_exec_select",
+                        )
+                        _exec_obj = _exec_obj_cache.get(_selected_exec)
+                        if _exec_obj is None:
+                            _exec_obj = _json.loads(Path(_selected_exec).read_text(encoding="utf-8"))
+                        _tracking = _exec_obj.get("tracking") or {}
+                        _record = _tracking.get("record") or {}
+                        _refresh = _tracking.get("refresh") or {}
+                        _scoreboard = _tracking.get("scoreboard") or {}
+
+                        _record_reason = str(_record.get("reason") or "")
+                        _refresh_reason = str(_refresh.get("reason") or "")
+                        _score_reason = str(_scoreboard.get("reason") or "")
+                        _inserted = int(_record.get("inserted") or 0)
+                        _evaluated = int(_refresh.get("evaluated") or 0)
+                        _rows = int(_scoreboard.get("rows") or 0)
+
+                        # 人话总结：先给结论，再看技术细节
+                        st.markdown("#### 人话结论")
+                        _summary_lines: List[str] = []
+                        _next_action = "继续正常使用，等待下一次交易日数据刷新。"
+                        if not _tracking:
+                            _summary_lines.append("当前文件没有追踪数据。")
+                            _next_action = "换一个更新的执行文件，或点击上方“补跑追踪”。"
+                        else:
+                            if _inserted > 0:
+                                _summary_lines.append(f"本次已记录新信号 {_inserted} 条。")
+                            elif _record_reason in {"no_picks", "no_run_summary"}:
+                                _summary_lines.append("本次没有可记录新信号（常见于当日无新标的）。")
+                            else:
+                                _summary_lines.append("本次信号记录量为 0。")
+
+                            if _evaluated > 0:
+                                _summary_lines.append(f"已完成 {_evaluated} 条信号评估。")
+                            elif _refresh_reason == "no_signals":
+                                _summary_lines.append("当前没有可评估信号。")
+                            else:
+                                _summary_lines.append("评估阶段暂无新增结果。")
+
+                            if _rows > 0:
+                                _summary_lines.append(f"看板已生成，共 {_rows} 行。")
+                                _next_action = "可直接展开下方 Markdown/CSV 看板查看策略表现。"
+                            elif _score_reason == "no_performance_rows":
+                                _summary_lines.append("看板暂为空：样本还没走完 T+N 窗口（例如 T+5/T+10）。")
+                                _next_action = "等待 1-2 个交易日后再看，或继续积累信号样本。"
+                            else:
+                                _summary_lines.append("看板暂未生成。")
+
+                        for _line in _summary_lines:
+                            st.markdown(f"- {_line}")
+                        st.caption(f"下一步建议：{_next_action}")
+
+                        st.markdown("#### 最近一次非空选股结果（自动）")
+                        if _latest_non_empty is None:
+                            st.info("最近 30 次执行里暂未找到非空选股结果。")
+                        else:
+                            st.caption(f"来源执行文件：{_latest_non_empty['exec']}")
+                            st.caption(f"来源产物：{_latest_non_empty['artifact']}")
+                            _result_df = _latest_non_empty["df"]
+                            if _result_df is None or _result_df.empty:
+                                st.info("该结果无可展示行。")
+                            else:
+                                _show_cols = [
+                                    _c for _c in [
+                                        "ts_code",
+                                        "weighted_score",
+                                        "score",
+                                        "strategy",
+                                        "reason",
+                                        "reasons",
+                                    ] if _c in _result_df.columns
+                                ]
+                                if not _show_cols:
+                                    _show_cols = list(_result_df.columns)[:8]
+                                st.dataframe(_result_df[_show_cols], use_container_width=True)
+
+                        if not _tracking:
+                            st.warning("该执行文件没有 tracking 字段。请选更新的 partner_execution 文件，或点击上方“补跑追踪”。")
+                        elif _inserted == 0 and _record_reason in {"no_picks", "no_run_summary"}:
+                            st.info("本次没有新信号可记录（no_picks），这是正常现象。")
+                        elif _inserted > 0:
+                            st.success(f"本次新记录信号：{_inserted} 条。")
+
+                        if _evaluated == 0 and _refresh_reason == "no_signals":
+                            st.info("当前没有可评估信号（no_signals）。先累计几次选股后会自动出现。")
+                        elif _evaluated == 0 and (_score_reason == "no_performance_rows" or _rows == 0):
+                            st.info("样本还没走完 T+N（例如 T+5/T+10），因此看板暂时为空。")
+                        elif _rows > 0:
+                            st.success(f"策略看板已生成：{_rows} 行。")
+
+                        with st.expander("技术明细（tracking JSON）", expanded=False):
+                            col_tr1, col_tr2, col_tr3 = st.columns(3)
+                            with col_tr1:
+                                st.markdown("**tracking.record**")
+                                st.json(_record)
+                            with col_tr2:
+                                st.markdown("**tracking.refresh**")
+                                st.json(_refresh)
+                            with col_tr3:
+                                st.markdown("**tracking.scoreboard**")
+                                st.json(_scoreboard)
+
+                        _sb_md = _scoreboard.get("markdown") or (_exec_obj.get("artifacts") or {}).get("strategy_scoreboard_markdown") or ""
+                        _sb_csv = _scoreboard.get("csv") or (_exec_obj.get("artifacts") or {}).get("strategy_scoreboard_csv") or ""
+
+                        st.markdown("#### Scoreboard 文件")
+                        c_sb1, c_sb2 = st.columns(2)
+                        with c_sb1:
+                            st.code(str(_sb_md or "N/A"), language="text")
+                            if _sb_md and Path(_sb_md).exists():
+                                try:
+                                    _md_content = Path(_sb_md).read_text(encoding="utf-8")
+                                    with st.expander("预览 Markdown 看板", expanded=False):
+                                        st.markdown(_md_content)
+                                except Exception as _e:
+                                    st.warning(f"读取 markdown 失败：{_e}")
+                        with c_sb2:
+                            st.code(str(_sb_csv or "N/A"), language="text")
+                            if _sb_csv and Path(_sb_csv).exists():
+                                try:
+                                    import pandas as _pd
+                                    _df_sb = _pd.read_csv(_sb_csv)
+                                    with st.expander("预览 CSV 看板", expanded=False):
+                                        if _df_sb.empty:
+                                            st.info("当前看板为空（通常是样本还未走完 T+N）。")
+                                        else:
+                                            st.dataframe(_df_sb, use_container_width=True)
+                                except Exception as _e:
+                                    st.warning(f"读取 csv 失败：{_e}")
+                except Exception as e:
+                    st.warning(f"执行追踪展示异常：{e}")
             
             # ========== 子Tab 5: 配置设置 ==========
             with sub_tab5:
@@ -13589,6 +16054,62 @@ def main():
                     )
                 
                 st.markdown("---")
+                st.markdown("### 自学习自动调参")
+                st.caption("基于近30天学习卡片结果（T+1/T+5/T+20）自动给出参数优化建议。")
+                col_t1, col_t2 = st.columns([1, 1])
+                with col_t1:
+                    if st.button("生成调参建议", key="assistant_gen_tuning", use_container_width=True):
+                        with st.spinner("正在分析最近学习结果..."):
+                            if hasattr(assistant, "get_auto_tuning_recommendation"):
+                                tuning_rec = assistant.get_auto_tuning_recommendation(lookback_days=30, min_samples=8)
+                            else:
+                                tuning_rec = {"ok": False, "reason": "当前部署版本不支持自动调参（缺少 get_auto_tuning_recommendation）"}
+                        st.session_state["assistant_tuning_rec"] = tuning_rec
+                with col_t2:
+                    if st.button("应用自动调参", key="assistant_apply_tuning", use_container_width=True):
+                        with st.spinner("正在应用调参..."):
+                            base_rec = st.session_state.get("assistant_tuning_rec")
+                            if hasattr(assistant, "apply_auto_tuning"):
+                                tune_result = assistant.apply_auto_tuning(base_rec if isinstance(base_rec, dict) else None)
+                            else:
+                                tune_result = {"ok": False, "applied": False, "reason": "当前部署版本不支持自动调参（缺少 apply_auto_tuning）"}
+                        st.session_state["assistant_tuning_apply"] = tune_result
+                        if tune_result.get("ok") and tune_result.get("applied"):
+                            st.success("自动调参已应用")
+                            st.rerun()
+                        elif tune_result.get("ok"):
+                            st.info("当前参数无需变更")
+                        else:
+                            st.warning(f"自动调参未应用：{tune_result.get('reason', 'unknown')}")
+
+                tuning_rec = st.session_state.get("assistant_tuning_rec")
+                if isinstance(tuning_rec, dict):
+                    if tuning_rec.get("ok"):
+                        metrics = tuning_rec.get("metrics", {})
+                        st.caption(
+                            f"样本={metrics.get('sample_count', 0)} | "
+                            f"D5胜率={float(metrics.get('d5_win_rate', 0))*100:.1f}% | "
+                            f"D5均值={metrics.get('d5_avg_ret_pct', 0):.2f}% | "
+                            f"波动={metrics.get('d5_vol_pct', 0):.2f}"
+                        )
+                        changes = tuning_rec.get("changes", {})
+                        if changes:
+                            change_df = pd.DataFrame(
+                                [
+                                    {"参数": k, "当前": v.get("from"), "建议": v.get("to")}
+                                    for k, v in changes.items()
+                                ]
+                            )
+                            st.dataframe(change_df, use_container_width=True, hide_index=True)
+                        else:
+                            st.info("暂无建议变更，参数状态稳定。")
+                    else:
+                        st.info(f"暂无法生成建议：{tuning_rec.get('reason', '数据不足')}")
+
+                tuning_apply = st.session_state.get("assistant_tuning_apply")
+                if isinstance(tuning_apply, dict) and tuning_apply.get("applied"):
+                    st.caption("最近一次自动调参已完成。")
+
                 st.markdown("###  通知设置")
                 
                 st.info("""
@@ -13849,8 +16370,12 @@ def main():
                 else:
                     ai_stocks = st.session_state[ai_key].copy()
                     max_buy_n = max(1, min(50, len(ai_stocks)))
-                    top_n_default = min(int(sim['auto_buy_top_n']), max_buy_n)
-                    top_n_buy = st.slider("买入数量（按排名前 N）", 1, max_buy_n, top_n_default)
+                    if max_buy_n <= 1:
+                        top_n_buy = 1
+                        st.caption("当前 AI 推荐仅 1 只股票，买入数量固定为 1。")
+                    else:
+                        top_n_default = min(int(sim['auto_buy_top_n']), max_buy_n)
+                        top_n_buy = st.slider("买入数量（按排名前 N）", 1, max_buy_n, top_n_default)
 
                     col_buy1, col_buy2 = st.columns([2, 1])
                     with col_buy1:
@@ -13859,6 +16384,8 @@ def main():
                             positions = _get_sim_positions()
                             cash = sim['cash']
                             now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            buy_count = 0
+                            buy_cost_total = 0.0
                             for _, row in buy_list.iterrows():
                                 ts_code = row.get('股票代码') or row.get('ts_code')
                                 name = row.get('股票名称') or row.get('name') or ts_code
@@ -13891,7 +16418,31 @@ def main():
                                     source="manual"
                                 )
                                 cash -= cost
+                                buy_count += 1
+                                buy_cost_total += float(cost)
+                                assistant.record_learning_event(
+                                    module="sim_trading",
+                                    event_type="sim_buy_recorded",
+                                    payload={
+                                        "action": "sim_buy",
+                                        "name": name,
+                                        "price": float(price),
+                                        "shares": int(shares),
+                                        "amount": float(cost),
+                                    },
+                                    ts_code=ts_code,
+                                )
                             _update_sim_account(cash=cash)
+                            assistant.record_learning_event(
+                                module="sim_trading",
+                                event_type="sim_batch_buy_completed",
+                                payload={
+                                    "buy_count": int(buy_count),
+                                    "total_cost": float(buy_cost_total),
+                                    "top_n_buy": int(top_n_buy),
+                                    "per_buy_amount": float(per_buy_amount),
+                                },
+                            )
                             st.success("买入完成")
                             st.rerun()
 
@@ -13963,6 +16514,8 @@ def main():
                     sell_codes = st.multiselect("选择卖出股票", options=list(positions.keys()))
                     if st.button("卖出选中股票", type="secondary"):
                         cash = sim['cash']
+                        sell_count = 0
+                        sell_pnl_total = 0.0
                         for ts_code in sell_codes:
                             pos = positions.get(ts_code)
                             if not pos:
@@ -13985,7 +16538,30 @@ def main():
                                 source="manual"
                             )
                             _delete_sim_position(ts_code)
+                            sell_count += 1
+                            sell_pnl_total += float(pnl)
+                            assistant.record_learning_event(
+                                module="sim_trading",
+                                event_type="sim_sell_recorded",
+                                payload={
+                                    "action": "sim_sell",
+                                    "name": pos['name'],
+                                    "price": float(last_price),
+                                    "shares": int(shares),
+                                    "amount": float(amount),
+                                    "pnl": float(pnl),
+                                },
+                                ts_code=ts_code,
+                            )
                         _update_sim_account(cash=cash)
+                        assistant.record_learning_event(
+                            module="sim_trading",
+                            event_type="sim_batch_sell_completed",
+                            payload={
+                                "sell_count": int(sell_count),
+                                "sell_pnl_total": float(sell_pnl_total),
+                            },
+                        )
                         st.success("卖出完成")
                         st.rerun()
                 else:
@@ -14024,4 +16600,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if os.getenv("RUN_OFFLINE_ALL") == "1":
+        run_offline_all()
+    elif os.getenv("RUN_OFFLINE_V7") == "1":
+        run_offline_v7_scan()
+    else:
+        main()

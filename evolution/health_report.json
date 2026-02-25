@@ -1,0 +1,33 @@
+{
+  "run_at": "2026-02-24 17:47:29",
+  "ok": true,
+  "warnings": [],
+  "stats": {
+    "last_trade_date": "20260213",
+    "records_last_trade_date": 4988,
+    "recent_trade_dates": [
+      "20260213",
+      "20260212",
+      "20260211",
+      "20260210",
+      "20260209",
+      "20260206",
+      "20260205",
+      "20260204",
+      "20260203",
+      "20260202"
+    ],
+    "recent_counts": {
+      "20260213": 4988,
+      "20260212": 4990,
+      "20260211": 4986
+    },
+    "northbound_flow_max_date": "20260213",
+    "margin_summary_max_date": "20260213",
+    "margin_detail_max_date": "20260213",
+    "moneyflow_daily_max_date": "20260213",
+    "moneyflow_ind_ths_max_date": "20260213",
+    "top_list_max_date": "20260213",
+    "top_inst_max_date": "20260213"
+  }
+}

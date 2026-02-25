@@ -1,0 +1,16 @@
+{
+  "strategy": "V5",
+  "run_at": "2026-02-08 00:56:27",
+  "score": 14.504878251216386,
+  "params": {
+    "score_threshold": 60,
+    "holding_days": 10
+  },
+  "stats": {
+    "total_signals": 4,
+    "avg_return": 4.526362700315152,
+    "win_rate": 100.0,
+    "sharpe_ratio": 8.09517949012745,
+    "max_drawdown": 0.0
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "strategy": "V8",
+  "run_at": "2026-02-24 05:52:04",
+  "score": 4.228927888239002,
+  "params": {
+    "score_threshold": 70,
+    "holding_days": 8
+  },
+  "stats": {
+    "total_signals": 21,
+    "avg_return": 6.10512767576434,
+    "win_rate": 57.14285714285714,
+    "sharpe_ratio": 2.0958168032681095,
+    "max_drawdown": -10.921293471629042
+  }
+}
