@@ -26,7 +26,14 @@ need_cmd git
 need_cmd ssh
 need_cmd scp
 need_cmd sshpass
-need_cmd sha1sum
+
+if command -v sha1sum >/dev/null 2>&1; then
+  HASH_CMD="sha1sum"
+elif command -v shasum >/dev/null 2>&1; then
+  HASH_CMD="shasum"
+else
+  die "missing hash command: sha1sum/shasum"
+fi
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not a git repository: $ROOT_DIR"
 
@@ -107,8 +114,8 @@ deploy_one_file() {
 verify_one_file() {
   local rel="$1"
   local local_sha remote_sha
-  local_sha="$(git show "$LOCAL_HEAD:$rel" | sha1sum | awk '{print $1}')"
-  remote_sha="$("${SSH_BASE[@]}" "sha1sum \"$REMOTE_APP_DIR/$rel\" | awk '{print \$1}'")"
+  local_sha="$(git show "$LOCAL_HEAD:$rel" | "$HASH_CMD" | awk '{print $1}')"
+  remote_sha="$("${SSH_BASE[@]}" "if command -v sha1sum >/dev/null 2>&1; then sha1sum \"$REMOTE_APP_DIR/$rel\"; else shasum \"$REMOTE_APP_DIR/$rel\"; fi | awk '{print \$1}'")"
   [[ "$local_sha" == "$remote_sha" ]] || die "hash mismatch: $rel local=$local_sha remote=$remote_sha"
 }
 
@@ -152,4 +159,3 @@ fi
 msg "done"
 msg "remote backup: $REMOTE_BACKUP_DIR"
 msg "synced commits: $REMOTE_BEFORE_SHORT..$LOCAL_HEAD_SHORT"
-
