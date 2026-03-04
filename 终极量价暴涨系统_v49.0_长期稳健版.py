@@ -100,6 +100,39 @@ OFFLINE_STOCK_LIMIT = int(os.getenv("OFFLINE_STOCK_LIMIT", "0"))
 OFFLINE_LOG_EVERY = int(os.getenv("OFFLINE_LOG_EVERY", "200"))
 BULK_HISTORY_LIMIT = int(os.getenv("BULK_HISTORY_LIMIT", "1200"))
 BULK_HISTORY_CHUNK = int(os.getenv("BULK_HISTORY_CHUNK", "200"))
+AUTO_EVOLVE_LOCK_PATH = os.getenv("AUTO_EVOLVE_LOCK_PATH", "/tmp/auto_evolve.lock")
+
+
+def _is_pid_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except Exception:
+        return False
+
+
+def _detect_heavy_background_job() -> Tuple[bool, str]:
+    """
+    Soft guard for interactive scans:
+    - Detect running auto_evolve by lock file + alive PID.
+    """
+    lock_path = AUTO_EVOLVE_LOCK_PATH
+    try:
+        if os.path.exists(lock_path):
+            pid_text = ""
+            try:
+                with open(lock_path, "r", encoding="utf-8") as f:
+                    pid_text = (f.read() or "").strip()
+            except Exception:
+                pid_text = ""
+            if pid_text.isdigit() and _is_pid_running(int(pid_text)):
+                return True, f"检测到自动进化任务运行中（PID={pid_text}）"
+            return True, "检测到自动进化锁文件存在（可能正在运行或刚结束）"
+    except Exception:
+        pass
+    return False, ""
 
 
 def _focus_tab_by_text(tab_text: str) -> None:
@@ -8799,7 +8832,6 @@ def main():
         
         _modes = [
             " v4.0 长期稳健版（潜伏策略 / 3-7日）",
-            " 稳定上涨策略（启动/回撤/二次确认）",
             " v5.0 趋势版（启动确认 / 5-10日）",
             " v6.0 超短线版（强势精选 / 2-5日）",
             " v7.0 智能版（动态自适应 / 5-15日）",
@@ -8966,6 +8998,11 @@ def main():
             st.markdown("---")
             
             if st.button("开始扫描（v4.0潜伏策略）", type="primary", use_container_width=True, key="scan_btn_v4"):
+                heavy_running, heavy_reason = _detect_heavy_background_job()
+                if heavy_running:
+                    st.warning(f"{heavy_reason}，为保证交互流畅，建议稍后再扫。")
+                    if not st.checkbox("我理解影响，仍要继续扫描", key="force_scan_v4_heavy"):
+                        st.stop()
                 with st.spinner(f"正在扫描全市场股票..."):
                     try:
                         cache_params = {
@@ -9528,6 +9565,11 @@ def main():
             st.markdown("---")
             
             if st.button("开始扫描（v5.0启动确认型）", type="primary", use_container_width=True, key="scan_btn_v5"):
+                heavy_running, heavy_reason = _detect_heavy_background_job()
+                if heavy_running:
+                    st.warning(f"{heavy_reason}，为保证交互流畅，建议稍后再扫。")
+                    if not st.checkbox("我理解影响，仍要继续扫描", key="force_scan_v5_heavy"):
+                        st.stop()
                 with st.spinner("正在扫描..."):
                     try:
                         cache_params = {
@@ -9970,6 +10012,11 @@ def main():
             
             # 扫描按钮
             if st.button("开始扫描（v6.0专业版）", type="primary", use_container_width=True, key="scan_v6_tab1"):
+                heavy_running, heavy_reason = _detect_heavy_background_job()
+                if heavy_running:
+                    st.warning(f"{heavy_reason}，为保证交互流畅，建议稍后再扫。")
+                    if not st.checkbox("我理解影响，仍要继续扫描", key="force_scan_v6_tab1_heavy"):
+                        st.stop()
                 with st.spinner("v6.0专业版全市场扫描中...（三级过滤+严格评分）"):
                     try:
                         # 获取股票列表
@@ -10367,6 +10414,11 @@ def main():
             
             # 扫描按钮
             if st.button("开始智能扫描（v7.0）", type="primary", use_container_width=True, key="scan_v7_tab1"):
+                heavy_running, heavy_reason = _detect_heavy_background_job()
+                if heavy_running:
+                    st.warning(f"{heavy_reason}，为保证交互流畅，建议稍后再扫。")
+                    if not st.checkbox("我理解影响，仍要继续扫描", key="force_scan_v7_heavy"):
+                        st.stop()
                 with st.spinner("v7.0智能系统扫描中...（识别环境→计算情绪→分析行业→动态评分→三层过滤）"):
                     try:
                         cache_params = {
@@ -10821,6 +10873,11 @@ def main():
             
             # 扫描按钮
             if st.button("开始扫描（v8.0）", type="primary", use_container_width=True, key="scan_v8_tab1"):
+                heavy_running, heavy_reason = _detect_heavy_background_job()
+                if heavy_running:
+                    st.warning(f"{heavy_reason}，为保证交互流畅，建议稍后再扫。")
+                    if not st.checkbox("我理解影响，仍要继续扫描", key="force_scan_v8_heavy"):
+                        st.stop()
                 with st.spinner("v8.0进阶版扫描中...（三级市场过滤→18维度评分→ATR风控→凯利仓位）"):
                     try:
                         cache_params = {
@@ -11426,6 +11483,11 @@ def main():
                 cap_max_v9 = st.number_input("最大市值（亿元）", min_value=0, max_value=50000, value=0, step=50, key="cap_max_v9")
 
             if st.button("开始扫描（v9.0中线均衡版）", type="primary", use_container_width=True, key="scan_v9"):
+                heavy_running, heavy_reason = _detect_heavy_background_job()
+                if heavy_running:
+                    st.warning(f"{heavy_reason}，为保证交互流畅，建议稍后再扫。")
+                    if not st.checkbox("我理解影响，仍要继续扫描", key="force_scan_v9_heavy"):
+                        st.stop()
                 with st.spinner("v9.0 中线均衡版扫描中..."):
                     try:
                         cache_params = {
@@ -11778,6 +11840,11 @@ def main():
                     return pd.DataFrame()
 
             if st.button("开始扫描（组合共识）", type="primary", use_container_width=True, key="scan_combo"):
+                heavy_running, heavy_reason = _detect_heavy_background_job()
+                if heavy_running:
+                    st.warning(f"{heavy_reason}，为保证交互流畅，建议稍后再扫。")
+                    if not st.checkbox("我理解影响，仍要继续扫描", key="force_scan_combo_heavy"):
+                        st.stop()
                 with st.spinner("组合共识评分计算中..."):
                     try:
                         cache_params = {
@@ -12130,7 +12197,11 @@ def main():
                 results_df = st.session_state['combo_scan_results']
                 st.dataframe(results_df, use_container_width=True, hide_index=True)
 
-        else:  # v6.0
+        else:  # fallback
+            st.warning("该入口已统一，请使用上方 v4/v5/v6/v7/v8/v9/组合策略入口。")
+            st.stop()
+
+            # Legacy block kept below for reference; no longer reachable.
             st.header("v6.0超短线狙击·专业版 - 只选市场高质量1-3%")
             st.caption("三级过滤+七维严格评分：必要条件淘汰→极度严格评分→精英筛选，胜率80-90%，单次8-15%")
             
@@ -12200,6 +12271,11 @@ def main():
             
             st.markdown("---")
             if st.button("开始扫描（v6.0超短线）", type="primary", use_container_width=True, key="scan_btn_v6"):
+                heavy_running, heavy_reason = _detect_heavy_background_job()
+                if heavy_running:
+                    st.warning(f"{heavy_reason}，为保证交互流畅，建议稍后再扫。")
+                    if not st.checkbox("我理解影响，仍要继续扫描", key="force_scan_v6_heavy"):
+                        st.stop()
                 with st.spinner("正在扫描..."):
                     try:
                         cache_params = {

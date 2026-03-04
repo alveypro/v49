@@ -91,6 +91,21 @@ def _get_cn_now() -> datetime:
         return datetime.now()
 
 
+def _in_heavy_job_window(cn_now: datetime) -> bool:
+    """
+    Guard heavy optimization jobs to run in an off-peak night window.
+    Default window: [01:00, 09:00) Asia/Shanghai.
+    """
+    start_hour = int(os.getenv("AUTO_EVOLVE_WINDOW_START_HOUR", "1"))
+    end_hour = int(os.getenv("AUTO_EVOLVE_WINDOW_END_HOUR", "9"))
+    if start_hour == end_hour:
+        return True
+    if start_hour < end_hour:
+        return start_hour <= cn_now.hour < end_hour
+    # Cross-midnight window (e.g. 22 -> 6)
+    return cn_now.hour >= start_hour or cn_now.hour < end_hour
+
+
 def _previous_weekday(d: datetime) -> datetime:
     """Move back to the most recent weekday (Mon-Fri)."""
     while d.weekday() >= 5:
@@ -2113,6 +2128,17 @@ def main() -> None:
 
         phase = _run_phase()
         LOGGER.info("auto evolve started (phase=%s)", phase)
+
+        enforce_window = str(os.getenv("AUTO_EVOLVE_ENFORCE_WINDOW", "1")).strip().lower() not in {"0", "false", "no"}
+        cn_now = _get_cn_now()
+        if enforce_window and phase in {"full", "optimize_only"} and not _in_heavy_job_window(cn_now):
+            LOGGER.warning(
+                "skip heavy phase outside window: now=%s, allowed_window=[%s:00,%s:00)",
+                cn_now.strftime("%Y-%m-%d %H:%M:%S"),
+                os.getenv("AUTO_EVOLVE_WINDOW_START_HOUR", "1"),
+                os.getenv("AUTO_EVOLVE_WINDOW_END_HOUR", "9"),
+            )
+            return
 
         if phase in {"full", "data_only"}:
             # 1) 更新数据（收盘后）
