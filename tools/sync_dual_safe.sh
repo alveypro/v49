@@ -62,8 +62,15 @@ fi
 msg "pushing HEAD -> $REMOTE_NAME/$REMOTE_BRANCH (commit=$LOCAL_HEAD_SHORT)"
 git push "$REMOTE_NAME" "$LOCAL_HEAD:$REMOTE_BRANCH"
 
-mapfile -t CHANGED_FILES < <(git diff --name-only --diff-filter=ACMRT "$REMOTE_BEFORE" "$LOCAL_HEAD")
-mapfile -t DELETED_FILES < <(git diff --name-only --diff-filter=D "$REMOTE_BEFORE" "$LOCAL_HEAD")
+CHANGED_FILES=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && CHANGED_FILES+=("$line")
+done < <(git diff --name-only --diff-filter=ACMRT "$REMOTE_BEFORE" "$LOCAL_HEAD")
+
+DELETED_FILES=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && DELETED_FILES+=("$line")
+done < <(git diff --name-only --diff-filter=D "$REMOTE_BEFORE" "$LOCAL_HEAD")
 
 if [[ "${#CHANGED_FILES[@]}" -eq 0 && "${#DELETED_FILES[@]}" -eq 0 ]]; then
   msg "no file changes in range $REMOTE_BEFORE_SHORT..$LOCAL_HEAD_SHORT"
