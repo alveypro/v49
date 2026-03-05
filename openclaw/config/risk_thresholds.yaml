@@ -1,0 +1,32 @@
+win_rate_min: 0.45
+max_drawdown_max: 0.12
+signal_density_min: 0.02
+
+strategy_overrides:
+  # ── 生产策略 (严格阈值) ──
+  v9:
+    win_rate_min: 0.48
+    max_drawdown_max: 0.11
+    signal_density_min: 0.02
+  v8:
+    win_rate_min: 0.50
+    max_drawdown_max: 0.10
+    signal_density_min: 0.02
+  v5:
+    win_rate_min: 0.48
+    max_drawdown_max: 0.11
+    signal_density_min: 0.02
+  combo:
+    win_rate_min: 0.50
+    max_drawdown_max: 0.10
+    signal_density_min: 0.02
+  # ── 实验策略 (宽松阈值, 仅供参考) ──
+  v4:
+    win_rate_min: 0.45
+    max_drawdown_max: 0.12
+  v6:
+    win_rate_min: 0.42
+    max_drawdown_max: 0.14
+  v7:
+    win_rate_min: 0.46
+    max_drawdown_max: 0.12

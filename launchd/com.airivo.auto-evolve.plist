@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.airivo.auto-evolve</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/bin/nice</string>
+      <string>-n</string>
+      <string>15</string>
+      <string>/usr/bin/python3</string>
+      <string>/Users/mac/2026Qlin/auto_evolve.py</string>
+    </array>
+
+    <key>LowPriorityIO</key>
+    <true/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mac/2026Qlin</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>AUTO_PUSH</key>
+      <string>1</string>
+      <key>UPDATE_DAYS</key>
+      <string>30</string>
+      <key>OPENCLAW_ROOT</key>
+      <string>/Users/mac/2026Qlin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key>
+      <integer>1</integer>
+      <key>Minute</key>
+      <integer>10</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mac/2026Qlin/auto_evolve.launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mac/2026Qlin/auto_evolve.launchd.err</string>
+  </dict>
+</plist>

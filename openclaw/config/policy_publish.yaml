@@ -1,0 +1,31 @@
+mode: publish_only
+permissions:
+  read_only: true
+  orchestrate: true
+  publish: true
+  trade: false
+
+production_strategies:
+  - v9
+  - v8
+  - v5
+  - combo
+
+allowed_strategies:
+  - v4
+  - v5
+  - v6
+  - v7
+  - v8
+  - v9
+  - stable
+  - combo
+  - ai
+
+forbidden_actions:
+  - place_live_order
+  - modify_broker_credentials
+  - disable_risk_checks
+
+human_approval_required:
+  - publish_notifications

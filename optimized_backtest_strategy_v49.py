@@ -29,6 +29,8 @@ import logging
 from typing import Dict, List
 import traceback
 
+np.random.seed(42)
+
 logger = logging.getLogger(__name__)
 
 

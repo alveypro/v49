@@ -1,0 +1,45 @@
+mode: read_only
+permissions:
+  read_only: true
+  orchestrate: true
+  publish: false
+  trade: false
+
+# ── 策略分区 ──────────────────────────────────────────────
+# production: 默认运行, 自动验证, 告警覆盖
+# experimental: 手动开关, 不进入默认流水线
+production_strategies:
+  - v9
+  - v8
+  - v5
+  - combo
+
+experimental_strategies:
+  - v4
+  - v6
+  - v7
+  - stable
+  - ai
+
+# allowed_strategies 保持全集, 用于 run_daily --strategy 参数校验
+allowed_strategies:
+  - v4
+  - v5
+  - v6
+  - v7
+  - v8
+  - v9
+  - stable
+  - combo
+  - ai
+
+default_strategy: v9
+
+forbidden_actions:
+  - place_live_order
+  - modify_broker_credentials
+  - disable_risk_checks
+
+human_approval_required:
+  - publish_notifications
+  - any_trade_related_action

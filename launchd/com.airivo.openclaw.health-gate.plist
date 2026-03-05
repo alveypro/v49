@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.airivo.openclaw.health-gate</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/bin/python3</string>
+      <string>/Users/mac/2026Qlin/tools/openclaw_health_gate.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mac/2026Qlin</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>OPENCLAW_ROOT</key>
+      <string>/Users/mac/2026Qlin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key>
+      <integer>1</integer>
+      <key>Minute</key>
+      <integer>50</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mac/2026Qlin/logs/health_gate.launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mac/2026Qlin/logs/health_gate.launchd.err</string>
+  </dict>
+</plist>
