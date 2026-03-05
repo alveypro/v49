@@ -127,27 +127,27 @@ verify_one_file() {
 }
 
 # 1) Backup files that may be changed/deleted
-for f in "${CHANGED_FILES[@]}"; do
+for f in ${CHANGED_FILES[@]+"${CHANGED_FILES[@]}"}; do
   backup_remote_file "$f"
 done
-for f in "${DELETED_FILES[@]}"; do
+for f in ${DELETED_FILES[@]+"${DELETED_FILES[@]}"}; do
   backup_remote_file "$f"
 done
 
 # 2) Deploy changed files from committed HEAD content
-for f in "${CHANGED_FILES[@]}"; do
+for f in ${CHANGED_FILES[@]+"${CHANGED_FILES[@]}"}; do
   msg "deploy $f"
   deploy_one_file "$f"
 done
 
 # 3) Delete removed files on server (after backup)
-for f in "${DELETED_FILES[@]}"; do
+for f in ${DELETED_FILES[@]+"${DELETED_FILES[@]}"}; do
   msg "delete $f"
   "${SSH_BASE[@]}" "rm -f \"$REMOTE_APP_DIR/$f\""
 done
 
 # 4) Verify hashes for deployed files
-for f in "${CHANGED_FILES[@]}"; do
+for f in ${CHANGED_FILES[@]+"${CHANGED_FILES[@]}"}; do
   verify_one_file "$f"
 done
 
