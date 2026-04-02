@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenClaw tracking guard anomaly checker
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/openclaw/app
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/openclaw/venv311/bin/python /opt/openclaw/app/openclaw/tracking_guard.py --output-dir /opt/openclaw/app/logs/openclaw --notify-config /opt/openclaw/app/openclaw/config/notify.yaml --lookback-files 6 --consecutive-threshold 2 --state-file /opt/openclaw/app/logs/openclaw/tracking_guard_state.json --status-file /opt/openclaw/app/logs/openclaw/tracking_guard_status.json
+StandardOutput=append:/opt/openclaw/app/logs/openclaw/tracking_guard.log
+StandardError=append:/opt/openclaw/app/logs/openclaw/tracking_guard.log
+
+[Install]
+WantedBy=multi-user.target

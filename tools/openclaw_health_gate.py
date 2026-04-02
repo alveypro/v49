@@ -2,6 +2,7 @@
 """全链路健康检查 — 凌晨 01:50 由 launchd 执行，覆盖所有关键子系统。
 
 检查项:
+  0. Python 运行时版本 (>=3.11) 与解释器路径
   1. DB 可达 & 数据新鲜度
   2. 缓存目录完整性
   3. 关键 Python 模块可导入
@@ -40,6 +41,11 @@ except ImportError:
     log_dir = lambda: ROOT / "logs" / "openclaw"
     doctor_log_dir = lambda: ROOT / "logs" / "doctor"
 
+try:
+    from strategies.center_config import load_center_config
+except Exception:
+    load_center_config = None  # type: ignore[assignment]
+
 
 class Check:
     def __init__(self, name: str, name_cn: str):
@@ -62,6 +68,28 @@ class Check:
 
     def to_dict(self) -> Dict[str, str]:
         return {"name": self.name, "name_cn": self.name_cn, "status": self.status, "detail": self.detail}
+
+
+def check_python_runtime() -> Check:
+    c = Check("python_runtime", "Python运行时")
+    try:
+        current = sys.executable
+        ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        try:
+            from openclaw.paths import venv_python
+            preferred = str(venv_python())
+        except Exception:
+            preferred = ""
+        if sys.version_info < (3, 11):
+            c.fail(f"当前解释器过低: {ver} ({current})")
+            return c
+        if preferred and Path(preferred).exists() and Path(current).resolve() != Path(preferred).resolve():
+            c.warn(f"当前={current}({ver})，建议使用={preferred}")
+            return c
+        c.ok(f"解释器={current} 版本={ver}")
+    except Exception as e:
+        c.fail(f"运行时检查失败: {e}")
+    return c
 
 
 def check_db() -> Check:
@@ -121,6 +149,7 @@ def check_imports() -> Check:
         "openclaw.paths",
         "openclaw.runtime.v49_handlers",
         "strategies.registry",
+        "strategies.center_config",
         "risk.engine",
     ]
     for mod in modules:
@@ -187,16 +216,28 @@ def check_recent_run() -> Check:
         return c
     latest = summaries[0]
     try:
+        center_cfg = _load_strategy_center_config()
         data = json.loads(latest.read_text(encoding="utf-8"))
-        risk = data.get("risk", {}).get("risk_level", "unknown")
+        risk = str(data.get("risk", {}).get("risk_level", "unknown")).lower()
         strat = data.get("strategy", "?")
         scan_status = data.get("scan", {}).get("status", "?")
         bt_status = data.get("backtest", {}).get("status", "?")
+        bt_summary = (((data.get("backtest") or {}).get("result") or {}).get("summary") or {})
+        market_stats = ((data.get("risk") or {}).get("evidence") or {}).get("market_stats") or bt_summary
+        limits = _risk_limits_for_strategy(strat, center_cfg)
+        breaches = _metric_breaches(market_stats, limits)
         age_h = (datetime.now() - datetime.fromtimestamp(latest.stat().st_mtime)).total_seconds() / 3600
-        info = f"策略={strat} 扫描={scan_status} 回测={bt_status} 风险={risk} ({age_h:.0f}h前)"
-        if risk == "red":
+        stale_warn_h = int(((center_cfg.get("health_gate") or {}).get("stale_run_hours_warn", 48)) or 48)
+        stale_fail_h = int(((center_cfg.get("health_gate") or {}).get("stale_run_hours_fail", 96)) or 96)
+        info = (
+            f"策略={strat} 扫描={scan_status} 回测={bt_status} 风险={risk} "
+            f"({age_h:.0f}h前) 指标={_brief_metric_line(market_stats)}"
+        )
+        if breaches:
+            c.fail(f"{info} 阈值违规={','.join(breaches)}")
+        elif risk == "red" or age_h > stale_fail_h:
             c.fail(info)
-        elif risk == "orange" or age_h > 48:
+        elif risk == "orange" or age_h > stale_warn_h:
             c.warn(info)
         else:
             c.ok(info)
@@ -205,13 +246,94 @@ def check_recent_run() -> Check:
     return c
 
 
+def _load_strategy_center_config() -> Dict[str, Any]:
+    if load_center_config is None:
+        return {}
+    try:
+        cfg_path = ROOT / "openclaw" / "config" / "strategy_center.yaml"
+        return load_center_config(cfg_path)
+    except Exception:
+        return {}
+
+
+def _risk_limits_for_strategy(strategy: str, center_cfg: Dict[str, Any]) -> Dict[str, float]:
+    # Fallback limits aligned with run_daily defaults.
+    base = {"win_rate_min": 0.45, "max_drawdown_max": 0.12, "signal_density_min": 0.02}
+    risk_overrides = center_cfg.get("risk_overrides") if isinstance(center_cfg, dict) else {}
+    if not isinstance(risk_overrides, dict):
+        return base
+    this = risk_overrides.get(str(strategy), {})
+    if not isinstance(this, dict):
+        return base
+    for k in ("win_rate_min", "max_drawdown_max", "signal_density_min"):
+        if k in this:
+            try:
+                base[k] = float(this[k])
+            except Exception:
+                pass
+    return base
+
+
+def _metric_breaches(market_stats: Dict[str, Any], limits: Dict[str, float]) -> List[str]:
+    out: List[str] = []
+    try:
+        win_rate = float(market_stats.get("win_rate", 0.0) or 0.0)
+        max_dd = float(market_stats.get("max_drawdown", 1.0) or 1.0)
+        density = float(market_stats.get("signal_density", 0.0) or 0.0)
+    except Exception:
+        return ["market_stats_unreadable"]
+
+    if win_rate < float(limits.get("win_rate_min", 0.45)):
+        out.append("win_rate")
+    if max_dd > float(limits.get("max_drawdown_max", 0.12)):
+        out.append("max_drawdown")
+    if density < float(limits.get("signal_density_min", 0.02)):
+        out.append("signal_density")
+    return out
+
+
+def _brief_metric_line(market_stats: Dict[str, Any]) -> str:
+    try:
+        wr = float(market_stats.get("win_rate", 0.0) or 0.0)
+        dd = float(market_stats.get("max_drawdown", 1.0) or 1.0)
+        sd = float(market_stats.get("signal_density", 0.0) or 0.0)
+        return f"wr={wr:.3f},dd={dd:.3f},sd={sd:.3f}"
+    except Exception:
+        return "wr=?,dd=?,sd=?"
+
+
 def check_port(port: int, label: str, label_cn: str) -> Check:
     c = Check(f"port_{port}", f"{label_cn}({port})")
+    http_probe = {
+        5101: "http://127.0.0.1:5101/health",
+        8501: "http://127.0.0.1:8501/_stcore/health",
+    }.get(int(port))
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=3):
             c.ok(f"{label} 在线")
+            return c
+    except PermissionError:
+        # Some sandboxed Python runtimes deny localhost sockets even when the
+        # service is healthy. Fall back to an HTTP probe before warning.
+        pass
     except Exception:
-        c.warn(f"{label} 未响应")
+        pass
+
+    if http_probe:
+        try:
+            r = subprocess.run(
+                ["curl", "-sS", "--max-time", "3", http_probe],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                c.ok(f"{label} 在线")
+                return c
+        except Exception:
+            pass
+
+    c.warn(f"{label} 未响应")
     return c
 
 
@@ -247,6 +369,7 @@ def check_git_hash() -> Check:
 
 def run_all() -> Dict[str, Any]:
     checks: List[Check] = [
+        check_python_runtime(),
         check_db(),
         check_cache(),
         check_imports(),

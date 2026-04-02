@@ -1,15 +1,15 @@
 {
   "strategy": "AI_V2",
-  "run_at": "2026-02-25 16:27:16",
-  "score": 8.896874901620881,
+  "run_at": "2026-03-05 20:16:48",
+  "score": 9.197857927569855,
   "params": {
-    "target_return": 0.15,
+    "target_return": 0.25,
     "min_amount": 1.5,
-    "max_volatility": 0.1
+    "max_volatility": 0.15
   },
   "stats": {
-    "total_signals": 463,
-    "avg_return": 3.111902562165989,
-    "win_rate": 44.49244060475162
+    "total_signals": 253,
+    "avg_return": 4.467144177335201,
+    "win_rate": 49.01185770750988
   }
 }

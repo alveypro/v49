@@ -1,0 +1,27 @@
+{
+  "run_at": "2026-03-27 08:47:56",
+  "risk_level": "red",
+  "triggered_rules": [
+    "signal_density_collapse",
+    "rolling_win_rate_drift",
+    "hard_win_rate_breach"
+  ],
+  "recommended_actions": [
+    "停止自动晋升，维持现有生产参数",
+    "人工排查数据与策略健康后再恢复"
+  ],
+  "evidence": {
+    "strategy": "V8",
+    "candidate_win_rate": 33.33333333333333,
+    "candidate_max_drawdown": -12.022979072630282,
+    "candidate_total_signals": 3,
+    "incumbent_win_rate": 57.14285714285714,
+    "win_rate_drop": 23.80952380952381,
+    "data_fresh": true,
+    "freshness_enforce": false,
+    "db_last_trade": "20260326",
+    "calendar_last_trade": "20260309",
+    "is_trade_day": true,
+    "ready_time": "2026-03-27 18:00"
+  }
+}

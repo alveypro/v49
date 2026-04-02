@@ -1,0 +1,14 @@
+[Unit]
+Description=Run OpenClaw Auto Evolve Data Retry in post-close windows
+
+[Timer]
+OnCalendar=Mon..Fri 17:20
+OnCalendar=Mon..Fri 18:00
+OnCalendar=Mon..Fri 18:40
+OnCalendar=Mon..Fri 19:20
+OnCalendar=Mon..Fri 20:00
+Persistent=true
+Unit=openclaw-auto-evolve-data-retry.service
+
+[Install]
+WantedBy=timers.target

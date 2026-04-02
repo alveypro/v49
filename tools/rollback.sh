@@ -55,9 +55,26 @@ start_services() {
 run_health() {
   echo ""
   echo "🏥 运行健康检查..."
-  PY_BIN="$ROOT_DIR/.venv/bin/python"
-  if [[ ! -x "$PY_BIN" ]]; then
-    PY_BIN="$(command -v python3 2>/dev/null || echo python3)"
+  resolve_python_bin() {
+    local c
+    for c in \
+      "$ROOT_DIR/.venv/bin/python" \
+      "$ROOT_DIR/venv311/bin/python" \
+      "/opt/openclaw/venv311/bin/python" \
+      "/opt/airivo/app/.venv/bin/python" \
+      "$(command -v python3 2>/dev/null || true)"; do
+      [[ -n "${c}" && -x "${c}" ]] && { echo "${c}"; return 0; }
+    done
+    echo "python3"
+  }
+  PY_BIN="$(resolve_python_bin)"
+  if ! "$PY_BIN" - <<'PY'
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 11) else 1)
+PY
+  then
+    echo "❌ Python 版本过低: $("$PY_BIN" -V 2>&1) (要求 >=3.11)"
+    return 2
   fi
   "$PY_BIN" "$ROOT_DIR/tools/openclaw_health_gate.py" || true
 }

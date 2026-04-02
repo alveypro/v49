@@ -1,0 +1,21 @@
+[Unit]
+Description=OpenClaw QA API (Hardened)
+After=network.target
+
+[Service]
+Type=simple
+User=openclaw
+Group=openclaw
+WorkingDirectory=/opt/openclaw/qa
+EnvironmentFile=/etc/openclaw/openclaw.env
+ExecStart=/opt/openclaw/qaenv/bin/python /opt/openclaw/qa/app.py
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/openclaw/qa/logs /opt/openclaw/qa/tmp
+
+[Install]
+WantedBy=multi-user.target

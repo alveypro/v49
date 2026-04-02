@@ -1,33 +1,52 @@
 {
-  "run_at": "2026-02-24 17:47:29",
+  "run_at": "2026-03-31 12:39:09",
   "ok": true,
   "warnings": [],
   "stats": {
-    "last_trade_date": "20260213",
-    "records_last_trade_date": 4988,
+    "db_path": "/Users/mac/2026Qlin/permanent_stock_database.db",
+    "daily_table": "daily_trading_data",
+    "last_trade_date": "20260330",
+    "records_last_trade_date": 5476,
     "recent_trade_dates": [
-      "20260213",
-      "20260212",
-      "20260211",
-      "20260210",
-      "20260209",
-      "20260206",
-      "20260205",
-      "20260204",
-      "20260203",
-      "20260202"
+      "20260330",
+      "20260327",
+      "20260326",
+      "20260325",
+      "20260324",
+      "20260323",
+      "20260320",
+      "20260319",
+      "20260318",
+      "20260317"
     ],
     "recent_counts": {
-      "20260213": 4988,
-      "20260212": 4990,
-      "20260211": 4986
+      "20260330": 5476,
+      "20260327": 5478,
+      "20260326": 5481
     },
-    "northbound_flow_max_date": "20260213",
-    "margin_summary_max_date": "20260213",
-    "margin_detail_max_date": "20260213",
-    "moneyflow_daily_max_date": "20260213",
-    "moneyflow_ind_ths_max_date": "20260213",
-    "top_list_max_date": "20260213",
-    "top_inst_max_date": "20260213"
+    "northbound_flow_max_date": "20260326",
+    "northbound_flow_lag_trading_days": 2,
+    "margin_summary_max_date": "20260325",
+    "margin_summary_lag_trading_days": 3,
+    "margin_detail_max_date": "20260325",
+    "margin_detail_lag_trading_days": 3,
+    "moneyflow_daily_max_date": "20260326",
+    "moneyflow_daily_lag_trading_days": 2,
+    "moneyflow_ind_ths_max_date": "20260326",
+    "moneyflow_ind_ths_lag_trading_days": 2,
+    "top_list_max_date": "20260326",
+    "top_list_lag_trading_days": 2,
+    "top_inst_max_date": "20260326",
+    "top_inst_lag_trading_days": 2,
+    "risk_level": "red",
+    "risk_rules": [
+      "signal_density_collapse",
+      "rolling_win_rate_drift",
+      "hard_win_rate_breach"
+    ],
+    "risk_run_at": "2026-03-27 08:47:56",
+    "risk_age_mins": 5991,
+    "risk_stale": true,
+    "risk_stale_threshold_mins": 180
   }
 }

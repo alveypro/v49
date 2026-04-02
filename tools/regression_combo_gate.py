@@ -24,26 +24,58 @@ sys.path.insert(0, str(ROOT))
 
 from openclaw.adapters import V49Adapter
 from openclaw.runtime.v49_handlers import HandlerFactory
+from strategies.center_config import load_center_config, resolve_run_policy, resolve_runtime_params
 from strategies.registry import get_profile, production_strategies
 
 try:
     from openclaw.paths import v49_module_path, log_dir
 except ImportError:
-    v49_module_path = lambda: ROOT / "终极量价暴涨系统_v49.0_长期稳健版.py"
+    v49_module_path = lambda: ROOT / "v49_app.py"
     log_dir = lambda: ROOT / "logs" / "openclaw"
 
 
 DEFAULT_STRATEGIES = production_strategies()  # v9, v8, v5, combo
-THRESHOLDS = {
-    "min_picks": 1,
-    "max_scan_sec": 600,
-}
+
+
+def _gate_thresholds(center_cfg: Dict[str, Any]) -> Dict[str, int]:
+    default = {"min_picks": 1, "max_scan_sec": 600}
+    section = center_cfg.get("regression_gate", {}) if isinstance(center_cfg, dict) else {}
+    if not isinstance(section, dict):
+        return default
+    out = dict(default)
+    for key in ("min_picks", "max_scan_sec"):
+        if key in section:
+            try:
+                out[key] = int(section[key])
+            except Exception:
+                pass
+    return out
+
+
+def _build_scan_params(strategy: str, center_cfg: Dict[str, Any]) -> Dict[str, int]:
+    resolved = resolve_runtime_params(
+        strategy=strategy,
+        requested_score_threshold=None,
+        requested_sample_size=None,
+        requested_holding_days=None,
+        center_config=center_cfg,
+        project_root=ROOT,
+    )
+    run_policy = resolve_run_policy(strategy=strategy, center_config=center_cfg, default_timeout_sec=900)
+    offline_limit = int(run_policy.get("offline_stock_limit", 300) or 300)
+    return {
+        "score_threshold": int(resolved["score_threshold"]),
+        "limit": 30,
+        "offline_stock_limit": offline_limit,
+    }
 
 
 def run_single_round(
     strategies: List[str],
     adapter: V49Adapter,
     round_no: int,
+    center_cfg: Dict[str, Any],
+    thresholds: Dict[str, int],
 ) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "round": round_no,
@@ -54,12 +86,8 @@ def run_single_round(
     }
 
     for strat in strategies:
-        profile = get_profile(strat)
-        params = {
-            "score_threshold": profile.default_score_threshold,
-            "limit": 30,
-            "offline_stock_limit": 300,
-        }
+        _ = get_profile(strat)  # validate strategy id
+        params = _build_scan_params(strat, center_cfg)
         t0 = time.time()
         try:
             scan_result = adapter.run_scan(strat, params)
@@ -75,12 +103,15 @@ def run_single_round(
                 "notes": [],
             }
 
-            if status != "ok":
+            if str(status).lower() not in {"ok", "success"}:
                 strat_info["passed"] = False
                 strat_info["notes"].append(f"状态异常: {status}")
 
-            if elapsed > THRESHOLDS["max_scan_sec"]:
-                strat_info["notes"].append(f"超时 {elapsed:.0f}s > {THRESHOLDS['max_scan_sec']}s")
+            if elapsed > thresholds["max_scan_sec"]:
+                strat_info["notes"].append(f"超时 {elapsed:.0f}s > {thresholds['max_scan_sec']}s")
+            if len(picks) < thresholds["min_picks"]:
+                strat_info["passed"] = False
+                strat_info["notes"].append(f"信号不足 {len(picks)} < {thresholds['min_picks']}")
 
             result["strategies"][strat] = strat_info
 
@@ -107,9 +138,16 @@ def main() -> int:
     parser.add_argument("--rounds", type=int, default=3, help="连续轮数 (默认 3)")
     parser.add_argument("--strategy", nargs="*", default=DEFAULT_STRATEGIES, help="策略列表")
     parser.add_argument("--module-path", default=None, help="v49 模块路径")
+    parser.add_argument(
+        "--strategy-center-config",
+        default="openclaw/config/strategy_center.yaml",
+        help="strategy center runtime config path",
+    )
     args = parser.parse_args()
 
     module_path = Path(args.module_path) if args.module_path else v49_module_path()
+    center_cfg = load_center_config(Path(args.strategy_center_config))
+    thresholds = _gate_thresholds(center_cfg)
     adapter = V49Adapter(module_path=module_path)
     factory = HandlerFactory(module_path)
     for strat in args.strategy:
@@ -124,7 +162,7 @@ def main() -> int:
 
     for r in range(1, args.rounds + 1):
         print(f"── 第 {r}/{args.rounds} 轮 ──")
-        result = run_single_round(args.strategy, adapter, r)
+        result = run_single_round(args.strategy, adapter, r, center_cfg=center_cfg, thresholds=thresholds)
         all_rounds.append(result)
 
         for strat, info in result["strategies"].items():

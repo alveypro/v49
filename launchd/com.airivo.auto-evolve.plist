@@ -10,8 +10,8 @@
       <string>/usr/bin/nice</string>
       <string>-n</string>
       <string>15</string>
-      <string>/usr/bin/python3</string>
-      <string>/Users/mac/2026Qlin/auto_evolve.py</string>
+      <string>/bin/bash</string>
+      <string>/Users/mac/2026Qlin/scripts/auto_evolve_local.sh</string>
     </array>
 
     <key>LowPriorityIO</key>

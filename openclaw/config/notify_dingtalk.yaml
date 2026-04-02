@@ -1,0 +1,6 @@
+enabled: true
+channels:
+  - legacy_service
+  - file
+outbox_path: logs/openclaw/notify_outbox.log
+legacy_config_file: notification_config.json

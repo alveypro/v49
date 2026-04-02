@@ -1,0 +1,11 @@
+[Unit]
+Description=OpenClaw Auto Evolve Data Full (nightly full coverage)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/openclaw/app
+ExecStart=/bin/bash /opt/openclaw/app/tools/openclaw_auto_evolve_data.sh full
+StandardOutput=append:/opt/openclaw/app/logs/openclaw/auto_evolve_data_full.service.log
+StandardError=append:/opt/openclaw/app/logs/openclaw/auto_evolve_data_full.service.err
+TimeoutStartSec=4h

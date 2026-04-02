@@ -1,0 +1,10 @@
+[Unit]
+Description=Run OpenClaw Auto Evolve Optimize Nightly
+
+[Timer]
+OnCalendar=Mon..Fri 22:20
+Persistent=true
+Unit=openclaw-auto-evolve-opt.service
+
+[Install]
+WantedBy=timers.target

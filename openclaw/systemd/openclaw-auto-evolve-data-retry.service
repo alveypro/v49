@@ -1,0 +1,11 @@
+[Unit]
+Description=OpenClaw Auto Evolve Data Retry (post-close chunk retries)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/openclaw/app
+ExecStart=/bin/bash /opt/openclaw/app/tools/openclaw_auto_evolve_data.sh retry
+StandardOutput=append:/opt/openclaw/app/logs/openclaw/auto_evolve_data_retry.service.log
+StandardError=append:/opt/openclaw/app/logs/openclaw/auto_evolve_data_retry.service.err
+TimeoutStartSec=2h

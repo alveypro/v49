@@ -6,13 +6,17 @@ permissions:
   trade: false
 
 # ── 策略分区 ──────────────────────────────────────────────
-# production: 默认运行, 自动验证, 告警覆盖
-# experimental: 手动开关, 不进入默认流水线
+# production_strategies: 生产候选池
+# primary_strategies: 当前主生产
+# experimental_strategies: 手动开关, 不进入默认流水线
 production_strategies:
   - v9
   - v8
   - v5
   - combo
+
+primary_strategies:
+  - v5
 
 experimental_strategies:
   - v4
@@ -33,7 +37,7 @@ allowed_strategies:
   - combo
   - ai
 
-default_strategy: v9
+default_strategy: v5
 
 forbidden_actions:
   - place_live_order

@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenClaw Auto Backtest Daily (v5/v8/v9/combo)
+After=network.target openclaw-daily-pipeline.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/openclaw/app
+Environment=OPENCLAW_SWEEP_STRATEGIES=v5,v8,v9,combo
+Environment=OPENCLAW_SWEEP_LOOKBACK_DAYS=540
+Environment=OPENCLAW_SWEEP_MODE=single
+Environment=OPENCLAW_SWEEP_PER_RUN_TIMEOUT_SEC=120
+ExecStart=/bin/bash /opt/openclaw/app/tools/openclaw_auto_backtest_daily.sh
+StandardOutput=append:/opt/openclaw/app/logs/openclaw/auto_backtest_daily.service.log
+StandardError=append:/opt/openclaw/app/logs/openclaw/auto_backtest_daily.service.err
+

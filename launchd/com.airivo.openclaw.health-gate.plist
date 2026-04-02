@@ -7,8 +7,8 @@
 
     <key>ProgramArguments</key>
     <array>
-      <string>/usr/bin/python3</string>
-      <string>/Users/mac/2026Qlin/tools/openclaw_health_gate.py</string>
+      <string>/bin/bash</string>
+      <string>/Users/mac/2026Qlin/tools/run_openclaw_health_gate.sh</string>
     </array>
 
     <key>WorkingDirectory</key>

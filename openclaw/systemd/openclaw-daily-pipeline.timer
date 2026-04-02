@@ -1,0 +1,12 @@
+[Unit]
+Description=Run OpenClaw Daily Pipeline after data window
+
+[Timer]
+OnCalendar=Mon..Fri 20:45
+OnCalendar=Mon..Fri 21:15
+OnCalendar=Mon..Fri 21:45
+Persistent=true
+Unit=openclaw-daily-pipeline.service
+
+[Install]
+WantedBy=timers.target

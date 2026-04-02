@@ -91,9 +91,31 @@ fi
 log ""
 log "▶ 关2: 默认组合回归验证 ($ROUNDS 轮)"
 
-PY_BIN="$ROOT_DIR/.venv/bin/python"
-if [[ ! -x "$PY_BIN" ]]; then
-  PY_BIN="$(command -v python3 2>/dev/null || echo python3)"
+resolve_python_bin() {
+  local c
+  for c in \
+    "${PY_BIN:-}" \
+    "$ROOT_DIR/.venv/bin/python" \
+    "$ROOT_DIR/venv311/bin/python" \
+    "/opt/openclaw/venv311/bin/python" \
+    "/opt/airivo/app/.venv/bin/python" \
+    "$(command -v python3 2>/dev/null || true)"; do
+    [[ -n "${c}" && -x "${c}" ]] && { echo "${c}"; return 0; }
+  done
+  echo "python3"
+}
+
+assert_python_ge_311() {
+  "$1" - <<'PY'
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 11) else 1)
+PY
+}
+
+PY_BIN="$(resolve_python_bin)"
+if ! assert_python_ge_311 "$PY_BIN"; then
+  log "  ❌ Python 版本过低: $("$PY_BIN" -V 2>&1) (要求 >=3.11)"
+  exit 2
 fi
 
 if "$PY_BIN" "$ROOT_DIR/tools/regression_combo_gate.py" --rounds "$ROUNDS" 2>&1 | tee -a "$LOG_FILE"; then

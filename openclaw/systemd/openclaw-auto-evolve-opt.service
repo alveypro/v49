@@ -1,0 +1,12 @@
+[Unit]
+Description=OpenClaw Auto Evolve Optimize Phase
+After=network.target openclaw-daily-pipeline.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/openclaw/app
+Environment=AUTO_EVOLVE_PHASE=optimize_only
+Environment=EVOLVE_FAST=1
+ExecStart=/opt/openclaw/venv311/bin/python /opt/openclaw/app/auto_evolve.py
+StandardOutput=append:/opt/openclaw/app/logs/openclaw/auto_evolve_opt.log
+StandardError=append:/opt/openclaw/app/logs/openclaw/auto_evolve_opt.err

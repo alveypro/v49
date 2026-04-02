@@ -85,7 +85,7 @@ def config_dir() -> Path:
 
 
 def v49_module_path() -> Path:
-    return project_root() / "终极量价暴涨系统_v49.0_长期稳健版.py"
+    return project_root() / "v49_app.py"
 
 
 def venv_python() -> Path:

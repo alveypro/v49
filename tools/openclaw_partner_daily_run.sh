@@ -11,12 +11,33 @@ LOG_PATH="${OUTPUT_DIR}/partner_daily_${RUN_TS}.log"
 EXEC_JSON="${OUTPUT_DIR}/partner_execution_${RUN_TS}.json"
 EXEC_MD="${OUTPUT_DIR}/partner_execution_${RUN_TS}.md"
 PYTHON_BIN="${OPENCLAW_PYTHON:-python3}"
-for _candidate in "$ROOT_DIR/.venv/bin/python" "/opt/openclaw/venv311/bin/python"; do
-  if [[ -x "$_candidate" ]]; then
-    PYTHON_BIN="$_candidate"
-    break
-  fi
-done
+resolve_python_bin() {
+  local c
+  for c in \
+    "$ROOT_DIR/.venv/bin/python" \
+    "$ROOT_DIR/venv311/bin/python" \
+    "/opt/openclaw/venv311/bin/python" \
+    "/opt/airivo/app/.venv/bin/python" \
+    "${OPENCLAW_PYTHON:-}" \
+    "${PYTHON_BIN:-}" \
+    "$(command -v python3 2>/dev/null || true)"; do
+    [[ -n "${c}" && -x "${c}" ]] && { echo "${c}"; return 0; }
+  done
+  echo "python3"
+}
+
+assert_python_ge_311() {
+  "$1" - <<'PY'
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 11) else 1)
+PY
+}
+
+PYTHON_BIN="$(resolve_python_bin)"
+if ! assert_python_ge_311 "$PYTHON_BIN"; then
+  echo "[openclaw] ERROR: Python>=3.11 required, got: $("$PYTHON_BIN" -V 2>&1)"
+  exit 2
+fi
 export OPENCLAW_ROOT="$ROOT_DIR"
 STRATEGY_LIST="${OPENCLAW_STRATEGY_LIST:-v9,v8,v5,combo}"
 RUN_STATUS_FILE="${OUTPUT_DIR}/partner_runs_${RUN_TS}.log"
@@ -25,6 +46,7 @@ STRATEGY_TIMEOUT_SEC="${OPENCLAW_STRATEGY_TIMEOUT_SEC:-900}"
 STRICT_ALL_STRATEGIES="${OPENCLAW_STRICT_ALL_STRATEGIES:-0}"
 MIN_OK_STRATEGIES="${OPENCLAW_MIN_OK_STRATEGIES:-1}"
 POLICY_CONFIG="${OPENCLAW_POLICY_CONFIG:-openclaw/config/policy.yaml}"
+STRATEGY_CENTER_CONFIG="${OPENCLAW_STRATEGY_CENTER_CONFIG:-openclaw/config/strategy_center.yaml}"
 
 mkdir -p "$OUTPUT_DIR"
 : > "$RUN_STATUS_FILE"
@@ -127,15 +149,45 @@ for _raw in "${STRATEGIES[@]}"; do
   BEFORE_SUMMARY="$(ls -1t "${OUTPUT_DIR}"/run_summary_*.json 2>/dev/null | head -n 1 || true)"
   EXTRA_ENV=()
   STRATEGY_TIMEOUT_THIS="$STRATEGY_TIMEOUT_SEC"
-  if [[ "$STRATEGY" == "v8" || "$STRATEGY" == "v9" ]]; then
-    EXTRA_ENV+=("OPENCLAW_OFFLINE_STOCK_LIMIT=40")
-    EXTRA_ENV+=("OPENCLAW_SAMPLE_SIZE=50")
-    EXTRA_ENV+=("OPENCLAW_RETRY_ON_NO_PICKS=0")
-    STRATEGY_TIMEOUT_THIS="${OPENCLAW_HEAVY_STRATEGY_TIMEOUT_SEC:-720}"
-  fi
-  if [[ "$STRATEGY" == "stable" || "$STRATEGY" == "combo" ]]; then
-    EXTRA_ENV+=("OPENCLAW_RETRY_ON_NO_PICKS=0")
-  fi
+  POLICY_LINE="$("$PYTHON_BIN" - "$STRATEGY" "$STRATEGY_CENTER_CONFIG" "$STRATEGY_TIMEOUT_SEC" <<'PY'
+import sys
+from pathlib import Path
+
+ROOT = Path(".").resolve()
+sys.path.insert(0, str(ROOT))
+
+from strategies.center_config import load_center_config, resolve_run_policy
+
+strategy = sys.argv[1]
+cfg_path = Path(sys.argv[2])
+default_timeout = int(sys.argv[3])
+cfg = load_center_config(cfg_path)
+policy = resolve_run_policy(strategy=strategy, center_config=cfg, default_timeout_sec=default_timeout)
+
+def pick(k):
+    v = policy.get(k)
+    return "" if v is None else str(v)
+
+print("|".join([
+    pick("timeout_sec"),
+    pick("offline_stock_limit"),
+    pick("sample_size"),
+    pick("score_threshold"),
+    pick("holding_days"),
+    pick("retry_on_no_picks"),
+    pick("no_picks_retry_max"),
+]))
+PY
+)"
+  IFS='|' read -r P_TIMEOUT P_OFFLINE P_SAMPLE P_SCORE P_HOLDING P_RETRY P_RETRY_MAX <<< "$POLICY_LINE"
+  [[ -n "$P_TIMEOUT" ]] && STRATEGY_TIMEOUT_THIS="$P_TIMEOUT"
+  [[ -n "$P_OFFLINE" ]] && EXTRA_ENV+=("OPENCLAW_OFFLINE_STOCK_LIMIT=${P_OFFLINE}")
+  [[ -n "$P_SAMPLE" ]] && EXTRA_ENV+=("OPENCLAW_SAMPLE_SIZE=${P_SAMPLE}")
+  [[ -n "$P_SCORE" ]] && EXTRA_ENV+=("OPENCLAW_SCORE_THRESHOLD=${P_SCORE}")
+  [[ -n "$P_HOLDING" ]] && EXTRA_ENV+=("OPENCLAW_HOLDING_DAYS=${P_HOLDING}")
+  [[ -n "$P_RETRY" ]] && EXTRA_ENV+=("OPENCLAW_RETRY_ON_NO_PICKS=${P_RETRY}")
+  [[ -n "$P_RETRY_MAX" ]] && EXTRA_ENV+=("OPENCLAW_NO_PICKS_RETRY_MAX=${P_RETRY_MAX}")
+  EXTRA_ENV+=("OPENCLAW_STRATEGY_CENTER_CONFIG=${STRATEGY_CENTER_CONFIG}")
 
   if [[ "${#EXTRA_ENV[@]}" -gt 0 ]]; then
     CMD=(env OPENCLAW_STRATEGY="$STRATEGY" "${EXTRA_ENV[@]}" bash openclaw/scripts_run_daily.sh)

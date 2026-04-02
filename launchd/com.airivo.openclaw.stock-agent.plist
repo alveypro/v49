@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.airivo.openclaw.stock-agent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/mac/2026Qlin/.venv/bin/python</string>
+      <string>/Users/mac/2026Qlin/deploy_stock/openclaw_agent_api_stock_v2.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mac/2026Qlin</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>STOCK_AGENT_MEMORY_DB</key>
+      <string>/Users/mac/2026Qlin/data/agent_memory.db</string>
+      <key>STOCK_AGENT_USE_LLM</key>
+      <string>1</string>
+      <key>OPENCLAW_ROOT</key>
+      <string>/Users/mac/2026Qlin</string>
+      <key>OPENCLAW_REPORT_DIR</key>
+      <string>/Users/mac/2026Qlin/logs/openclaw</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mac/2026Qlin/logs/openclaw/stock_agent.launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mac/2026Qlin/logs/openclaw/stock_agent.launchd.err.log</string>
+  </dict>
+</plist>

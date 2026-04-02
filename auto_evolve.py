@@ -40,6 +40,10 @@ EVOLUTION_DIR = os.path.join(ROOT, "evolution")
 LOG_PATH = os.path.join(ROOT, "auto_evolve.log")
 LOCK_PATH = "/tmp/auto_evolve.lock"
 SSE_INDEX_CODE = "000001.SH"
+UNIFIED_PROFILE_PATH = os.path.join(EVOLUTION_DIR, "production_unified_profile.json")
+PROMOTION_HISTORY_PATH = os.path.join(EVOLUTION_DIR, "promotion_history.jsonl")
+RISK_SENTINEL_PATH = os.path.join(EVOLUTION_DIR, "risk_sentinel.json")
+RISK_SENTINEL_CANDIDATE_PATH = os.path.join(EVOLUTION_DIR, "risk_sentinel_last_candidate.json")
 
 
 def _fetch_trade_cal_with_retry(
@@ -673,11 +677,22 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return val.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _load_unified_profile() -> Dict:
+    if not os.path.exists(UNIFIED_PROFILE_PATH):
+        return {}
+    try:
+        with open(UNIFIED_PROFILE_PATH, "r", encoding="utf-8") as f:
+            obj = json.load(f) or {}
+        return obj if isinstance(obj, dict) else {}
+    except Exception:
+        return {}
+
+
 def _get_evolve_settings() -> Dict[str, int | bool]:
     fast = _env_bool("EVOLVE_FAST", False)
     max_seconds = _env_int("EVOLVE_MAX_SECONDS", 900 if fast else 0)
     log_every = _env_int("EVOLVE_LOG_EVERY", 5 if fast else 10)
-    return {
+    settings = {
         "fast": fast,
         "max_seconds": max_seconds,
         "log_every": max(1, log_every),
@@ -686,18 +701,74 @@ def _get_evolve_settings() -> Dict[str, int | bool]:
         "sample_v6": _env_int("EVOLVE_SAMPLE_SIZE_V6", 400 if fast else 1200),
         "sample_v7": _env_int("EVOLVE_SAMPLE_SIZE_V7", 250 if fast else 600),
         "sample_v8": _env_int("EVOLVE_SAMPLE_SIZE_V8", 250 if fast else 500),
+        "sample_v9": _env_int("EVOLVE_SAMPLE_SIZE_V9", 300 if fast else 600),
         "sample_stable": _env_int("EVOLVE_SAMPLE_SIZE_STABLE", 200 if fast else 400),
         "sample_ai": _env_int("EVOLVE_SAMPLE_SIZE_AI", 200 if fast else 400),
     }
+    unified = _load_unified_profile()
+    strategies = (unified.get("strategies") or {}) if isinstance(unified, dict) else {}
+    for sk, key in (("v5", "sample_v5"), ("v8", "sample_v8"), ("v9", "sample_v9")):
+        p = strategies.get(sk) or {}
+        try:
+            candidate_count = int(float(p.get("candidate_count", 0) or 0))
+        except Exception:
+            candidate_count = 0
+        if candidate_count > 0:
+            # Keep optimization practical: sample ~= 30% of candidate pool, clamped.
+            settings[key] = int(max(200, min(2000, round(candidate_count * 0.30))))
+    return settings
 
 
 EVOLVE_SETTINGS = _get_evolve_settings()
 
 
+def _safe_int(value, default: int) -> int:
+    try:
+        if value is None:
+            return int(default)
+        return int(round(float(value)))
+    except Exception:
+        return int(default)
+
+
+def _safe_float_local(value, default: float) -> float:
+    try:
+        if value is None:
+            return float(default)
+        return float(value)
+    except Exception:
+        return float(default)
+
+
+def _grid_values_around(base: int, low: int, high: int, step: int, radius: int = 1) -> List[int]:
+    out: List[int] = []
+    for i in range(-radius, radius + 1):
+        v = base + i * step
+        if low <= v <= high:
+            out.append(v)
+    uniq = sorted(set(out))
+    return uniq if uniq else [max(low, min(high, base))]
+
+
+def _unified_strategy_params(strategy: str, defaults: Dict) -> Dict:
+    unified = _load_unified_profile()
+    strategies = (unified.get("strategies") or {}) if isinstance(unified, dict) else {}
+    st = str(strategy or "").strip().lower()
+    p = strategies.get(st) if isinstance(strategies, dict) else None
+    if not isinstance(p, dict):
+        return dict(defaults)
+    out = dict(defaults)
+    out.update({k: v for k, v in p.items() if v is not None})
+    return out
+
+
 def _evolve_targets() -> set[str]:
-    targets = {"v4", "ai_v5", "ai_v2", "v5", "v6", "v7", "v8", "v9", "stable"}
+    targets = {"v9", "v8", "v5", "combo"}
     only = os.getenv("EVOLVE_ONLY", "").strip()
     exclude = os.getenv("EVOLVE_EXCLUDE", "").strip()
+    include_experimental = os.getenv("EVOLVE_INCLUDE_EXPERIMENTAL", "0").strip().lower() in {"1", "true", "yes"}
+    if include_experimental:
+        targets |= {"v4", "ai_v5", "ai_v2", "v6", "v7", "stable"}
     if only:
         targets = {t.strip().lower() for t in only.split(",") if t.strip()}
     if exclude:
@@ -959,6 +1030,109 @@ def _ensure_evolution_tables(db_path: str) -> None:
 MIN_WIN_RATE = 45.0
 MAX_DRAWDOWN = -12.0
 
+STRATEGY_GATES = {
+    "V4": {
+        "min_signals": 30,
+        "min_win_rate": 48.0,
+        "min_sharpe": 0.15,
+        "min_score_delta": 0.35,
+        "max_drawdown_floor": -15.0,
+        "cooldown_hours": 6,
+        "oos_min_win_rate": 45.0,
+    },
+    "V5": {
+        "min_signals": 20,
+        "min_win_rate": 45.0,
+        "min_sharpe": 0.0,
+        "min_score_delta": 0.25,
+        "max_drawdown_floor": -18.0,
+        "cooldown_hours": 6,
+        "oos_min_win_rate": 42.0,
+        "allow_orange_if_no_hard_fail": True,
+        "max_score_regress": 12.0,
+        "max_param_drift": 1.0,
+        "require_rolling_validation": True,
+    },
+    "V6": {
+        "min_signals": 20,
+        "min_win_rate": 45.0,
+        "min_sharpe": 0.0,
+        "min_score_delta": 0.25,
+        "max_drawdown_floor": -18.0,
+        "cooldown_hours": 6,
+        "oos_min_win_rate": 42.0,
+    },
+    "V7": {
+        "min_signals": 20,
+        "min_win_rate": 45.0,
+        "min_sharpe": 0.0,
+        "min_score_delta": 0.25,
+        "max_drawdown_floor": -18.0,
+        "cooldown_hours": 6,
+        "oos_min_win_rate": 42.0,
+    },
+    "V8": {
+        "min_signals": 20,
+        "min_win_rate": 45.0,
+        "min_sharpe": 0.0,
+        "min_score_delta": 0.25,
+        "max_drawdown_floor": -18.0,
+        "cooldown_hours": 6,
+        "oos_min_win_rate": 42.0,
+        "require_rolling_validation": True,
+    },
+    "V9": {
+        "min_signals": 16,
+        "min_win_rate": 45.0,
+        "min_sharpe": -0.2,
+        "min_score_delta": 0.25,
+        "max_drawdown_floor": -28.0,
+        "cooldown_hours": 6,
+        "oos_min_win_rate": 38.0,
+        "allow_orange_if_no_hard_fail": True,
+        "max_score_regress": 10.0,
+        "max_param_drift": 1.0,
+        "require_rolling_validation": True,
+    },
+    "COMBO": {
+        "min_signals": 15,
+        "min_win_rate": 45.0,
+        "min_sharpe": 0.0,
+        "min_score_delta": 0.20,
+        "max_drawdown_floor": -18.0,
+        "cooldown_hours": 6,
+        "oos_min_win_rate": 42.0,
+        "require_rolling_validation": True,
+    },
+    "STABLE_UPTREND": {
+        "min_signals": 10,
+        "min_win_rate": 45.0,
+        "min_sharpe": 0.0,
+        "min_score_delta": 0.20,
+        "max_drawdown_floor": -15.0,
+        "cooldown_hours": 12,
+        "oos_min_win_rate": 42.0,
+    },
+    "AI_V5": {
+        "min_signals": 15,
+        "min_win_rate": 45.0,
+        "min_sharpe": 0.0,
+        "min_score_delta": 0.20,
+        "max_drawdown_floor": -18.0,
+        "cooldown_hours": 6,
+        "oos_min_win_rate": 42.0,
+    },
+    "AI_V2": {
+        "min_signals": 15,
+        "min_win_rate": 45.0,
+        "min_sharpe": 0.0,
+        "min_score_delta": 0.20,
+        "max_drawdown_floor": -18.0,
+        "cooldown_hours": 6,
+        "oos_min_win_rate": 42.0,
+    },
+}
+
 
 def _score_result(stats: Dict) -> float:
     sharpe = stats.get("sharpe_ratio", 0) or 0
@@ -966,12 +1140,295 @@ def _score_result(stats: Dict) -> float:
     win = stats.get("win_rate", 0) or 0
     avg_ret = stats.get("avg_return", 0) or 0
     max_dd = stats.get("max_drawdown", 0) or 0
-    if win < MIN_WIN_RATE:
-        return -1e9
-    if max_dd < MAX_DRAWDOWN:
-        return -1e9
     score = (sharpe * 1.5) + (w_avg * 0.12) + (avg_ret * 0.08) + (win * 0.02) - (abs(max_dd) * 0.05)
+    # Soft penalties instead of hard-drop to keep optimizer producing candidates.
+    if win < MIN_WIN_RATE:
+        score -= (MIN_WIN_RATE - win) * 0.35
+    if max_dd < MAX_DRAWDOWN:
+        score -= (abs(max_dd - MAX_DRAWDOWN)) * 0.4
     return float(score)
+
+
+def _composite_score(stats: Dict) -> float:
+    sharpe = float(stats.get("sharpe_ratio", 0) or 0)
+    w_avg = float(stats.get("weighted_avg_return", 0) or 0)
+    win = float(stats.get("win_rate", 0) or 0)
+    avg_ret = float(stats.get("avg_return", 0) or 0)
+    max_dd = float(stats.get("max_drawdown", 0) or 0)
+    return float((sharpe * 1.5) + (w_avg * 0.12) + (avg_ret * 0.08) + (win * 0.02) - (abs(max_dd) * 0.05))
+
+
+def _safe_dt(s: str) -> datetime | None:
+    text = str(s or "").strip()
+    if not text:
+        return None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y%m%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(text[:19], fmt)
+        except Exception:
+            continue
+    return None
+
+
+def _safe_float(v, default: float = 0.0) -> float:
+    try:
+        return float(v)
+    except Exception:
+        return default
+
+
+def _load_json(path: str) -> Dict:
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def _write_json(path: str, payload: Dict) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
+def _append_jsonl(path: str, payload: Dict) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def _strategy_active_file(strategy: str) -> str:
+    st = strategy.strip().upper()
+    mapping = {
+        "V4": "best_params.json",
+        "V5": "v5_best.json",
+        "V6": "v6_best.json",
+        "V7": "v7_best.json",
+        "V8": "v8_best.json",
+        "V9": "v9_best.json",
+        "COMBO": "combo_best.json",
+        "STABLE_UPTREND": "stable_uptrend_best.json",
+        "AI_V5": "ai_v5_best.json",
+        "AI_V2": "ai_v2_best.json",
+    }
+    return os.path.join(EVOLUTION_DIR, mapping.get(st, f"{st.lower()}_best.json"))
+
+
+def _strategy_candidate_file(strategy: str) -> str:
+    st = strategy.strip().upper()
+    return os.path.join(EVOLUTION_DIR, f"{st.lower()}_candidate.json")
+
+
+def _calc_param_drift(old_params: Dict, new_params: Dict) -> float:
+    if not old_params:
+        return 0.0
+    keys = sorted(set(old_params.keys()) | set(new_params.keys()))
+    if not keys:
+        return 0.0
+    changed = 0
+    for k in keys:
+        ov = old_params.get(k)
+        nv = new_params.get(k)
+        if isinstance(ov, (int, float)) and isinstance(nv, (int, float)):
+            base = abs(float(ov)) if abs(float(ov)) > 1e-9 else 1.0
+            if abs(float(nv) - float(ov)) / base > 0.15:
+                changed += 1
+        else:
+            if ov != nv:
+                changed += 1
+    return float(changed / len(keys))
+
+
+def _build_risk_sentinel(
+    strategy: str,
+    candidate_stats: Dict,
+    incumbent_stats: Dict,
+    db_path: str,
+) -> Dict:
+    st = strategy.strip().upper()
+    gates = STRATEGY_GATES.get(st, STRATEGY_GATES["V5"])
+    rules: List[str] = []
+    evidence: Dict[str, object] = {}
+    level = "green"
+    actions: List[str] = []
+
+    win_rate = _safe_float(candidate_stats.get("win_rate"), 0.0)
+    max_dd = _safe_float(candidate_stats.get("max_drawdown"), 0.0)
+    total_signals = int(_safe_float(candidate_stats.get("total_signals"), 0))
+    inc_win = _safe_float((incumbent_stats or {}).get("win_rate"), 0.0)
+    win_drop = (inc_win - win_rate) if inc_win > 0 else 0.0
+
+    evidence.update(
+        {
+            "strategy": st,
+            "candidate_win_rate": win_rate,
+            "candidate_max_drawdown": max_dd,
+            "candidate_total_signals": total_signals,
+            "incumbent_win_rate": inc_win,
+            "win_rate_drop": win_drop,
+        }
+    )
+
+    if total_signals < int(gates["min_signals"]):
+        rules.append("signal_density_collapse")
+        level = "orange"
+    if win_drop >= 8.0:
+        rules.append("rolling_win_rate_drift")
+        level = "orange"
+    if max_dd < float(gates["max_drawdown_floor"]):
+        rules.append("max_drawdown_breach")
+        level = "red"
+    if win_rate < float(gates["min_win_rate"]) - 6.0:
+        rules.append("hard_win_rate_breach")
+        level = "red"
+
+    fresh, enforce, db_last, last_trade, is_trade_day, ready_time = _data_freshness_status(db_path)
+    evidence.update(
+        {
+            "data_fresh": fresh,
+            "freshness_enforce": enforce,
+            "db_last_trade": db_last,
+            "calendar_last_trade": last_trade,
+            "is_trade_day": is_trade_day,
+            "ready_time": ready_time,
+        }
+    )
+    if not fresh and enforce:
+        rules.append("data_freshness_breach")
+        level = "red"
+    elif not fresh:
+        rules.append("data_freshness_warning")
+        if level == "green":
+            level = "yellow"
+
+    if level == "green":
+        actions = ["保持当前自动进化频率"]
+    elif level == "yellow":
+        actions = ["保持自动化，但提高参数晋升门槛", "优先检查数据更新链路"]
+    elif level == "orange":
+        actions = ["降低自动化激进度", "仅允许小步参数变更", "增加人工复核"]
+    else:
+        actions = ["停止自动晋升，维持现有生产参数", "人工排查数据与策略健康后再恢复"]
+
+    return {
+        "run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "risk_level": level,
+        "triggered_rules": rules,
+        "recommended_actions": actions,
+        "evidence": evidence,
+    }
+
+
+def _promote_candidate(
+    strategy: str,
+    candidate_report: Dict,
+    db_path: str,
+) -> Dict:
+    st = strategy.strip().upper()
+    gates = STRATEGY_GATES.get(st, STRATEGY_GATES["V5"])
+    now = datetime.now()
+    active_path = _strategy_active_file(st)
+    incumbent = _load_json(active_path)
+    incumbent_stats = incumbent.get("stats", {}) if isinstance(incumbent, dict) else {}
+    incumbent_params = incumbent.get("params", {}) if isinstance(incumbent, dict) else {}
+    incumbent_score = _safe_float(incumbent.get("score"), -1e9) if incumbent else -1e9
+    incumbent_run_at = _safe_dt(str(incumbent.get("run_at", ""))) if incumbent else None
+
+    cand_stats = candidate_report.get("stats", {}) or {}
+    cand_params = candidate_report.get("params", {}) or {}
+    cand_score = _safe_float(candidate_report.get("score"), -1e9)
+    validation_mode = str(candidate_report.get("validation_mode", "") or "").strip().lower()
+    oos = candidate_report.get("oos_stats", {}) or {}
+    bootstrap_mode = not bool(incumbent)
+
+    hard_fail_reasons: List[str] = []
+    if int(_safe_float(cand_stats.get("total_signals"), 0)) < int(gates["min_signals"]):
+        hard_fail_reasons.append("total_signals below min")
+    if _safe_float(cand_stats.get("win_rate"), 0.0) < float(gates["min_win_rate"]):
+        hard_fail_reasons.append("win_rate below min")
+    if _safe_float(cand_stats.get("sharpe_ratio"), 0.0) < float(gates["min_sharpe"]):
+        hard_fail_reasons.append("sharpe below min")
+    if _safe_float(cand_stats.get("max_drawdown"), 0.0) < float(gates["max_drawdown_floor"]):
+        hard_fail_reasons.append("max_drawdown breach")
+    if bool(gates.get("require_rolling_validation", False)) and validation_mode != "rolling":
+        hard_fail_reasons.append(f"validation_mode={validation_mode or 'unknown'} not rolling")
+    if oos and (not bootstrap_mode):
+        if _safe_float(oos.get("win_rate"), 0.0) < float(gates["oos_min_win_rate"]):
+            hard_fail_reasons.append("oos win_rate below min")
+        if int(_safe_float(oos.get("total_signals"), 0)) < max(5, int(gates["min_signals"] // 3)):
+            hard_fail_reasons.append("oos signals too low")
+
+    cooldown_block = False
+    if incumbent_run_at is not None:
+        hours = (now - incumbent_run_at).total_seconds() / 3600.0
+        if hours < float(gates["cooldown_hours"]):
+            cooldown_block = True
+
+    score_delta = cand_score - incumbent_score if incumbent else cand_score
+    drift = _calc_param_drift(incumbent_params, cand_params) if incumbent_params else 0.0
+    enough_improve = score_delta >= float(gates["min_score_delta"])
+    conservative_override = (
+        _safe_float(cand_stats.get("max_drawdown"), 0.0) > _safe_float(incumbent_stats.get("max_drawdown"), -999.0) + 2.0
+        and _safe_float(cand_stats.get("win_rate"), 0.0) >= _safe_float(incumbent_stats.get("win_rate"), 0.0) - 1.5
+    )
+
+    risk = _build_risk_sentinel(st, cand_stats, incumbent_stats, db_path)
+    risk_level = risk.get("risk_level", "green")
+    _write_json(RISK_SENTINEL_CANDIDATE_PATH, risk)
+
+    allow_orange = bool(gates.get("allow_orange_if_no_hard_fail", False))
+    max_score_regress = float(gates.get("max_score_regress", 0.0))
+    max_param_drift = float(gates.get("max_param_drift", 0.8))
+    risk_gate_ok = (risk_level != "red") and (risk_level != "orange" or (allow_orange and len(hard_fail_reasons) == 0))
+    score_gate_ok = enough_improve or conservative_override or bootstrap_mode or (score_delta >= -max_score_regress)
+
+    approved = (
+        (len(hard_fail_reasons) == 0)
+        and risk_gate_ok
+        and ((not cooldown_block) or enough_improve)
+        and score_gate_ok
+        and (drift <= max_param_drift or score_delta >= float(gates["min_score_delta"]) + 0.3)
+    )
+
+    decision = {
+        "strategy": st,
+        "approved": approved,
+        "run_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "hard_fail_reasons": hard_fail_reasons,
+        "risk_level": risk_level,
+        "risk_rules": risk.get("triggered_rules", []),
+        "cooldown_block": cooldown_block,
+        "score_delta": round(score_delta, 6),
+        "param_drift": round(drift, 6),
+        "validation_mode": validation_mode or "unknown",
+        "incumbent_score": incumbent_score if incumbent else None,
+        "candidate_score": cand_score,
+    }
+
+    _append_jsonl(PROMOTION_HISTORY_PATH, {"decision": decision, "candidate": candidate_report})
+    _write_json(_strategy_candidate_file(st), candidate_report)
+
+    if approved:
+        _write_json(RISK_SENTINEL_PATH, risk)
+        if os.path.exists(active_path):
+            bak_path = f"{active_path}.bak_{now.strftime('%Y%m%d_%H%M%S')}"
+            try:
+                with open(active_path, "r", encoding="utf-8") as src, open(bak_path, "w", encoding="utf-8") as dst:
+                    dst.write(src.read())
+            except Exception:
+                pass
+        _write_json(active_path, candidate_report)
+    else:
+        # Do not let rejected low-sample candidates poison global risk state.
+        hard_rules = set(risk.get("triggered_rules") or [])
+        severe = bool(hard_rules & {"data_freshness_breach", "max_drawdown_breach", "hard_win_rate_breach"})
+        if severe:
+            _write_json(RISK_SENTINEL_PATH, risk)
+    return decision
 
 
 def _grid_search(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
@@ -1045,7 +1502,7 @@ def _grid_search(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
     return best_params, best_stats, best_score
 
 
-def _write_reports(best_params: Dict, best_stats: Dict, best_score: float) -> None:
+def _write_reports(best_params: Dict, best_stats: Dict, best_score: float, oos_stats: Dict | None = None, db_path: str = "") -> Dict:
     os.makedirs(EVOLUTION_DIR, exist_ok=True)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     report = {
@@ -1054,23 +1511,37 @@ def _write_reports(best_params: Dict, best_stats: Dict, best_score: float) -> No
         "score": best_score,
         "params": best_params,
         "stats": best_stats,
+        "oos_stats": oos_stats or {},
     }
-    with open(os.path.join(EVOLUTION_DIR, "best_params.json"), "w", encoding="utf-8") as f:
-        json.dump(report, f, ensure_ascii=False, indent=2)
-    with open(os.path.join(EVOLUTION_DIR, "last_run.json"), "w", encoding="utf-8") as f:
-        json.dump(report, f, ensure_ascii=False, indent=2)
+    decision = _promote_candidate("V4", report, db_path=db_path) if db_path else {"approved": True}
+    report["promotion_decision"] = decision
+    if decision.get("approved", False):
+        with open(os.path.join(EVOLUTION_DIR, "last_run.json"), "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+        flat = {
+            "run_at": now,
+            "score": best_score,
+            **{f"param_{k}": v for k, v in best_params.items()},
+            **{f"stat_{k}": v for k, v in best_stats.items()},
+        }
+        df = pd.DataFrame([flat])
+        df.to_csv(os.path.join(EVOLUTION_DIR, "last_run.csv"), index=False)
+    else:
+        with open(os.path.join(EVOLUTION_DIR, "last_run_attempt_v4.json"), "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+    return decision
 
-    flat = {
-        "run_at": now,
-        "score": best_score,
-        **{f"param_{k}": v for k, v in best_params.items()},
-        **{f"stat_{k}": v for k, v in best_stats.items()},
-    }
-    df = pd.DataFrame([flat])
-    df.to_csv(os.path.join(EVOLUTION_DIR, "last_run.csv"), index=False)
 
-
-def _write_ai_report(filename: str, strategy: str, best_params: Dict, best_stats: Dict, best_score: float) -> None:
+def _write_ai_report(
+    filename: str,
+    strategy: str,
+    best_params: Dict,
+    best_stats: Dict,
+    best_score: float,
+    oos_stats: Dict | None = None,
+    db_path: str = "",
+    validation_mode: str = "single",
+) -> Dict:
     os.makedirs(EVOLUTION_DIR, exist_ok=True)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     report = {
@@ -1079,25 +1550,35 @@ def _write_ai_report(filename: str, strategy: str, best_params: Dict, best_stats
         "score": best_score,
         "params": best_params,
         "stats": best_stats,
+        "oos_stats": oos_stats or {},
+        "validation_mode": str(validation_mode or "single"),
     }
-    with open(os.path.join(EVOLUTION_DIR, filename), "w", encoding="utf-8") as f:
-        json.dump(report, f, ensure_ascii=False, indent=2)
+    decision = _promote_candidate(strategy, report, db_path=db_path) if db_path else {"approved": True}
+    report["promotion_decision"] = decision
+    if decision.get("approved", False):
+        with open(os.path.join(EVOLUTION_DIR, filename), "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+    else:
+        with open(os.path.join(EVOLUTION_DIR, f"{strategy.lower()}_last_attempt.json"), "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+    return decision
 
 
-def _save_to_db(db_path: str, best_params: Dict, best_stats: Dict, best_score: float) -> None:
+def _save_to_db(db_path: str, best_params: Dict, best_stats: Dict, best_score: float, approved: bool = True) -> None:
     _ensure_evolution_tables(db_path)
     conn = _connect(db_path)
     cur = conn.cursor()
     run_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     params_json = json.dumps(best_params, ensure_ascii=False)
     stats_json = json.dumps(best_stats, ensure_ascii=False)
-    cur.execute(
-        """
-        INSERT INTO evolution_best_params (strategy, run_at, params_json, stats_json, score)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        ("综合优选v4.0", run_at, params_json, stats_json, best_score),
-    )
+    if approved:
+        cur.execute(
+            """
+            INSERT INTO evolution_best_params (strategy, run_at, params_json, stats_json, score)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            ("综合优选v4.0", run_at, params_json, stats_json, best_score),
+        )
     cur.execute(
         """
         INSERT INTO evolution_run_history (strategy, run_at, params_json, stats_json, score)
@@ -1109,20 +1590,21 @@ def _save_to_db(db_path: str, best_params: Dict, best_stats: Dict, best_score: f
     conn.close()
 
 
-def _save_ai_to_db(db_path: str, strategy: str, best_params: Dict, best_stats: Dict, best_score: float) -> None:
+def _save_ai_to_db(db_path: str, strategy: str, best_params: Dict, best_stats: Dict, best_score: float, approved: bool = True) -> None:
     _ensure_evolution_tables(db_path)
     conn = _connect(db_path)
     cur = conn.cursor()
     run_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     params_json = json.dumps(best_params, ensure_ascii=False)
     stats_json = json.dumps(best_stats, ensure_ascii=False)
-    cur.execute(
-        """
-        INSERT INTO evolution_ai_best (strategy, run_at, params_json, stats_json, score)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (strategy, run_at, params_json, stats_json, best_score),
-    )
+    if approved:
+        cur.execute(
+            """
+            INSERT INTO evolution_ai_best (strategy, run_at, params_json, stats_json, score)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (strategy, run_at, params_json, stats_json, best_score),
+        )
     conn.commit()
     conn.close()
 
@@ -1306,6 +1788,83 @@ def _calc_stats(returns: List[float], holding_days: int) -> Dict:
     }
 
 
+def _rolling_eval_stats(
+    df: pd.DataFrame,
+    eval_fn,
+    train_window_days: int = 180,
+    test_window_days: int = 60,
+    step_days: int = 60,
+) -> Dict:
+    if df is None or df.empty or "trade_date" not in df.columns:
+        return {}
+    work = df.copy()
+    work["trade_date"] = work["trade_date"].astype(str)
+    dates = sorted(work["trade_date"].dropna().unique().tolist())
+    min_need = train_window_days + test_window_days + 10
+    if len(dates) < min_need:
+        stats = eval_fn(work)
+        if isinstance(stats, dict):
+            stats = dict(stats)
+            stats["validation_mode"] = "single"
+            stats["rolling_test_windows"] = 0
+            stats["rolling_failed_windows"] = 0
+        return stats
+
+    fold_stats: List[Dict[str, float]] = []
+    failed = 0
+    start = 0
+    while start + train_window_days + test_window_days <= len(dates):
+        i0 = start + train_window_days
+        i1 = i0 + test_window_days - 1
+        d0 = dates[i0]
+        d1 = dates[i1]
+        test_df = work[(work["trade_date"] >= d0) & (work["trade_date"] <= d1)].copy()
+        if test_df.empty:
+            failed += 1
+            start += step_days
+            continue
+        try:
+            st = eval_fn(test_df)
+        except Exception:
+            st = {}
+        signals = int(_safe_float((st or {}).get("total_signals"), 0))
+        if not st or signals <= 0:
+            failed += 1
+        else:
+            fold_stats.append(
+                {
+                    "total_signals": float(signals),
+                    "win_rate": _safe_float(st.get("win_rate"), 0.0),
+                    "avg_return": _safe_float(st.get("avg_return"), 0.0),
+                    "sharpe_ratio": _safe_float(st.get("sharpe_ratio"), 0.0),
+                    "max_drawdown": _safe_float(st.get("max_drawdown"), 0.0),
+                }
+            )
+        start += step_days
+
+    if not fold_stats:
+        stats = eval_fn(work)
+        if isinstance(stats, dict):
+            stats = dict(stats)
+            stats["validation_mode"] = "single"
+            stats["rolling_test_windows"] = 0
+            stats["rolling_failed_windows"] = failed
+        return stats
+
+    total_w = sum(x["total_signals"] for x in fold_stats) or 1.0
+    agg = {
+        "total_signals": int(sum(x["total_signals"] for x in fold_stats)),
+        "win_rate": float(sum(x["win_rate"] * x["total_signals"] for x in fold_stats) / total_w),
+        "avg_return": float(sum(x["avg_return"] * x["total_signals"] for x in fold_stats) / total_w),
+        "sharpe_ratio": float(sum(x["sharpe_ratio"] * x["total_signals"] for x in fold_stats) / total_w),
+        "max_drawdown": float(min(x["max_drawdown"] for x in fold_stats)),
+        "rolling_test_windows": int(len(fold_stats)),
+        "rolling_failed_windows": int(failed),
+        "validation_mode": "rolling",
+    }
+    return agg
+
+
 def _backtest_simple_v5(df: pd.DataFrame, score_threshold: float, holding_days: int) -> Dict:
     evaluator = ComprehensiveStockEvaluatorV4()
     returns = []
@@ -1430,8 +1989,11 @@ def _backtest_simple_v8(df: pd.DataFrame, score_threshold: float, holding_days: 
 
 
 def _grid_search_v5(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
-    thresholds = [50, 55, 60, 65]
-    holding_days = [5, 10, 15]
+    up = _unified_strategy_params("v5", {"score_threshold": 60, "holding_days": 8})
+    base_thr = _safe_int(up.get("score_threshold"), 60)
+    base_hold = _safe_int(up.get("holding_days"), 8)
+    thresholds = _grid_values_around(base_thr, 50, 75, 5, radius=2)
+    holding_days = _grid_values_around(base_hold, 3, 20, 2, radius=2)
     best_params, best_stats, best_score = {}, {}, -1e9
     start_ts = datetime.now().timestamp()
     max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
@@ -1523,8 +2085,11 @@ def _grid_search_v7(df: pd.DataFrame, db_path: str) -> Tuple[Dict, Dict, float]:
 
 
 def _grid_search_v8(df: pd.DataFrame, db_path: str, index_data: pd.DataFrame) -> Tuple[Dict, Dict, float]:
-    thresholds = [60, 65, 70, 75, 80]
-    holding_days = [3, 5, 8]
+    up = _unified_strategy_params("v8", {"score_threshold": 65, "holding_days": 10})
+    base_thr = _safe_int(up.get("score_threshold"), 65)
+    base_hold = _safe_int(up.get("holding_days"), 10)
+    thresholds = _grid_values_around(base_thr, 55, 85, 5, radius=2)
+    holding_days = _grid_values_around(base_hold, 3, 20, 2, radius=2)
     best_params, best_stats, best_score = {}, {}, -1e9
     start_ts = datetime.now().timestamp()
     max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
@@ -1539,7 +2104,13 @@ def _grid_search_v8(df: pd.DataFrame, db_path: str, index_data: pd.DataFrame) ->
                 LOGGER.warning("grid search v8 time limit reached (%ss), returning best so far", max_seconds)
                 break
             tried += 1
-            stats = _backtest_simple_v8(df, thr, hd, db_path, index_data)
+            stats = _rolling_eval_stats(
+                df,
+                lambda x: _backtest_simple_v8(x, thr, hd, db_path, index_data),
+                train_window_days=180,
+                test_window_days=60,
+                step_days=60,
+            )
             score = _score_result(stats)
             if score > best_score:
                 best_score, best_params, best_stats = score, {"score_threshold": thr, "holding_days": hd}, stats
@@ -1620,7 +2191,7 @@ def _backtest_simple_v9(
 ) -> Dict:
     returns = []
     unique_stocks = df["ts_code"].unique()
-    sample_size = min(600, len(unique_stocks))
+    sample_size = min(int(EVOLVE_SETTINGS.get("sample_v9", 600)), len(unique_stocks))
     if len(unique_stocks) > sample_size:
         np.random.seed(42)
         sample_stocks = np.random.choice(unique_stocks, sample_size, replace=False)
@@ -1672,10 +2243,19 @@ def _backtest_simple_v9(
 
 
 def _grid_search_v9(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
-    thresholds = [55, 60, 65, 70]
-    holding_days = [10, 15, 20, 25]
-    lookback_days = [120, 160]
-    min_turnovers = [3.0, 5.0, 8.0]
+    up = _unified_strategy_params("v9", {"score_threshold": 65, "holding_days": 20, "lookback_days": 160, "min_turnover": 5.0})
+    base_thr = _safe_int(up.get("score_threshold"), 65)
+    base_hold = _safe_int(up.get("holding_days"), 20)
+    base_lookback = _safe_int(up.get("lookback_days"), 160)
+    base_turnover = _safe_float_local(up.get("min_turnover"), 5.0)
+    thresholds = _grid_values_around(base_thr, 50, 80, 5, radius=2)
+    holding_days = _grid_values_around(base_hold, 5, 30, 3, radius=2)
+    lookback_days = _grid_values_around(base_lookback, 80, 220, 20, radius=1)
+    min_turnovers = sorted(set([
+        round(max(1.0, min(20.0, base_turnover - 2.0)), 1),
+        round(max(1.0, min(20.0, base_turnover)), 1),
+        round(max(1.0, min(20.0, base_turnover + 2.0)), 1),
+    ]))
     best_params, best_stats, best_score = {}, {}, -1e9
     start_ts = datetime.now().timestamp()
     max_seconds = int(EVOLVE_SETTINGS.get("max_seconds", 0))
@@ -1692,7 +2272,13 @@ def _grid_search_v9(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
                         LOGGER.warning("grid search v9 time limit reached (%ss), returning best so far", max_seconds)
                         break
                     tried += 1
-                    stats = _backtest_simple_v9(df, thr, hd, lb, mt)
+                    stats = _rolling_eval_stats(
+                        df,
+                        lambda x: _backtest_simple_v9(x, thr, hd, lb, mt),
+                        train_window_days=180,
+                        test_window_days=60,
+                        step_days=60,
+                    )
                     score = _score_result(stats)
                     if score > best_score:
                         best_score, best_params, best_stats = score, {
@@ -1948,10 +2534,166 @@ def _grid_search_ai_v2(df: pd.DataFrame) -> Tuple[Dict, Dict, float]:
     return best_params, best_stats, best_score
 
 
+def _split_train_test(df: pd.DataFrame, test_ratio: float = 0.25) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    if df is None or df.empty or "trade_date" not in df.columns:
+        return pd.DataFrame(), pd.DataFrame()
+    work = df.copy().sort_values("trade_date")
+    dates = sorted(work["trade_date"].dropna().astype(str).unique().tolist())
+    if len(dates) < 40:
+        return work, pd.DataFrame()
+    cut_idx = max(1, int(len(dates) * (1.0 - test_ratio)))
+    cut_date = dates[cut_idx - 1]
+    train_df = work[work["trade_date"].astype(str) <= cut_date].copy()
+    test_df = work[work["trade_date"].astype(str) > cut_date].copy()
+    return train_df, test_df
+
+
+def _compute_oos_stats(strategy: str, params: Dict, train_df: pd.DataFrame, test_df: pd.DataFrame, db_path: str, index_df: pd.DataFrame | None = None) -> Dict:
+    if test_df is None or test_df.empty:
+        return {}
+    st = strategy.strip().upper()
+    try:
+        if st == "V4":
+            evaluator = ComprehensiveStockEvaluatorV4()
+            result = backtest_with_dynamic_strategy(
+                evaluator,
+                test_df,
+                sample_size=int(EVOLVE_SETTINGS.get("sample_v4", 800)),
+                score_threshold=float(params.get("score_threshold", 60)),
+                max_holding_days=int(params.get("max_holding_days", 15)),
+                stop_loss_pct=float(params.get("stop_loss_pct", -5.0)),
+                take_profit_pct=float(params.get("take_profit_pct", 8.0)),
+            )
+            return result.get("stats", {}) if result.get("success") else {}
+        if st == "V5":
+            return _backtest_simple_v5(test_df, float(params.get("score_threshold", 60)), int(params.get("holding_days", 10)))
+        if st == "V6":
+            return _backtest_simple_v6(test_df, float(params.get("score_threshold", 75)), int(params.get("holding_days", 5)))
+        if st == "V7":
+            return _backtest_simple_v7(test_df, float(params.get("score_threshold", 65)), int(params.get("holding_days", 5)), db_path)
+        if st == "V8":
+            if index_df is None or index_df.empty:
+                return {}
+            return _backtest_simple_v8(test_df, float(params.get("score_threshold", 70)), int(params.get("holding_days", 5)), db_path, index_df)
+        if st == "V9":
+            return _backtest_simple_v9(
+                test_df,
+                float(params.get("score_threshold", 65)),
+                int(params.get("holding_days", 20)),
+                int(params.get("lookback_days", 160)),
+                float(params.get("min_turnover", 5.0)),
+            )
+        if st == "AI_V5":
+            return {}
+        if st == "AI_V2":
+            return {}
+        if st == "STABLE_UPTREND":
+            return {}
+    except Exception as e:
+        LOGGER.warning("oos stats compute failed for %s: %s", st, e)
+    return {}
+
+
+def _build_combo_candidate_from_production() -> Tuple[Dict, Dict, float, str]:
+    def _load(name: str) -> Dict:
+        return _load_json(os.path.join(EVOLUTION_DIR, name))
+
+    v5 = _load("v5_best.json")
+    v8 = _load("v8_best.json")
+    v9 = _load("v9_best.json")
+    refs = [x for x in (v5, v8, v9) if x]
+    if not refs:
+        return {}, {}, -1e9, "single"
+
+    def _st(x: Dict, k: str, default: float = 0.0) -> float:
+        return _safe_float((x.get("stats") or {}).get(k), default)
+
+    weights = {
+        "v5": max(0.1, _safe_float((v5.get("stats") or {}).get("sharpe_ratio"), 0.2) + 0.3) if v5 else 0.0,
+        "v8": max(0.1, _safe_float((v8.get("stats") or {}).get("sharpe_ratio"), 0.2) + 0.3) if v8 else 0.0,
+        "v9": max(0.1, _safe_float((v9.get("stats") or {}).get("sharpe_ratio"), 0.2) + 0.3) if v9 else 0.0,
+    }
+    total_w = sum(weights.values()) or 1.0
+    for k in list(weights.keys()):
+        weights[k] = round(weights[k] / total_w, 4)
+
+    thr_vals = []
+    for src in (v5, v8, v9):
+        if not src:
+            continue
+        p = src.get("params") or {}
+        thr = p.get("score_threshold")
+        if isinstance(thr, (int, float)):
+            thr_vals.append(float(thr))
+    base_thr = int(round(float(np.mean(thr_vals)))) if thr_vals else 68
+    combo_threshold = int(max(58, min(80, base_thr + 3)))
+    min_agree = 3 if combo_threshold >= 70 else 2
+    top_percent = 2 if combo_threshold >= 68 else 3
+    lookback_days = int(max(80, min(200, _safe_float((v9.get("params") or {}).get("lookback_days"), 120))))
+    min_turnover = float(max(3.0, min(20.0, _safe_float((v9.get("params") or {}).get("min_turnover"), 5.0))))
+
+    params = {
+        "combo_threshold": combo_threshold,
+        "top_percent": top_percent,
+        "select_mode": "双重筛选(阈值+Top%)",
+        "min_agree": min_agree,
+        "lookback_days": lookback_days,
+        "min_turnover": min_turnover,
+        "candidate_count": 1200,
+        "enable_consistency": True,
+        "min_align": 2,
+        "auto_weights": True,
+        "w_v4": 0.0,
+        "w_v5": float(weights["v5"]),
+        "w_v7": 0.0,
+        "w_v8": float(weights["v8"]),
+        "w_v9": float(weights["v9"]),
+        "thr_v4": 60,
+        "thr_v5": int((v5.get("params") or {}).get("score_threshold", 60)) if v5 else 60,
+        "thr_v7": 65,
+        "thr_v8": int((v8.get("params") or {}).get("score_threshold", 65)) if v8 else 65,
+        "thr_v9": int((v9.get("params") or {}).get("score_threshold", 65)) if v9 else 65,
+    }
+
+    wrs = [_st(x, "win_rate", 0.0) for x in refs]
+    dds = [_st(x, "max_drawdown", 0.0) for x in refs]
+    shs = [_st(x, "sharpe_ratio", 0.0) for x in refs]
+    sigs = [_st(x, "total_signals", 0.0) for x in refs]
+    avg_wr = float(np.mean(wrs)) if wrs else 0.0
+    avg_dd = float(np.mean(dds)) if dds else 0.0
+    avg_sh = float(np.mean(shs)) if shs else 0.0
+    total_signals = int(sum(sigs))
+    score = float((avg_sh * 1.5) + (avg_wr * 0.03) - (abs(avg_dd) * 0.04))
+    stats = {
+        "total_signals": total_signals,
+        "win_rate": avg_wr,
+        "max_drawdown": avg_dd,
+        "sharpe_ratio": avg_sh,
+        "source": {
+            "v5_score": _safe_float(v5.get("score"), 0.0) if v5 else None,
+            "v8_score": _safe_float(v8.get("score"), 0.0) if v8 else None,
+            "v9_score": _safe_float(v9.get("score"), 0.0) if v9 else None,
+        },
+    }
+    source_modes = []
+    for src in (v5, v8, v9):
+        if not src:
+            continue
+        mode = str(src.get("validation_mode", "") or "").strip().lower()
+        if mode:
+            source_modes.append(mode)
+    validation_mode = "rolling" if source_modes and all(m == "rolling" for m in source_modes) else "single"
+    stats["source_validation_modes"] = source_modes
+    return params, stats, score, validation_mode
+
+
 def _git_push() -> None:
     auto_push = os.getenv("AUTO_PUSH", "1").strip() in ("1", "true", "yes")
     if not auto_push:
         LOGGER.info("AUTO_PUSH disabled")
+        return
+    if not os.path.exists(os.path.join(ROOT, ".git")):
+        LOGGER.info("AUTO_PUSH skipped: current path is not a git repo")
         return
     try:
         candidates = [
@@ -1966,7 +2708,10 @@ def _git_push() -> None:
             "evolution/v7_best.json",
             "evolution/v8_best.json",
             "evolution/v9_best.json",
+            "evolution/combo_best.json",
             "evolution/stable_uptrend_best.json",
+            "evolution/risk_sentinel.json",
+            "evolution/promotion_history.jsonl",
         ]
         files = [f for f in candidates if os.path.exists(os.path.join(ROOT, f))]
         if not files:
@@ -1981,7 +2726,37 @@ def _git_push() -> None:
         LOGGER.error("git push failed: %s", e)
 
 
-def _write_health_report(db_path: str) -> None:
+def _should_auto_repair_funding() -> bool:
+    return str(os.getenv("AUTO_REPAIR_FUNDING_TABLES", "1")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _auto_repair_lagging_funding_tables(db_path: str, lagging_warnings: List[str]) -> Dict[str, Dict]:
+    out: Dict[str, Dict] = {}
+    if not lagging_warnings or not _should_auto_repair_funding():
+        return out
+    need_margin = any(("margin_summary" in w or "margin_detail" in w) for w in lagging_warnings)
+    need_moneyflow = any(("moneyflow_daily" in w or "moneyflow_ind_ths" in w) for w in lagging_warnings)
+    need_top = any(("top_list" in w or "top_inst" in w) for w in lagging_warnings)
+    need_north = any("northbound_flow" in w for w in lagging_warnings)
+
+    try:
+        if need_margin:
+            out["margin_summary"] = _update_margin(db_path)
+            out["margin_detail"] = _update_margin_detail(db_path)
+        if need_moneyflow:
+            out["moneyflow_daily"] = _update_moneyflow_daily(db_path)
+            out["moneyflow_ind_ths"] = _update_moneyflow_industry(db_path)
+        if need_top:
+            out["top_list"] = _update_top_list(db_path)
+            out["top_inst"] = _update_top_inst(db_path)
+        if need_north:
+            out["northbound_flow"] = _update_northbound(db_path)
+    except Exception as e:
+        LOGGER.warning("auto repair funding tables failed: %s", e)
+    return out
+
+
+def _write_health_report(db_path: str, _allow_auto_repair: bool = True) -> None:
     report = {
         "run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "ok": True,
@@ -1989,115 +2764,64 @@ def _write_health_report(db_path: str) -> None:
         "stats": {},
     }
 
-    if not db_path or not os.path.exists(db_path):
-        report["ok"] = False
-        report["warnings"].append("database not found")
-    else:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT MAX(trade_date) FROM daily_trading_data")
-            last_trade = cursor.fetchone()[0]
-            report["stats"]["last_trade_date"] = last_trade
+    try:
+        from risk.summary import compute_health_report as _compute_health_report_v2  # type: ignore
+        report = _compute_health_report_v2(
+            db_path=db_path,
+            enable_fund_bonus=True,
+            fund_portfolio_funds=os.getenv("FUND_PORTFOLIO_FUNDS", ""),
+            evolution_last_run_path=os.path.join(ROOT, "evolution", "last_run.json"),
+        )
+    except Exception as e:
+        LOGGER.warning("compute_health_report v2 unavailable, fallback to minimal report: %s", e)
+        report = {
+            "run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": False,
+            "warnings": [f"health report unavailable: {e}"],
+            "stats": {"db_path": str(db_path or "")},
+        }
 
-            if last_trade:
-                cursor.execute(
-                    "SELECT COUNT(*) FROM daily_trading_data WHERE trade_date = ?",
-                    (last_trade,),
-                )
-                count_last = cursor.fetchone()[0]
-                report["stats"]["records_last_trade_date"] = count_last
-                if count_last < 2000:
-                    report["warnings"].append(f"daily_trading_data records low: {count_last}")
+    # Auto-repair lagging funding tables once, then rebuild report.
+    if _allow_auto_repair:
+        lagging = [
+            w for w in (report.get("warnings", []) or [])
+            if (" lagging: " in str(w) or "not updated for " in str(w) or "not updated in last 3 trading days" in str(w))
+        ]
+        repair_result = _auto_repair_lagging_funding_tables(db_path, lagging)
+        if repair_result:
+            report.setdefault("stats", {})["auto_repair"] = repair_result
+            LOGGER.info("auto repaired lagging funding tables: %s", repair_result)
+            _write_health_report(db_path, _allow_auto_repair=False)
+            return
 
-                cursor.execute(
-                    "SELECT DISTINCT trade_date FROM daily_trading_data ORDER BY trade_date DESC LIMIT 10"
-                )
-                distinct_dates = [row[0] for row in cursor.fetchall() if row and row[0]]
-                report["stats"]["recent_trade_dates"] = distinct_dates
-                if len(distinct_dates) < 5:
-                    report["warnings"].append("recent trade dates < 5")
-                # 最近3日记录数检查
-                recent_counts = {}
-                for d in distinct_dates[:3]:
-                    cursor.execute(
-                        "SELECT COUNT(*) FROM daily_trading_data WHERE trade_date = ?",
-                        (d,),
-                    )
-                    recent_counts[d] = cursor.fetchone()[0]
-                report["stats"]["recent_counts"] = recent_counts
-                if recent_counts:
-                    vals = list(recent_counts.values())
-                    if min(vals) < 2000:
-                        report["warnings"].append("recent trade day records low (<2000)")
-                    if len(vals) >= 2 and vals[0] > 0:
-                        drop_ratio = (vals[0] - vals[-1]) / max(vals[0], 1)
-                        if drop_ratio > 0.3:
-                            report["warnings"].append("recent trade day records drop >30%")
+    # Attach risk sentinel details for UI observability.
+    try:
+        risk = _load_json(RISK_SENTINEL_PATH)
+        if risk:
+            stats = report.setdefault("stats", {})
+            risk_level = str(risk.get("risk_level", "unknown") or "unknown")
+            risk_run_at = str(risk.get("run_at", "") or "")
+            risk_age_mins = None
+            risk_stale = False
+            stale_mins = int(os.getenv("OPENCLAW_RISK_SENTINEL_STALE_MINUTES", "180"))
+            try:
+                risk_dt = datetime.strptime(risk_run_at[:19], "%Y-%m-%d %H:%M:%S") if risk_run_at else None
+                if risk_dt is not None:
+                    risk_age_mins = int(max(0.0, (datetime.now() - risk_dt).total_seconds() // 60))
+                    risk_stale = bool(risk_age_mins > stale_mins)
+            except Exception:
+                risk_dt = None
 
-            def _table_exists(name: str) -> bool:
-                cursor.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                    (name,),
-                )
-                return cursor.fetchone() is not None
-
-            def _table_has_column(table: str, col: str) -> bool:
-                try:
-                    cursor.execute(f"PRAGMA table_info({table})")
-                    cols = [row[1] for row in cursor.fetchall()]
-                    return col in cols
-                except Exception:
-                    return False
-
-            table_checks = {
-                "northbound_flow": "trade_date",
-                "margin_summary": "trade_date",
-                "margin_detail": "trade_date",
-                "moneyflow_daily": "trade_date",
-                "moneyflow_ind_ths": "trade_date",
-                "top_list": "trade_date",
-                "top_inst": "trade_date",
-            }
-            if os.getenv("FUND_PORTFOLIO_FUNDS", "").strip():
-                table_checks["fund_portfolio_cache"] = "trade_date"
-            for table, col in table_checks.items():
-                if not _table_exists(table):
-                    report["warnings"].append(f"table missing: {table}")
-                    continue
-                if not _table_has_column(table, col):
-                    report["warnings"].append(f"{table} missing column: {col}")
-                    continue
-                cursor.execute(f"SELECT MAX({col}) FROM {table}")
-                max_date = cursor.fetchone()[0]
-                report["stats"][f"{table}_max_date"] = max_date
-                if last_trade and max_date and str(max_date) < str(last_trade):
-                    report["warnings"].append(f"{table} lagging: {max_date} < {last_trade}")
-                if distinct_dates and max_date and max_date not in distinct_dates[:3]:
-                    report["warnings"].append(f"{table} not updated in last 3 trading days")
-        finally:
-            conn.close()
-
-        # Evolution stats warnings
-        try:
-            last_run_path = os.path.join(ROOT, "evolution", "last_run.json")
-            if os.path.exists(last_run_path):
-                with open(last_run_path, "r", encoding="utf-8") as f:
-                    evo = json.load(f)
-                stats = evo.get("stats", {})
-                win_rate = stats.get("win_rate")
-                max_dd = stats.get("max_drawdown")
-                if win_rate is not None and win_rate < 40:
-                    report["warnings"].append(f"win_rate low: {win_rate}")
-                if max_dd is not None and max_dd < -30:
-                    report["warnings"].append(f"max_drawdown high: {max_dd}")
-        except Exception as e:
-            report["warnings"].append(f"evolution stats read failed: {e}")
-
-        # v9负分已在算法内修正，此处不再告警
-
-    if report["warnings"]:
-        report["ok"] = False
+            stats["risk_level"] = risk_level
+            stats["risk_rules"] = risk.get("triggered_rules", [])
+            stats["risk_run_at"] = risk_run_at
+            stats["risk_age_mins"] = risk_age_mins
+            stats["risk_stale"] = risk_stale
+            stats["risk_stale_threshold_mins"] = stale_mins
+            if risk_level.lower() in {"orange", "red"} and (not risk_stale):
+                report.setdefault("warnings", []).append(f"risk sentinel={risk_level}")
+    except Exception as e:
+        report.setdefault("warnings", []).append(f"risk sentinel read failed: {e}")
 
     try:
         out_path = os.path.join(ROOT, "evolution", "health_report.json")
@@ -2209,6 +2933,8 @@ def main() -> None:
         index_df = _load_index_data(db_path, lookback_days=420)
         if index_df is None or index_df.empty:
             LOGGER.warning("index data empty (v8 evolution may be skipped)")
+        train_df, test_df = _split_train_test(df, test_ratio=0.25)
+        LOGGER.info("walk-forward split: train_rows=%s test_rows=%s", len(train_df), len(test_df))
 
         targets = _evolve_targets()
 
@@ -2226,8 +2952,10 @@ def main() -> None:
                 return
 
             # 5) 写入结果
-            _save_to_db(db_path, best_params, best_stats, best_score)
-            _write_reports(best_params, best_stats, best_score)
+            oos_v4 = _compute_oos_stats("V4", best_params, train_df, test_df, db_path, index_df=index_df)
+            d_v4 = _write_reports(best_params, best_stats, best_score, oos_stats=oos_v4, db_path=db_path)
+            _save_to_db(db_path, best_params, best_stats, best_score, approved=bool(d_v4.get("approved", False)))
+            LOGGER.info("promotion decision V4: %s", d_v4)
 
         # 6) AI智能选股进化（V5 + V2）
         if "ai_v5" in targets:
@@ -2239,8 +2967,10 @@ def main() -> None:
                 LOGGER.error("grid search ai_v5 failed: %s", e, exc_info=True)
                 ai_v5_params = None
             if ai_v5_params:
-                _write_ai_report("ai_v5_best.json", "AI_V5", ai_v5_params, ai_v5_stats, ai_v5_score)
-                _save_ai_to_db(db_path, "AI_V5", ai_v5_params, ai_v5_stats, ai_v5_score)
+                oos_ai_v5 = _compute_oos_stats("AI_V5", ai_v5_params, train_df, test_df, db_path, index_df=index_df)
+                d_ai_v5 = _write_ai_report("ai_v5_best.json", "AI_V5", ai_v5_params, ai_v5_stats, ai_v5_score, oos_stats=oos_ai_v5, db_path=db_path)
+                _save_ai_to_db(db_path, "AI_V5", ai_v5_params, ai_v5_stats, ai_v5_score, approved=bool(d_ai_v5.get("approved", False)))
+                LOGGER.info("promotion decision AI_V5: %s", d_ai_v5)
             else:
                 LOGGER.warning("AI V5 evolution failed: no params")
 
@@ -2253,8 +2983,10 @@ def main() -> None:
                 LOGGER.error("grid search ai_v2 failed: %s", e, exc_info=True)
                 ai_v2_params = None
             if ai_v2_params:
-                _write_ai_report("ai_v2_best.json", "AI_V2", ai_v2_params, ai_v2_stats, ai_v2_score)
-                _save_ai_to_db(db_path, "AI_V2", ai_v2_params, ai_v2_stats, ai_v2_score)
+                oos_ai_v2 = _compute_oos_stats("AI_V2", ai_v2_params, train_df, test_df, db_path, index_df=index_df)
+                d_ai_v2 = _write_ai_report("ai_v2_best.json", "AI_V2", ai_v2_params, ai_v2_stats, ai_v2_score, oos_stats=oos_ai_v2, db_path=db_path)
+                _save_ai_to_db(db_path, "AI_V2", ai_v2_params, ai_v2_stats, ai_v2_score, approved=bool(d_ai_v2.get("approved", False)))
+                LOGGER.info("promotion decision AI_V2: %s", d_ai_v2)
             else:
                 LOGGER.warning("AI V2 evolution failed: no params")
 
@@ -2268,8 +3000,19 @@ def main() -> None:
                 LOGGER.error("grid search v5 failed: %s", e, exc_info=True)
                 v5_params = None
             if v5_params:
-                _write_ai_report("v5_best.json", "V5", v5_params, v5_stats, v5_score)
-                _save_ai_to_db(db_path, "V5", v5_params, v5_stats, v5_score)
+                oos_v5 = _compute_oos_stats("V5", v5_params, train_df, test_df, db_path, index_df=index_df)
+                d_v5 = _write_ai_report(
+                    "v5_best.json",
+                    "V5",
+                    v5_params,
+                    v5_stats,
+                    v5_score,
+                    oos_stats=oos_v5,
+                    db_path=db_path,
+                    validation_mode="rolling",
+                )
+                _save_ai_to_db(db_path, "V5", v5_params, v5_stats, v5_score, approved=bool(d_v5.get("approved", False)))
+                LOGGER.info("promotion decision V5: %s", d_v5)
             else:
                 LOGGER.warning("V5 evolution failed: no params")
 
@@ -2282,8 +3025,10 @@ def main() -> None:
                 LOGGER.error("grid search v6 failed: %s", e, exc_info=True)
                 v6_params = None
             if v6_params:
-                _write_ai_report("v6_best.json", "V6", v6_params, v6_stats, v6_score)
-                _save_ai_to_db(db_path, "V6", v6_params, v6_stats, v6_score)
+                oos_v6 = _compute_oos_stats("V6", v6_params, train_df, test_df, db_path, index_df=index_df)
+                d_v6 = _write_ai_report("v6_best.json", "V6", v6_params, v6_stats, v6_score, oos_stats=oos_v6, db_path=db_path)
+                _save_ai_to_db(db_path, "V6", v6_params, v6_stats, v6_score, approved=bool(d_v6.get("approved", False)))
+                LOGGER.info("promotion decision V6: %s", d_v6)
             else:
                 LOGGER.warning("V6 evolution failed: no params")
 
@@ -2296,8 +3041,10 @@ def main() -> None:
                 LOGGER.error("grid search v7 failed: %s", e, exc_info=True)
                 v7_params = None
             if v7_params:
-                _write_ai_report("v7_best.json", "V7", v7_params, v7_stats, v7_score)
-                _save_ai_to_db(db_path, "V7", v7_params, v7_stats, v7_score)
+                oos_v7 = _compute_oos_stats("V7", v7_params, train_df, test_df, db_path, index_df=index_df)
+                d_v7 = _write_ai_report("v7_best.json", "V7", v7_params, v7_stats, v7_score, oos_stats=oos_v7, db_path=db_path)
+                _save_ai_to_db(db_path, "V7", v7_params, v7_stats, v7_score, approved=bool(d_v7.get("approved", False)))
+                LOGGER.info("promotion decision V7: %s", d_v7)
             else:
                 LOGGER.warning("V7 evolution failed: no params")
 
@@ -2311,8 +3058,19 @@ def main() -> None:
                     LOGGER.error("grid search v8 failed: %s", e, exc_info=True)
                     v8_params = None
                 if v8_params:
-                    _write_ai_report("v8_best.json", "V8", v8_params, v8_stats, v8_score)
-                    _save_ai_to_db(db_path, "V8", v8_params, v8_stats, v8_score)
+                    oos_v8 = _compute_oos_stats("V8", v8_params, train_df, test_df, db_path, index_df=index_df)
+                    d_v8 = _write_ai_report(
+                        "v8_best.json",
+                        "V8",
+                        v8_params,
+                        v8_stats,
+                        v8_score,
+                        oos_stats=oos_v8,
+                        db_path=db_path,
+                        validation_mode=str((v8_stats or {}).get("validation_mode", "single")),
+                    )
+                    _save_ai_to_db(db_path, "V8", v8_params, v8_stats, v8_score, approved=bool(d_v8.get("approved", False)))
+                    LOGGER.info("promotion decision V8: %s", d_v8)
                 else:
                     LOGGER.warning("V8 evolution failed: no params")
             else:
@@ -2328,10 +3086,48 @@ def main() -> None:
                 LOGGER.error("grid search v9 failed: %s", e, exc_info=True)
                 v9_params = None
             if v9_params:
-                _write_ai_report("v9_best.json", "V9", v9_params, v9_stats, v9_score)
-                _save_ai_to_db(db_path, "V9", v9_params, v9_stats, v9_score)
+                oos_v9 = _compute_oos_stats("V9", v9_params, train_df, test_df, db_path, index_df=index_df)
+                d_v9 = _write_ai_report(
+                    "v9_best.json",
+                    "V9",
+                    v9_params,
+                    v9_stats,
+                    v9_score,
+                    oos_stats=oos_v9,
+                    db_path=db_path,
+                    validation_mode=str((v9_stats or {}).get("validation_mode", "single")),
+                )
+                _save_ai_to_db(db_path, "V9", v9_params, v9_stats, v9_score, approved=bool(d_v9.get("approved", False)))
+                LOGGER.info("promotion decision V9: %s", d_v9)
             else:
                 LOGGER.warning("V9 evolution failed: no params")
+
+        # 8.5) 组合策略（生产共识评分）参数进化
+        if "combo" in targets:
+            try:
+                LOGGER.info("combo evolve started (from production v5/v8/v9)")
+                combo_params, combo_stats, combo_score, combo_validation_mode = _build_combo_candidate_from_production()
+            except Exception as e:
+                LOGGER.error("combo evolve failed: %s", e, exc_info=True)
+                combo_params = {}
+                combo_stats = {}
+                combo_score = -1e9
+                combo_validation_mode = "single"
+            if combo_params:
+                d_combo = _write_ai_report(
+                    "combo_best.json",
+                    "COMBO",
+                    combo_params,
+                    combo_stats,
+                    combo_score,
+                    oos_stats={},
+                    db_path=db_path,
+                    validation_mode=str(combo_validation_mode or "single"),
+                )
+                _save_ai_to_db(db_path, "COMBO", combo_params, combo_stats, combo_score, approved=bool(d_combo.get("approved", False)))
+                LOGGER.info("promotion decision COMBO: %s", d_combo)
+            else:
+                LOGGER.warning("COMBO evolution failed: no params")
 
         # 9) 稳定上涨策略进化
         if "stable" in targets:
@@ -2343,8 +3139,10 @@ def main() -> None:
                 LOGGER.error("grid search stable_uptrend failed: %s", e, exc_info=True)
                 stable_params = None
             if stable_params:
-                _write_ai_report("stable_uptrend_best.json", "STABLE_UPTREND", stable_params, stable_stats, stable_score)
-                _save_ai_to_db(db_path, "STABLE_UPTREND", stable_params, stable_stats, stable_score)
+                oos_stable = _compute_oos_stats("STABLE_UPTREND", stable_params, train_df, test_df, db_path, index_df=index_df)
+                d_stable = _write_ai_report("stable_uptrend_best.json", "STABLE_UPTREND", stable_params, stable_stats, stable_score, oos_stats=oos_stable, db_path=db_path)
+                _save_ai_to_db(db_path, "STABLE_UPTREND", stable_params, stable_stats, stable_score, approved=bool(d_stable.get("approved", False)))
+                LOGGER.info("promotion decision STABLE_UPTREND: %s", d_stable)
             else:
                 LOGGER.warning("Stable uptrend evolution failed: no params")
 

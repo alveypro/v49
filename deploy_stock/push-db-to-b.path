@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch DB updates and push to B server
+
+[Path]
+PathModified=/opt/airivo/data/permanent_stock_database.db
+Unit=push-db-to-b.service
+
+[Install]
+WantedBy=multi-user.target
+

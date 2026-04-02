@@ -1,0 +1,14 @@
+enabled: false
+channels:
+  - file
+  - stdout
+#  - legacy_service
+outbox_path: logs/openclaw/notify_outbox.log
+legacy_config_file: notification_config.json
+
+# Optional:
+# webhook_url: "https://example.com/notify"
+# webhook_timeout_sec: 5
+# webhook_retries: 2
+# webhook_secret_env: "OPENCLAW_WEBHOOK_SECRET"
+# webhook_secret_file: "/etc/openclaw/notify.secret"

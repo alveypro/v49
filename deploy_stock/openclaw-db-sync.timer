@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily stock DB sync from A server
+
+[Timer]
+OnCalendar=*-*-* 07:10:00
+Persistent=true
+Unit=openclaw-db-sync.service
+
+[Install]
+WantedBy=timers.target
+

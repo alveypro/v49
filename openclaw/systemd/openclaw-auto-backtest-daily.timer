@@ -1,0 +1,11 @@
+[Unit]
+Description=Run OpenClaw Auto Backtest Daily
+
+[Timer]
+OnCalendar=Mon..Fri 22:05
+Persistent=true
+Unit=openclaw-auto-backtest-daily.service
+
+[Install]
+WantedBy=timers.target
+

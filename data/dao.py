@@ -12,6 +12,16 @@ class DataAccessError(RuntimeError):
 
 
 def resolve_db_path(preferred: Optional[str] = None) -> Path:
+    # If caller explicitly specifies a path, do not silently fall back
+    # to other DBs; this avoids accidental connections to a different DB.
+    if preferred is not None:
+        candidate = Path(preferred)
+        if candidate.exists():
+            return candidate.resolve()
+        raise DataAccessError(
+            "No available DB path. Set PERMANENT_DB_PATH/OPENCLAW_DB_PATH/AIRIVO_DB_PATH."
+        )
+
     try:
         from openclaw.paths import db_path as _canonical_db_path
         return _canonical_db_path(preferred)

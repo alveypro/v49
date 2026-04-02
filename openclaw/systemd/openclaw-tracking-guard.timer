@@ -1,0 +1,10 @@
+[Unit]
+Description=Run OpenClaw tracking guard nightly (after 01:00)
+
+[Timer]
+OnCalendar=Mon..Sun 03:10
+Persistent=true
+Unit=openclaw-tracking-guard.service
+
+[Install]
+WantedBy=timers.target

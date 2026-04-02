@@ -31,11 +31,17 @@ from openclaw.runtime.v49_handlers import HandlerFactory
 from openclaw.assistant import OpenClawStockAssistant
 from openclaw.strategy_tracking import generate_scoreboard, record_signals_from_summary, refresh_performance
 from openclaw.research.v4_factor_research import analyze_factor_decay, calibrate_v4_weights
+from strategies.center_config import (
+    apply_risk_overrides,
+    load_center_config,
+    resolve_runtime_params,
+    resolve_strategy_weight,
+)
 from strategies.registry import get_profile, ui_primary_strategies, production_strategies, all_strategy_names
 from risk.engine import combine_risk
 from utils_json_logger import setup_json_logger
 
-DEFAULT_V49_MODULE_PATH = str(ROOT / "终极量价暴涨系统_v49.0_长期稳健版.py")
+DEFAULT_V49_MODULE_PATH = str(ROOT / "v49_app.py")
 LOGGER = setup_json_logger("openclaw.run_daily")
 
 
@@ -66,13 +72,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run OpenClaw daily orchestration")
     parser.add_argument(
         "--strategy",
-        default="v9",
+        default="v5",
         choices=["v4", "v5", "v6", "v7", "v8", "v9", "stable", "combo", "ai"],
         help="primary strategy (production: v9/v8/v5/combo; experimental: v4/v6/v7/stable/ai)",
     )
     parser.add_argument("--module-path", default=DEFAULT_V49_MODULE_PATH, help="v49 module path")
     parser.add_argument("--policy-config", default="openclaw/config/policy.yaml", help="policy config path")
     parser.add_argument("--risk-config", default="openclaw/config/risk_thresholds.yaml", help="risk config path")
+    parser.add_argument(
+        "--strategy-center-config",
+        default="openclaw/config/strategy_center.yaml",
+        help="strategy center runtime config (best params/weights/risk overrides)",
+    )
     parser.add_argument("--score-threshold", type=int, default=None)
     parser.add_argument("--sample-size", type=int, default=None)
     parser.add_argument("--holding-days", type=int, default=None)
@@ -96,12 +107,18 @@ def main() -> int:
     parser.add_argument("--run-v4-research", action="store_true", help="run v4 IC calibration and factor decay")
     args = parser.parse_args()
     profile = get_profile(args.strategy)
-    if args.score_threshold is None:
-        args.score_threshold = profile.default_score_threshold
-    if args.sample_size is None:
-        args.sample_size = profile.default_sample_size
-    if args.holding_days is None:
-        args.holding_days = profile.default_holding_days
+    center_cfg = load_center_config(Path(args.strategy_center_config))
+    resolved_runtime = resolve_runtime_params(
+        strategy=args.strategy,
+        requested_score_threshold=args.score_threshold,
+        requested_sample_size=args.sample_size,
+        requested_holding_days=args.holding_days,
+        center_config=center_cfg,
+        project_root=ROOT,
+    )
+    args.score_threshold = int(resolved_runtime["score_threshold"])
+    args.sample_size = int(resolved_runtime["sample_size"])
+    args.holding_days = int(resolved_runtime["holding_days"])
 
     if args.apply_migrations:
         mig = apply_migrations()
@@ -113,7 +130,7 @@ def main() -> int:
 
     _assert_policy(args.strategy, policy)
 
-    prod = set(production_strategies())
+    prod = set(_policy_production_strategies(policy))
     if args.strategy not in prod:
         LOGGER.warning(
             "experimental_strategy",
@@ -139,7 +156,7 @@ def main() -> int:
     scan_result = adapter.run_scan(args.strategy, scan_params)
     picks = (scan_result.get("result") or {}).get("picks", [])
 
-    merged = adapter.merge_signals(picks, _weights_for_strategy(args.strategy))
+    merged = adapter.merge_signals(picks, _weights_for_strategy(args.strategy, center_cfg))
 
     date_to = datetime.now().strftime("%Y-%m-%d")
     date_from = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
@@ -161,6 +178,7 @@ def main() -> int:
 
     summary = ((backtest_result.get("result") or {}).get("summary") or {})
     strategy_thresholds = _resolve_thresholds(args.strategy, thresholds)
+    strategy_thresholds = apply_risk_overrides(args.strategy, strategy_thresholds, center_cfg)
     system_health = _collect_system_health()
     risk_v2_obj = combine_risk(
         market_stats=summary,
@@ -186,7 +204,7 @@ def main() -> int:
         },
     )
 
-    primary_strategies = set(ui_primary_strategies())
+    primary_strategies = set(_policy_primary_strategies(policy))
     opportunities = merged.get("ranked_list", [])[:20]
     opportunities = _apply_positioning(
         opportunities=opportunities,
@@ -238,6 +256,12 @@ def main() -> int:
         "strategy_ui_tag": profile.ui_tag,
         "strategy_is_primary": args.strategy in primary_strategies,
         "primary_strategies": sorted(primary_strategies),
+        "runtime_params": {
+            "score_threshold": args.score_threshold,
+            "sample_size": args.sample_size,
+            "holding_days": args.holding_days,
+            "source": resolved_runtime.get("source", {}),
+        },
         "scan": scan_result,
         "opportunities": opportunities,
         "backtest": backtest_result,
@@ -381,9 +405,27 @@ def _assert_policy(strategy: str, policy: Dict[str, Any]) -> None:
         raise ValueError(f"strategy {strategy} not allowed by policy")
 
 
-def _weights_for_strategy(strategy: str) -> Dict[str, float]:
+def _policy_production_strategies(policy: Dict[str, Any]) -> List[str]:
+    vals = policy.get("production_strategies")
+    if isinstance(vals, list):
+        out = [str(x).strip() for x in vals if str(x).strip()]
+        if out:
+            return out
+    return production_strategies()
+
+
+def _policy_primary_strategies(policy: Dict[str, Any]) -> List[str]:
+    vals = policy.get("primary_strategies")
+    if isinstance(vals, list):
+        out = [str(x).strip() for x in vals if str(x).strip()]
+        if out:
+            return out
+    return ui_primary_strategies()
+
+
+def _weights_for_strategy(strategy: str, center_cfg: Dict[str, Any]) -> Dict[str, float]:
     # Future extension: multi-strategy blend.
-    return {strategy: 1.0}
+    return {strategy: resolve_strategy_weight(strategy, center_config=center_cfg, default=1.0)}
 
 
 def _collect_system_health() -> Dict[str, Any]:
@@ -593,6 +635,7 @@ def _default_policy() -> Dict[str, Any]:
         "mode": "read_only",
         "allowed_strategies": all_strategy_names(),
         "production_strategies": production_strategies(),
+        "primary_strategies": ui_primary_strategies(),
         "permissions": {
             "read_only": True,
             "orchestrate": True,
@@ -654,7 +697,7 @@ def _parse_simple_yaml(text: str) -> Dict[str, Any]:
         if value == "":
             next_is_list = False
             # Look ahead is skipped; infer from known key style.
-            if key in {"channels", "allowed_strategies", "production_strategies", "experimental_strategies", "forbidden_actions", "human_approval_required"}:
+            if key in {"channels", "allowed_strategies", "production_strategies", "primary_strategies", "experimental_strategies", "forbidden_actions", "human_approval_required"}:
                 child: Any = []
                 next_is_list = True
             else:

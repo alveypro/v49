@@ -1,0 +1,18 @@
+[Unit]
+Description=OpenClaw Daily Pipeline (OC partner daily)
+After=network.target openclaw-data-updater.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/openclaw/app
+Environment=OPENCLAW_AUTO_UPDATE_DB=1
+Environment=OPENCLAW_REQUIRE_FRESH_DB=1
+Environment=OPENCLAW_TRADE_CLOSE_HOUR=15
+Environment=OPENCLAW_DATA_READY_DELAY_HOURS=2
+Environment=OPENCLAW_MAX_DB_STALE_TRADE_DAYS=1
+Environment=OPENCLAW_STRATEGY_LIST=v4,v5,v6,v7,v8,v9,stable,combo
+Environment=OPENCLAW_STRATEGY_TIMEOUT_SEC=900
+Environment=OPENCLAW_HEAVY_STRATEGY_TIMEOUT_SEC=420
+ExecStart=/bin/bash /opt/openclaw/app/tools/openclaw_partner_daily_run.sh
+StandardOutput=append:/opt/openclaw/app/logs/openclaw/daily_pipeline.log
+StandardError=append:/opt/openclaw/app/logs/openclaw/daily_pipeline.err

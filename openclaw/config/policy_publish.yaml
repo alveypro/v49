@@ -11,6 +11,9 @@ production_strategies:
   - v5
   - combo
 
+primary_strategies:
+  - v5
+
 allowed_strategies:
   - v4
   - v5

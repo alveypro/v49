@@ -1,0 +1,10 @@
+[Unit]
+Description=Push stock DB and backtest artifacts to B server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/push_db_to_b.sh
+User=root
+

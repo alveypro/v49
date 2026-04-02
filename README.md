@@ -44,3 +44,9 @@ If you prefer config file, copy `config.json.example` to `config.json` and fill 
 ```bash
 ./tools/install_v49_streamlit_launchd.sh
 ```
+
+- One-shot recovery (restart service + verify health + print logs on failure):
+
+```bash
+./tools/recover_airivo_online.sh
+```

@@ -1,0 +1,11 @@
+[Unit]
+Description=Fallback push at night
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 21:30:00
+Persistent=true
+Unit=push-db-to-b.service
+
+[Install]
+WantedBy=timers.target
+

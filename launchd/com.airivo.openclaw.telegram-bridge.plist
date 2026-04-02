@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.airivo.openclaw.telegram-bridge</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/bash</string>
+      <string>/Users/mac/2026Qlin/tools/openclaw_telegram_run.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mac/2026Qlin</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PYTHON_BIN</key>
+      <string>/Users/mac/2026Qlin/.venv/bin/python</string>
+      <key>OPENCLAW_ROOT</key>
+      <string>/Users/mac/2026Qlin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mac/2026Qlin/logs/openclaw/telegram_bridge.launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mac/2026Qlin/logs/openclaw/telegram_bridge.launchd.err.log</string>
+  </dict>
+</plist>

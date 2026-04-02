@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.airivo.openclaw.weekly-sweep</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/bash</string>
+      <string>/Users/mac/2026Qlin/tools/run_openclaw_weekly_sweep.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mac/2026Qlin</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>OPENCLAW_ROOT</key>
+      <string>/Users/mac/2026Qlin</string>
+      <key>OPENCLAW_STRATEGY_CENTER_CONFIG</key>
+      <string>/Users/mac/2026Qlin/openclaw/config/strategy_center.yaml</string>
+      <key>OPENCLAW_WEEKLY_SWEEP_STRATEGIES</key>
+      <string>v5,v8,v9,combo</string>
+      <key>OPENCLAW_WEEKLY_SWEEP_LOOKBACK_DAYS</key>
+      <string>730</string>
+      <key>OPENCLAW_WEEKLY_SWEEP_TIMEOUT_SEC</key>
+      <string>300</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Weekday</key>
+      <integer>7</integer>
+      <key>Hour</key>
+      <integer>3</integer>
+      <key>Minute</key>
+      <integer>30</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mac/2026Qlin/logs/openclaw/weekly_sweep.launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mac/2026Qlin/logs/openclaw/weekly_sweep.launchd.err.log</string>
+  </dict>
+</plist>

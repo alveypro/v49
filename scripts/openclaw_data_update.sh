@@ -8,6 +8,30 @@ STAMP_FILE="$LOG_DIR/data_update.last_ok"
 LOCK_DIR="$LOG_DIR/.data_update.lock"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
+resolve_python_bin() {
+  local c
+  for c in \
+    "$ROOT_DIR/.venv/bin/python" \
+    "$ROOT_DIR/venv311/bin/python" \
+    "/opt/openclaw/venv311/bin/python" \
+    "/opt/airivo/app/.venv/bin/python" \
+    "${OPENCLAW_PYTHON:-}" \
+    "${PYTHON_BIN:-}" \
+    "$(command -v python3 2>/dev/null || true)"; do
+    [[ -n "${c}" && -x "${c}" ]] && { echo "${c}"; return 0; }
+  done
+  echo "python3"
+}
+
+assert_python_ge_311() {
+  "$1" - <<'PY'
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 11) else 1)
+PY
+}
+
+PYTHON_BIN="$(resolve_python_bin)"
+
 mkdir -p "$LOG_DIR"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] skip: data_update lock exists" >> "$LOG_FILE"
@@ -19,6 +43,10 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$ROOT_DIR"
+if ! assert_python_ge_311 "$PYTHON_BIN"; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Python>=3.11 required, got: $("$PYTHON_BIN" -V 2>&1)" >> "$LOG_FILE"
+  exit 2
+fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] start data update" >> "$LOG_FILE"
 
 OUT="$("$PYTHON_BIN" openclaw/update_db_calendar.py \

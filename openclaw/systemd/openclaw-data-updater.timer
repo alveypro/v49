@@ -1,0 +1,13 @@
+[Unit]
+Description=Run OpenClaw Data Updater on Trade Nights
+
+[Timer]
+OnCalendar=Mon..Fri 17:10
+OnCalendar=Mon..Fri 18:10
+OnCalendar=Mon..Fri 19:10
+OnCalendar=Mon..Fri 20:35
+Persistent=true
+Unit=openclaw-data-updater.service
+
+[Install]
+WantedBy=timers.target

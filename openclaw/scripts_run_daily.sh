@@ -4,20 +4,42 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-PYTHON_BIN="${PYTHON_BIN:-python3}"
-for _candidate in "$ROOT_DIR/.venv/bin/python" "/opt/openclaw/venv311/bin/python"; do
-  if [[ -x "$_candidate" ]]; then
-    PYTHON_BIN="$_candidate"
-    break
-  fi
-done
+resolve_python_bin() {
+  local c
+  for c in \
+    "$ROOT_DIR/.venv/bin/python" \
+    "$ROOT_DIR/venv311/bin/python" \
+    "/opt/openclaw/venv311/bin/python" \
+    "/opt/airivo/app/.venv/bin/python" \
+    "${OPENCLAW_PYTHON:-}" \
+    "${PYTHON_BIN:-}" \
+    "$(command -v python3 2>/dev/null || true)"; do
+    [[ -n "${c}" && -x "${c}" ]] && { echo "${c}"; return 0; }
+  done
+  echo "python3"
+}
+
+assert_python_ge_311() {
+  "$1" - <<'PY'
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 11) else 1)
+PY
+}
+
+PYTHON_BIN="$(resolve_python_bin)"
+if ! assert_python_ge_311 "$PYTHON_BIN"; then
+  echo "[openclaw] ERROR: Python>=3.11 required, got: $("$PYTHON_BIN" -V 2>&1)"
+  exit 2
+fi
 export OPENCLAW_ROOT="$ROOT_DIR"
-STRATEGY="${OPENCLAW_STRATEGY:-v9}"
-SCORE_THRESHOLD="${OPENCLAW_SCORE_THRESHOLD:-75}"
-SAMPLE_SIZE="${OPENCLAW_SAMPLE_SIZE:-120}"
-HOLDING_DAYS="${OPENCLAW_HOLDING_DAYS:-5}"
+STRATEGY="${OPENCLAW_STRATEGY:-v5}"
+SCORE_THRESHOLD="${OPENCLAW_SCORE_THRESHOLD:-}"
+SAMPLE_SIZE="${OPENCLAW_SAMPLE_SIZE:-}"
+HOLDING_DAYS="${OPENCLAW_HOLDING_DAYS:-}"
 OFFLINE_LIMIT="${OPENCLAW_OFFLINE_STOCK_LIMIT:-200}"
-USE_LAST_FALLBACK="${OPENCLAW_USE_LAST_FALLBACK:-1}"
+# Fallback reuse is opt-in for production. Implicitly replaying old degraded params
+# makes the next run hard to reason about and can hide real regressions.
+USE_LAST_FALLBACK="${OPENCLAW_USE_LAST_FALLBACK:-0}"
 FALLBACK_MAX_AGE_HOURS="${OPENCLAW_FALLBACK_MAX_AGE_HOURS:-12}"
 ALLOW_HALTED_ON_NON_TRADING="${OPENCLAW_ALLOW_HALTED_ON_NON_TRADING:-1}"
 FALLBACK_SCOPE="${OPENCLAW_FALLBACK_SCOPE:-same}"
@@ -38,11 +60,52 @@ STEP_DAYS="${OPENCLAW_STEP_DAYS:-60}"
 
 POLICY_CONFIG="${OPENCLAW_POLICY_CONFIG:-openclaw/config/policy.yaml}"
 RISK_CONFIG="${OPENCLAW_RISK_CONFIG:-openclaw/config/risk_thresholds.yaml}"
+STRATEGY_CENTER_CONFIG="${OPENCLAW_STRATEGY_CENTER_CONFIG:-openclaw/config/strategy_center.yaml}"
 NOTIFY_CONFIG="${OPENCLAW_NOTIFY_CONFIG:-openclaw/config/notify.yaml}"
 OUTPUT_DIR="${OPENCLAW_OUTPUT_DIR:-logs/openclaw}"
 APPLY_MIGRATIONS_FLAG=""
 if [[ "${OPENCLAW_APPLY_MIGRATIONS:-1}" == "1" ]]; then
   APPLY_MIGRATIONS_FLAG="--apply-migrations"
+fi
+
+if [[ -z "${SCORE_THRESHOLD}" || -z "${SAMPLE_SIZE}" || -z "${HOLDING_DAYS}" ]]; then
+  RESOLVED_PARAMS="$("$PYTHON_BIN" - "$STRATEGY" "$SCORE_THRESHOLD" "$SAMPLE_SIZE" "$HOLDING_DAYS" "$STRATEGY_CENTER_CONFIG" <<'PY'
+import sys
+from pathlib import Path
+
+ROOT = Path(".").resolve()
+sys.path.insert(0, str(ROOT))
+
+from strategies.center_config import load_center_config, resolve_runtime_params
+
+strategy = sys.argv[1]
+raw_score = sys.argv[2].strip()
+raw_sample = sys.argv[3].strip()
+raw_holding = sys.argv[4].strip()
+cfg_path = Path(sys.argv[5])
+
+def to_opt_int(v):
+    if not v:
+        return None
+    try:
+        return int(v)
+    except Exception:
+        return None
+
+cfg = load_center_config(cfg_path)
+resolved = resolve_runtime_params(
+    strategy=strategy,
+    requested_score_threshold=to_opt_int(raw_score),
+    requested_sample_size=to_opt_int(raw_sample),
+    requested_holding_days=to_opt_int(raw_holding),
+    center_config=cfg,
+    project_root=ROOT,
+)
+print(f"{resolved['score_threshold']}|{resolved['sample_size']}|{resolved['holding_days']}")
+PY
+)"
+  IFS='|' read -r SCORE_THRESHOLD SAMPLE_SIZE HOLDING_DAYS <<< "$RESOLVED_PARAMS"
+  echo "[openclaw] resolved runtime params from strategy center: score=${SCORE_THRESHOLD}, sample=${SAMPLE_SIZE}, holding=${HOLDING_DAYS}"
 fi
 
 if [[ "$AUTO_UPDATE_DB" == "1" ]]; then
@@ -362,6 +425,7 @@ ARGS=(
   --step-days "$STEP_DAYS"
   --policy-config "$POLICY_CONFIG"
   --risk-config "$RISK_CONFIG"
+  --strategy-center-config "$STRATEGY_CENTER_CONFIG"
   --notify-config "$NOTIFY_CONFIG"
   --output-dir "$OUTPUT_DIR"
 )
@@ -468,6 +532,7 @@ while true; do
     --step-days "$STEP_DAYS"
     --policy-config "$POLICY_CONFIG"
     --risk-config "$RISK_CONFIG"
+    --strategy-center-config "$STRATEGY_CENTER_CONFIG"
     --notify-config "$NOTIFY_CONFIG"
     --output-dir "$OUTPUT_DIR"
   )

@@ -8,12 +8,12 @@ cd "$ROOT_DIR"
 REMOTE_NAME="${REMOTE_NAME:-origin}"
 REMOTE_BRANCH="${REMOTE_BRANCH:-main}"
 DEPLOY_HOST="${DEPLOY_HOST:-root@47.90.160.87}"
-DEPLOY_PASS="${DEPLOY_PASS:-Keep@2026}"
+DEPLOY_PASS="${DEPLOY_PASS:-}"
 REMOTE_APP_DIR="${REMOTE_APP_DIR:-/opt/openclaw/app}"
 REMOTE_SERVICE="${REMOTE_SERVICE:-openclaw-streamlit.service}"
 REMOTE_HEALTH_URL="${REMOTE_HEALTH_URL:-http://127.0.0.1:8501/_stcore/health}"
 ALLOW_DIRTY="${ALLOW_DIRTY:-0}"     # 0: block on dirty tree, 1: allow (still deploys committed HEAD only)
-RESTART_SERVICE="${RESTART_SERVICE:-1}"
+RESTART_SERVICE="${RESTART_SERVICE:-0}"
 
 msg() { printf "[sync-dual] %s\n" "$*"; }
 die() { printf "[sync-dual] ERROR: %s\n" "$*" >&2; exit 1; }
@@ -25,7 +25,10 @@ need_cmd() {
 need_cmd git
 need_cmd ssh
 need_cmd scp
-need_cmd sshpass
+
+if [[ -n "$DEPLOY_PASS" ]]; then
+  need_cmd sshpass
+fi
 
 if command -v sha1sum >/dev/null 2>&1; then
   HASH_CMD="sha1sum"
@@ -79,8 +82,12 @@ fi
 
 msg "changed=${#CHANGED_FILES[@]} deleted=${#DELETED_FILES[@]}"
 
-SSH_BASE=(sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no "$DEPLOY_HOST")
-SCP_BASE=(sshpass -p "$DEPLOY_PASS" scp -o StrictHostKeyChecking=no)
+SSH_BASE=(ssh -o StrictHostKeyChecking=no "$DEPLOY_HOST")
+SCP_BASE=(scp -o StrictHostKeyChecking=no)
+if [[ -n "$DEPLOY_PASS" ]]; then
+  SSH_BASE=(sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no "$DEPLOY_HOST")
+  SCP_BASE=(sshpass -p "$DEPLOY_PASS" scp -o StrictHostKeyChecking=no)
+fi
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 REMOTE_BACKUP_DIR="$REMOTE_APP_DIR/backups/manual_sync_$TIMESTAMP"
@@ -161,6 +168,11 @@ if [[ "$RESTART_SERVICE" == "1" ]]; then
     die "health check failed: $HEALTH"
   fi
   msg "health=ok"
+fi
+
+if [[ "$RESTART_SERVICE" != "1" ]]; then
+  msg "skip service restart (RESTART_SERVICE=$RESTART_SERVICE)"
+  msg "if you need restart, run with: RESTART_SERVICE=1 bash tools/sync_dual_safe.sh"
 fi
 
 msg "done"

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run OpenClaw Auto Evolve Data Full at night
+
+[Timer]
+OnCalendar=Tue..Sat 01:35
+Persistent=true
+Unit=openclaw-auto-evolve-data-full.service
+
+[Install]
+WantedBy=timers.target

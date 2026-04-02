@@ -11,15 +11,14 @@ class StrategyProfile:
     default_sample_size: int
     default_holding_days: int
     tier: str = "experimental"     # "production" | "experimental"
+    stage: str = "experimental"    # "primary" | "candidate" | "experimental"
     role: str = ""                 # 角色说明
     ui_tag: str = "secondary"
 
 
-# ── 生产策略 (默认运行) ──────────────────────────────────────
-# v9  中线主策略: 15日持仓, 综合量价+资金流+板块轮动
-# v8  风控主策略: 8日持仓, 极致风控+机构行为识别
-# v5  趋势启动补充: 5日短持仓, 启动确认+爆发力筛选
-# combo 统一决策出口: 多策略投票融合, 最终输出
+# ── 生产候选池 ─────────────────────────────────────────────
+# v9/v8/v5/combo 仍属于生产体系, 但只有 v5 是当前主生产
+# 其余先保留候选身份, 用于回归验证与恢复评估
 
 # ── 实验策略 (手动开关, 不影响主流程) ────────────────────────
 # v4  研究基座: 与v5重叠高, 保留做因子研究
@@ -28,11 +27,11 @@ class StrategyProfile:
 # ai  AI选股: 辅助工具, 不作为中心主策略
 
 STRATEGIES: Dict[str, StrategyProfile] = {
-    # ── 生产策略 ──
-    "v9": StrategyProfile("v9", 60, 500, 15, tier="production", role="中线主策略", ui_tag="primary"),
-    "v8": StrategyProfile("v8", 50, 400, 8,  tier="production", role="风控主策略", ui_tag="primary"),
-    "v5": StrategyProfile("v5", 60, 500, 5,  tier="production", role="趋势启动补充", ui_tag="primary"),
-    "combo": StrategyProfile("combo", 68, 500, 10, tier="production", role="统一决策出口", ui_tag="primary"),
+    # ── 生产候选池 ──
+    "v5": StrategyProfile("v5", 60, 500, 5, tier="production", stage="primary", role="当前主执行策略", ui_tag="primary"),
+    "v9": StrategyProfile("v9", 60, 500, 15, tier="production", stage="candidate", role="中线生产候选"),
+    "v8": StrategyProfile("v8", 50, 400, 8, tier="production", stage="candidate", role="风控生产候选"),
+    "combo": StrategyProfile("combo", 68, 500, 10, tier="production", stage="candidate", role="统一决策生产候选"),
     # ── 实验策略 ──
     "v4": StrategyProfile("v4", 60, 400, 5, tier="experimental", role="因子研究基座"),
     "v6": StrategyProfile("v6", 75, 400, 5, tier="experimental", role="超短周期实验"),
@@ -50,7 +49,7 @@ def get_profile(strategy: str) -> StrategyProfile:
 
 
 def production_strategies() -> List[str]:
-    """生产策略列表 — 默认运行、默认验证、默认告警。"""
+    """生产候选池 — 具备生产资格, 不等于当前主生产。"""
     return [k for k, v in STRATEGIES.items() if v.tier == "production"]
 
 
@@ -59,10 +58,19 @@ def experimental_strategies() -> List[str]:
     return [k for k, v in STRATEGIES.items() if v.tier == "experimental"]
 
 
+def primary_strategies() -> List[str]:
+    primaries = [k for k, v in STRATEGIES.items() if v.stage == "primary"]
+    return primaries or ["v5"]
+
+
+def production_candidate_strategies() -> List[str]:
+    return production_strategies()
+
+
 def all_strategy_names() -> List[str]:
     return list(STRATEGIES.keys())
 
 
 # backward compat
 def ui_primary_strategies() -> list[str]:
-    return production_strategies()
+    return primary_strategies()

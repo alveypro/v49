@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenClaw Data Updater (Trade Calendar Aware)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/openclaw/app
+Environment=OPENCLAW_TRADE_CLOSE_HOUR=15
+Environment=OPENCLAW_DATA_READY_DELAY_HOURS=2
+Environment=OPENCLAW_AUTO_UPDATE_MAX_DAYS=15
+ExecStart=/opt/openclaw/venv311/bin/python /opt/openclaw/app/openclaw/update_db_calendar.py
+StandardOutput=append:/opt/openclaw/app/logs/openclaw/data_updater.log
+StandardError=append:/opt/openclaw/app/logs/openclaw/data_updater.err

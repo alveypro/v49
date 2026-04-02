@@ -1,0 +1,11 @@
+{
+  "allowed": [
+    "start_v49.sh",
+    "start_v49_full.sh",
+    "start_v49_streamlit.sh",
+    "openclaw/scripts_run_daily.sh",
+    "scripts/safety_check_v49_openclaw.py",
+    "comprehensive_test_v49.py",
+    "manual_test_v49.py"
+  ]
+}

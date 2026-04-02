@@ -7,9 +7,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import importlib.util
+import logging
 import os
 import threading
 from contextlib import contextmanager
+from types import ModuleType
 
 import pandas as pd
 from data.dao import resolve_db_path as resolve_db_path_dao
@@ -64,6 +66,41 @@ class HandlerFactory:
 
     def create_backtest_handler(self, strategy: str):
         strategy = strategy.lower()
+        module_cache: Optional[ModuleType] = None
+        analyzer_cache: Dict[str, Any] = {}
+        frame_cache: Dict[Tuple[str, int, int], pd.DataFrame] = {}
+
+        def _get_module() -> ModuleType:
+            nonlocal module_cache
+            if module_cache is None:
+                module_cache = _load_module(self.module_path)
+            return module_cache
+
+        def _get_analyzer(db_path: Path) -> Any:
+            key = str(db_path)
+            analyzer = analyzer_cache.get(key)
+            if analyzer is None:
+                module = _get_module()
+                analyzer_cls = getattr(module, "CompleteVolumePriceAnalyzer", None)
+                if analyzer_cls is None:
+                    raise RuntimeError("CompleteVolumePriceAnalyzer not found in module")
+                analyzer = analyzer_cls(db_path=key)
+                _patch_analyzer_stats_signal_strength(analyzer)
+                analyzer_cache[key] = analyzer
+            return analyzer
+
+        def _get_backtest_frame(db_path: Path, lookback_days: int, sample_size: int) -> pd.DataFrame:
+            key = (str(db_path), int(lookback_days), int(sample_size))
+            df = frame_cache.get(key)
+            if df is None:
+                df = _load_backtest_frame(
+                    db_path=db_path,
+                    lookback_days=int(lookback_days),
+                    sample_size=int(sample_size),
+                )
+                frame_cache[key] = df
+            # Strategy methods may mutate columns; isolate each run from cache side effects.
+            return df.copy()
 
         def _handler(params: Optional[JsonDict] = None) -> JsonDict:
             params = params or {}
@@ -92,7 +129,12 @@ class HandlerFactory:
                 return {"summary": _normalize_summary(result), "raw": result}
 
             if strategy == "v5":
-                import backtest_v5_launch_confirm as v5_mod
+                v5_mod = _import_backtest_module(
+                    "backtest_v5_launch_confirm",
+                    fallback_rel_paths=[
+                        "versions/archive/legacy_systems/backtest_v5_launch_confirm.py",
+                    ],
+                )
                 v5_mod.PERMANENT_DB_PATH = str(db_path)
                 V5LaunchConfirmBacktest = v5_mod.V5LaunchConfirmBacktest
 
@@ -113,14 +155,9 @@ class HandlerFactory:
                         pass
                 return {"summary": _normalize_summary(result), "raw": result}
 
-            if strategy in {"v7", "v8", "v9"}:
-                module = _load_module(self.module_path)
-                analyzer_cls = getattr(module, "CompleteVolumePriceAnalyzer", None)
-                if analyzer_cls is None:
-                    raise RuntimeError("CompleteVolumePriceAnalyzer not found in module")
-
-                analyzer = analyzer_cls(db_path=str(db_path))
-                df_bt = _load_backtest_frame(
+            if strategy in {"v7", "v8", "v9", "combo"}:
+                analyzer = _get_analyzer(db_path)
+                df_bt = _get_backtest_frame(
                     db_path=db_path,
                     lookback_days=int(params.get("lookback_days", 320)),
                     sample_size=int(params.get("sample_size", 500)),
@@ -145,19 +182,32 @@ class HandlerFactory:
                         holding_days=int(params.get("holding_days", 8)),
                         score_threshold=float(params.get("score_threshold", 50)),
                     )
-                else:
+                elif strategy == "v9":
                     result = analyzer.backtest_v9_midterm(
                         df_bt,
                         sample_size=int(params.get("sample_size", 500)),
                         holding_days=int(params.get("holding_days", 15)),
                         score_threshold=float(params.get("score_threshold", 60)),
                     )
+                else:
+                    combo_threshold = float(params.get("combo_threshold", params.get("score_threshold", 68)))
+                    if hasattr(analyzer, "backtest_combo_production"):
+                        result = analyzer.backtest_combo_production(
+                            df_bt,
+                            sample_size=int(params.get("sample_size", 500)),
+                            holding_days=int(params.get("holding_days", 10)),
+                            combo_threshold=combo_threshold,
+                            min_agree=int(params.get("min_agree", 2)),
+                        )
+                    else:
+                        # Legacy fallback: use an ensemble of available strategy backtests.
+                        result = _run_combo_ensemble_backtest(analyzer, df_bt, params)
 
                 stats_src = (result or {}).get("stats") if isinstance(result, dict) else None
                 summary = _normalize_summary(stats_src if isinstance(stats_src, dict) else result)
                 return {"summary": summary, "raw": result}
 
-            if strategy in {"v4", "stable", "combo"}:
+            if strategy in {"v4", "stable"}:
                 return {
                     "summary": _default_skip_summary(strategy),
                     "raw": {
@@ -186,6 +236,29 @@ def _load_module(path: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _import_backtest_module(module_name: str, fallback_rel_paths: list[str]) -> ModuleType:
+    try:
+        return __import__(module_name)
+    except Exception:
+        pass
+
+    root = Path(__file__).resolve().parents[2]
+    for rel in fallback_rel_paths:
+        p = root / rel
+        if not p.exists():
+            continue
+        spec = importlib.util.spec_from_file_location(f"legacy_{module_name}", str(p))
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    raise ModuleNotFoundError(
+        f"No module named '{module_name}' (checked fallback paths: {fallback_rel_paths})"
+    )
 
 
 def _extract_df_and_meta(raw: Any) -> Tuple[Optional[pd.DataFrame], JsonDict]:
@@ -253,16 +326,32 @@ def _normalize_summary(result: Any) -> JsonDict:
 
     # absorb different key styles from legacy scripts
     win_rate = result.get("win_rate", result.get("胜率", 0.0))
-    max_drawdown = result.get("max_drawdown", result.get("最大回撤", 0.0))
-    total_trades = float(result.get("total_trades", result.get("总交易次数", 0.0)) or 0.0)
-    sample_size = float(result.get("sample_size", 500.0) or 500.0)
+    max_drawdown = result.get(
+        "max_drawdown",
+        result.get("最大回撤", result.get("drawdown", result.get("最大回撤率", 0.0))),
+    )
+    total_trades = float(
+        result.get(
+            "total_trades",
+            result.get("总交易次数", result.get("total_signals", result.get("信号总数", 0.0))),
+        )
+        or 0.0
+    )
+    sample_size = float(
+        result.get(
+            "sample_size",
+            result.get("analyzed_stocks", result.get("分析股票数", 500.0)),
+        )
+        or 500.0
+    )
 
     # legacy scripts often return percent values for win_rate/max_drawdown
     win_rate = float(win_rate)
     if win_rate > 1.0:
         win_rate = win_rate / 100.0
 
-    max_drawdown = float(max_drawdown)
+    # legacy scripts may report drawdown as negative percentage, e.g. -21.9
+    max_drawdown = abs(float(max_drawdown))
     if max_drawdown > 1.0:
         max_drawdown = max_drawdown / 100.0
 
@@ -366,6 +455,165 @@ def _patch_backtest_stock_pool(backtest_obj: Any) -> None:
         return list(zip(df["ts_code"], df["name"]))
 
     backtest_obj._get_stock_pool = _get_stock_pool
+
+
+def _patch_analyzer_stats_signal_strength(analyzer: Any) -> None:
+    """Legacy analyzers may miss `signal_strength` in backtest frames.
+
+    Normalize before stats computation to avoid KeyError from older implementations.
+    """
+    fn = getattr(analyzer, "_calculate_backtest_stats", None)
+    if fn is None or getattr(fn, "_openclaw_signal_strength_patched", False):
+        return
+
+    def _wrapped(backtest_df, *args, **kwargs):
+        try:
+            if isinstance(backtest_df, pd.DataFrame) and "signal_strength" not in backtest_df.columns:
+                df2 = backtest_df.copy()
+                if "score" in df2.columns:
+                    df2["signal_strength"] = df2["score"]
+                elif "final_score" in df2.columns:
+                    df2["signal_strength"] = df2["final_score"]
+                else:
+                    df2["signal_strength"] = 0.0
+                backtest_df = df2
+        except Exception:
+            pass
+        return fn(backtest_df, *args, **kwargs)
+
+    _wrapped._openclaw_signal_strength_patched = True  # type: ignore[attr-defined]
+    setattr(analyzer, "_calculate_backtest_stats", _wrapped)
+
+
+def _run_combo_ensemble_backtest(analyzer: Any, df_bt: pd.DataFrame, params: JsonDict) -> JsonDict:
+    """Compose combo result from multiple strategy backtests for legacy modules."""
+    sample_size = int(params.get("sample_size", 500))
+    holding_days = int(params.get("holding_days", 10))
+    combo_threshold = float(params.get("combo_threshold", params.get("score_threshold", 68)))
+    components_raw = str(params.get("combo_components", "v8,v9,legacy")).strip().lower()
+    enabled_components = {x.strip() for x in components_raw.split(",") if x.strip()}
+    if "all" in enabled_components:
+        enabled_components = {"v7", "v8", "v9", "legacy"}
+    if not enabled_components:
+        enabled_components = {"v8", "v9", "legacy"}
+    # Keep combo ensemble responsive during parameter sweeps.
+    sub_sample = max(30, min(sample_size, 60))
+
+    components: Dict[str, JsonDict] = {}
+    summaries: Dict[str, JsonDict] = {}
+
+    def _run_component(name: str, fn):
+        if name not in enabled_components:
+            return
+        try:
+            out = fn()
+            stats_src = out.get("stats") if isinstance(out, dict) else None
+            summary = _normalize_summary(stats_src if isinstance(stats_src, dict) else out)
+            ok = isinstance(out, dict) and bool(out.get("success", True))
+            components[name] = {
+                "status": "success" if ok else "failed",
+                "summary": summary,
+                "error": "" if ok else str(out.get("error", "unknown")) if isinstance(out, dict) else "unknown",
+            }
+            if ok:
+                summaries[name] = summary
+        except Exception as exc:
+            components[name] = {"status": "failed", "summary": _default_skip_summary("combo"), "error": str(exc)}
+
+    with _temp_log_level(logging.WARNING):
+        _run_component(
+            "v7",
+            lambda: analyzer.backtest_v7_intelligent(
+                df_bt,
+                sample_size=sub_sample,
+                holding_days=max(6, min(holding_days, 12)),
+                score_threshold=max(55.0, min(75.0, combo_threshold)),
+            ),
+        )
+        _run_component(
+            "v8",
+            lambda: analyzer.backtest_v8_ultimate(
+                df_bt,
+                sample_size=sub_sample,
+                holding_days=max(6, min(holding_days, 10)),
+                score_threshold=max(45.0, min(65.0, combo_threshold - 8.0)),
+            ),
+        )
+        _run_component(
+            "v9",
+            lambda: analyzer.backtest_v9_midterm(
+                df_bt,
+                sample_size=sub_sample,
+                holding_days=max(8, holding_days),
+                score_threshold=max(55.0, min(75.0, combo_threshold + 2.0)),
+            ),
+        )
+        _run_component(
+            "legacy",
+            lambda: analyzer.backtest_strategy_complete(
+                df_bt,
+                sample_size=sub_sample,
+                signal_strength=(combo_threshold / 100.0 if combo_threshold > 1 else combo_threshold),
+                holding_days=max(6, holding_days),
+            ),
+        )
+
+    if not summaries:
+        return {
+            "success": False,
+            "error": "combo ensemble has no successful component",
+            "components": components,
+            "stats": _default_skip_summary("combo"),
+        }
+
+    combo_summary = _weighted_combo_summary(summaries, sample_size=sub_sample)
+    return {
+        "success": True,
+        "strategy": "combo_ensemble",
+        "stats": {
+            "win_rate": combo_summary["win_rate"],
+            "max_drawdown": combo_summary["max_drawdown"],
+            "total_signals": int(round(combo_summary["signal_density"] * sub_sample)),
+            "sample_size": sub_sample,
+        },
+        "components": components,
+    }
+
+
+def _weighted_combo_summary(summaries: Dict[str, JsonDict], sample_size: int) -> JsonDict:
+    base_weights = {"v7": 0.23, "v8": 0.22, "v9": 0.30, "legacy": 0.25}
+    active_weights = {k: v for k, v in base_weights.items() if k in summaries}
+    weight_sum = sum(active_weights.values()) or 1.0
+    active_weights = {k: v / weight_sum for k, v in active_weights.items()}
+
+    win_rate = sum(active_weights[k] * float(summaries[k].get("win_rate", 0.0)) for k in active_weights)
+    density = sum(active_weights[k] * float(summaries[k].get("signal_density", 0.0)) for k in active_weights)
+    weighted_dd = sum(active_weights[k] * float(summaries[k].get("max_drawdown", 1.0)) for k in active_weights)
+    worst_dd = max(float(summaries[k].get("max_drawdown", 1.0)) for k in active_weights)
+
+    # Keep ensemble conservative by mixing weighted drawdown with worst-case drawdown.
+    max_drawdown = min(1.0, weighted_dd * 0.7 + worst_dd * 0.3)
+
+    return {
+        "win_rate": max(0.0, min(1.0, win_rate)),
+        "max_drawdown": max(0.0, min(1.0, max_drawdown)),
+        "signal_density": max(0.0, min(2.0, density)),
+    }
+
+
+@contextmanager
+def _temp_log_level(level: int):
+    root = logging.getLogger()
+    old_root = root.level
+    strategy_logger = logging.getLogger("volume_price_analyzer")
+    old_strategy = strategy_logger.level
+    try:
+        root.setLevel(level)
+        strategy_logger.setLevel(level)
+        yield
+    finally:
+        root.setLevel(old_root)
+        strategy_logger.setLevel(old_strategy)
 
 
 def _resolve_db_path(preferred: Optional[str]) -> Path:

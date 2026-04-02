@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.airivo.openclaw.daily</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/mac/2026Qlin/openclaw/scripts_run_daily.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/mac/2026Qlin</string>
+
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>10</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>10</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>10</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>10</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>10</integer></dict>
+  </array>
+
+  <key>StandardOutPath</key>
+  <string>/Users/mac/2026Qlin/logs/openclaw/launchd.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/mac/2026Qlin/logs/openclaw/launchd.err.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHON_BIN</key><string>/Users/mac/2026Qlin/.venv/bin/python</string>
+    <key>OPENCLAW_ROOT</key><string>/Users/mac/2026Qlin</string>
+    <key>OPENCLAW_STRATEGY</key><string>v5</string>
+    <key>OPENCLAW_OFFLINE_STOCK_LIMIT</key><string>200</string>
+    <key>OPENCLAW_USE_LAST_FALLBACK</key><string>0</string>
+    <key>OPENCLAW_PUBLISH</key><string>1</string>
+    <key>OPENCLAW_APPROVE_PUBLISH</key><string>1</string>
+    <key>OPENCLAW_FORCE_PUBLISH_ON_RISK</key><string>1</string>
+    <key>OPENCLAW_POLICY_CONFIG</key><string>openclaw/config/policy_publish.yaml</string>
+    <key>OPENCLAW_RISK_CONFIG</key><string>openclaw/config/risk_thresholds.yaml</string>
+    <key>OPENCLAW_STRATEGY_CENTER_CONFIG</key><string>openclaw/config/strategy_center.yaml</string>
+    <key>OPENCLAW_NOTIFY_CONFIG</key><string>openclaw/config/notify_dingtalk.yaml</string>
+    <key>OPENCLAW_OUTPUT_DIR</key><string>logs/openclaw</string>
+  </dict>
+</dict>
+</plist>

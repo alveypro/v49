@@ -31,15 +31,29 @@ except ImportError:
     doctor_log_dir = lambda: ROOT / "logs" / "doctor"
 
 try:
-    from strategies.registry import STRATEGIES, production_strategies, experimental_strategies
+    from strategies.registry import STRATEGIES, production_strategies, experimental_strategies, primary_strategies
 except ImportError:
     STRATEGIES = {}
     production_strategies = lambda: ["v9", "v8", "v5", "combo"]
+    primary_strategies = lambda: ["v5"]
     experimental_strategies = lambda: ["v4", "v6", "v7", "stable", "ai"]
+
+try:
+    from strategies.center_config import (
+        apply_risk_overrides,
+        load_center_config,
+        resolve_runtime_params,
+        resolve_strategy_weight,
+    )
+except Exception:
+    apply_risk_overrides = None  # type: ignore[assignment]
+    load_center_config = None  # type: ignore[assignment]
+    resolve_runtime_params = None  # type: ignore[assignment]
+    resolve_strategy_weight = None  # type: ignore[assignment]
 
 
 def _icon(status: str) -> str:
-    return {"green": "🟢", "orange": "🟡", "red": "🔴"}.get(status, "⚪")
+    return {"green": "🟢", "orange": "🟡", "yellow": "🟡", "red": "🔴"}.get(status, "⚪")
 
 
 def _latest_health_report() -> Optional[Dict[str, Any]]:
@@ -120,25 +134,92 @@ def _cache_stats() -> Dict[str, Any]:
     return {"CSV文件数": len(csvs), "总计": f"{total_mb:.1f}MB"}
 
 
+def _load_strategy_center() -> Dict[str, Any]:
+    if load_center_config is None:
+        return {}
+    try:
+        return load_center_config(ROOT / "openclaw" / "config" / "strategy_center.yaml")
+    except Exception:
+        return {}
+
+
+def _effective_strategy_view(strategy: str, center_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    role = ""
+    p = STRATEGIES.get(strategy)
+    if p:
+        role = str(getattr(p, "role", "") or "")
+
+    runtime = {
+        "score_threshold": getattr(p, "default_score_threshold", 0),
+        "sample_size": getattr(p, "default_sample_size", 0),
+        "holding_days": getattr(p, "default_holding_days", 0),
+        "source": {"score_threshold": "registry_default", "sample_size": "registry_default", "holding_days": "registry_default"},
+    }
+    if resolve_runtime_params is not None:
+        try:
+            runtime = resolve_runtime_params(
+                strategy=strategy,
+                requested_score_threshold=None,
+                requested_sample_size=None,
+                requested_holding_days=None,
+                center_config=center_cfg,
+                project_root=ROOT,
+            )
+        except Exception:
+            pass
+
+    base_risk = {"win_rate_min": 0.45, "max_drawdown_max": 0.12, "signal_density_min": 0.02}
+    risk = base_risk
+    if apply_risk_overrides is not None:
+        try:
+            risk = apply_risk_overrides(strategy, base_risk, center_cfg)
+        except Exception:
+            risk = base_risk
+
+    weight = 1.0
+    if resolve_strategy_weight is not None:
+        try:
+            weight = resolve_strategy_weight(strategy, center_config=center_cfg, default=1.0)
+        except Exception:
+            weight = 1.0
+
+    src = runtime.get("source", {}) if isinstance(runtime, dict) else {}
+    src_tag = str(src.get("score_threshold", "unknown"))
+    return {
+        "strategy": strategy,
+        "role": role or "-",
+        "score_threshold": int(runtime.get("score_threshold", 0) or 0),
+        "sample_size": int(runtime.get("sample_size", 0) or 0),
+        "holding_days": int(runtime.get("holding_days", 0) or 0),
+        "source": src_tag,
+        "weight": float(weight),
+        "risk_text": f"wr>={float(risk['win_rate_min']):.2f} dd<={float(risk['max_drawdown_max']):.2f} sd>={float(risk['signal_density_min']):.2f}",
+    }
+
+
 def build_dashboard() -> str:
     lines: List[str] = []
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     lines.append(f"# OpenClaw 系统状态看板")
     lines.append(f"*生成时间: {now}*\n")
+    center_cfg = _load_strategy_center()
 
     # ─── 策略中心 ───
     lines.append("## 〇、策略中心")
     prod = production_strategies()
+    primary = set(primary_strategies())
     exp = experimental_strategies()
     lines.append("")
-    lines.append("**生产策略** (默认运行)")
+    lines.append("**生产候选策略**")
     lines.append("")
-    lines.append("| 策略 | 角色 | 阈值 | 样本 | 持仓天数 |")
-    lines.append("|------|------|------|------|----------|")
+    lines.append("| 策略 | 角色 | 阈值 | 样本 | 持仓天数 | 参数来源 | 权重 | 风控线 |")
+    lines.append("|------|------|------|------|----------|----------|------|--------|")
     for k in prod:
-        p = STRATEGIES.get(k)
-        if p:
-            lines.append(f"| **{k}** | {p.role} | {p.default_score_threshold} | {p.default_sample_size} | {p.default_holding_days} |")
+        row = _effective_strategy_view(k, center_cfg)
+        lines.append(
+            f"| **{row['strategy']}{' (主生产)' if row['strategy'] in primary else ''}** | {row['role']} | {row['score_threshold']} | {row['sample_size']} | "
+            f"{row['holding_days']} | {row['source']} | {row['weight']:.2f} | {row['risk_text']} |"
+        )
     lines.append("")
     lines.append("**实验策略** (手动开关, 不影响主流程)")
     lines.append("")
@@ -190,7 +271,7 @@ def build_dashboard() -> str:
         lines.append(f"- 扫描: {scan.get('status', '?')} (选出 {len(rs.get('opportunities', []))} 只)")
         lines.append(f"- 回测: {bt.get('status', '?')}")
         risk_level = risk.get("risk_level", "?")
-        lines.append(f"- 风险: {_icon('green' if risk_level == 'green' else 'orange' if risk_level == 'orange' else 'red')} {risk_level}")
+        lines.append(f"- 风险: {_icon(str(risk_level).lower())} {risk_level}")
         rules = risk.get("triggered_rules", [])
         if rules:
             lines.append(f"- 触发规则: {', '.join(rules)}")
