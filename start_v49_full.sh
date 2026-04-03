@@ -36,6 +36,8 @@ fi
 exec "$PY_BIN" -m streamlit run "$APP_FILE" \
   --server.port "$PORT" \
   --server.address 0.0.0.0 \
+  --server.enableCORS false \
+  --server.enableXsrfProtection false \
   --server.headless true \
   --server.runOnSave false \
   --server.fileWatcherType none \
