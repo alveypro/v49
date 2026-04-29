@@ -43,7 +43,10 @@ echo "[consistency] host=${DEPLOY_HOST} app=${REMOTE_APP_DIR}"
 echo "[consistency] checking canonical files..."
 
 run_ssh() {
-  AIRIVO_REMOTE_TARGET="$DEPLOY_HOST" AIRIVO_REMOTE_PASS="$DEPLOY_PASS" airivo_remote_exec_ssh "$1"
+  AIRIVO_REMOTE_TARGET="$DEPLOY_HOST" \
+  AIRIVO_REMOTE_PASS="$DEPLOY_PASS" \
+  AIRIVO_REMOTE_KEY="${AIRIVO_REMOTE_KEY:-}" \
+  airivo_remote_exec_ssh "$1" </dev/null
 }
 
 fail=0

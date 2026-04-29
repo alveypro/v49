@@ -88,7 +88,8 @@ msg "changed=${#CHANGED_FILES[@]} deleted=${#DELETED_FILES[@]}"
 run_remote_ssh() {
   AIRIVO_REMOTE_TARGET="$DEPLOY_HOST" \
   AIRIVO_REMOTE_PASS="$DEPLOY_PASS" \
-  airivo_remote_exec_ssh "$1"
+  AIRIVO_REMOTE_KEY="${AIRIVO_REMOTE_KEY:-}" \
+  airivo_remote_exec_ssh "$1" </dev/null
 }
 
 run_remote_scp() {

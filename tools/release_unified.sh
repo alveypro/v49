@@ -32,10 +32,7 @@ fi
 
 HEAD_SHORT="$(git rev-parse --short HEAD)"
 msg "release start: branch=${BRANCH} commit=${HEAD_SHORT}"
-msg "step 1/2: push+deploy (local->github + local->server)"
-bash tools/sync_dual_safe.sh
-
-msg "step 2/2: consistency check (local == server canonical files)"
-bash tools/check_local_server_consistency.sh
+msg "step 1/1: canonical mainline release"
+bash tools/release_airivo_mainline.sh
 
 msg "release success: commit=${HEAD_SHORT}"
