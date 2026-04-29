@@ -4,9 +4,12 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-DEPLOY_HOST="${DEPLOY_HOST:-root@47.90.160.87}"
-DEPLOY_PASS="${DEPLOY_PASS:-}"
-REMOTE_APP_DIR="${REMOTE_APP_DIR:-/opt/openclaw/app}"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/tools/lib/remote_access.sh"
+
+DEPLOY_HOST="${DEPLOY_HOST:-$AIRIVO_REMOTE_TARGET}"
+DEPLOY_PASS="${DEPLOY_PASS:-$AIRIVO_REMOTE_PASS}"
+REMOTE_APP_DIR="${REMOTE_APP_DIR:-$AIRIVO_REMOTE_APP_DIR}"
 
 FILES=(
   "v49_app.py"
@@ -40,11 +43,7 @@ echo "[consistency] host=${DEPLOY_HOST} app=${REMOTE_APP_DIR}"
 echo "[consistency] checking canonical files..."
 
 run_ssh() {
-  if [[ -n "$DEPLOY_PASS" ]]; then
-    sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no "$DEPLOY_HOST" "$1"
-  else
-    ssh -o StrictHostKeyChecking=no "$DEPLOY_HOST" "$1"
-  fi
+  AIRIVO_REMOTE_TARGET="$DEPLOY_HOST" AIRIVO_REMOTE_PASS="$DEPLOY_PASS" airivo_remote_exec_ssh "$1"
 }
 
 fail=0

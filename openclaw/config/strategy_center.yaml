@@ -1,30 +1,26 @@
-auto_apply_backtest_best: false
+auto_apply_backtest_best: true
 backtest_best_dir: logs/openclaw
-
-# 默认参数（会被最新 backtest sweep best 自动覆盖）
 runtime_defaults:
   v5:
-    score_threshold: 65
+    score_threshold: 70
     sample_size: 50
-    holding_days: 8
+    holding_days: 4
   v8:
-    score_threshold: 50
+    score_threshold: 45
     sample_size: 50
-    holding_days: 8
+    holding_days: 6
   v9:
     score_threshold: 65
-    sample_size: 50
-    holding_days: 8
-  combo:
-    score_threshold: 60
     sample_size: 80
     holding_days: 8
-
-# 策略中心风控线（覆盖 risk_thresholds.yaml 的对应策略阈值）
+  combo:
+    score_threshold: 65
+    sample_size: 50
+    holding_days: 6
 risk_overrides:
   v5:
     win_rate_min: 0.55
-    max_drawdown_max: 0.30
+    max_drawdown_max: 0.3
     signal_density_min: 0.05
   v8:
     win_rate_min: 0.35
@@ -38,15 +34,11 @@ risk_overrides:
     win_rate_min: 0.38
     max_drawdown_max: 0.35
     signal_density_min: 0.05
-
-# 多策略合并时可用（当前单策略运行时也会记录在 run_summary）
 strategy_weights:
-  v5: 0.40
-  combo: 0.30
-  v9: 0.20
-  v8: 0.10
-
-# 运行编排策略（partner_daily / 调度器）
+  v5: 0.3022
+  v8: 0.2189
+  v9: 0.2583
+  combo: 0.2205
 run_policy:
   default:
     timeout_sec: 900
@@ -69,31 +61,111 @@ run_policy:
     timeout_sec: 840
     sample_size: 80
     retry_on_no_picks: 0
-
 regression_gate:
   min_picks: 1
   max_scan_sec: 600
-
 health_gate:
   stale_run_hours_warn: 48
   stale_run_hours_fail: 96
-
 weekly_sweep:
-  min_weight: 0.10
+  min_weight: 0.1
   strategies:
     v5:
-      score_thresholds: [60, 65, 70]
-      sample_sizes: [30, 40, 50]
-      holding_days: [2, 3, 4, 5]
+      score_thresholds:
+      - 60
+      - 65
+      - 70
+      sample_sizes:
+      - 30
+      - 40
+      - 50
+      holding_days:
+      - 2
+      - 3
+      - 4
+      - 5
     v8:
-      score_thresholds: [45, 50, 55]
-      sample_sizes: [50, 80]
-      holding_days: [6, 8]
+      score_thresholds:
+      - 45
+      - 50
+      - 55
+      sample_sizes:
+      - 50
+      - 80
+      holding_days:
+      - 6
+      - 8
     v9:
-      score_thresholds: [60, 65, 70]
-      sample_sizes: [50, 80]
-      holding_days: [6, 8]
+      score_thresholds:
+      - 60
+      - 65
+      - 70
+      sample_sizes:
+      - 50
+      - 80
+      holding_days:
+      - 6
+      - 8
     combo:
-      score_thresholds: [55, 60, 65]
-      sample_sizes: [50, 80]
-      holding_days: [6, 8]
+      score_thresholds:
+      - 55
+      - 60
+      - 65
+      sample_sizes:
+      - 50
+      - 80
+      holding_days:
+      - 6
+      - 8
+last_weekly_sweep:
+  ts: '2026-04-26T16:13:59'
+  date_from: '2024-04-26'
+  date_to: '2026-04-26'
+  strategies:
+  - v5
+  - v8
+  - v9
+  - combo
+  failed: []
+  best_by_strategy:
+    v5:
+      score_threshold: 70
+      sample_size: 50
+      holding_days: 4
+      objective: 87.36999999999999
+      max_drawdown: 0.3
+      win_rate: 1.0
+      artifact_json: /Users/mac/2026Qlin/logs/openclaw/backtest_sweep_v5_20260426_095801.json
+    v8:
+      score_threshold: 45
+      sample_size: 50
+      holding_days: 6
+      objective: 51.385
+      max_drawdown: 0.2113
+      win_rate: 0.48979999999999996
+      artifact_json: /Users/mac/2026Qlin/logs/openclaw/backtest_sweep_v8_20260426_102555.json
+    v9:
+      score_threshold: 65
+      sample_size: 80
+      holding_days: 8
+      objective: 68.40814285714285
+      max_drawdown: 0.0330285714285715
+      win_rate: 0.5714285714285714
+      artifact_json: /Users/mac/2026Qlin/logs/openclaw/backtest_sweep_v9_20260426_132613.json
+    combo:
+      score_threshold: 65
+      sample_size: 50
+      holding_days: 6
+      objective: 52.05297897503285
+      max_drawdown: 0.11066701708278581
+      win_rate: 0.5
+      artifact_json: /Users/mac/2026Qlin/logs/openclaw/backtest_sweep_combo_20260426_161359.json
+strategy_governance:
+  lookback_days: 30
+  current_primary: v5
+  recommended_primary: v5
+  governance_action: observe
+  reason: insufficient_samples
+  by_strategy: {}
+  ranked: []
+  as_of: '2026-04-26T16:14:00'

@@ -21,6 +21,8 @@ import time
 import uuid
 import urllib.request
 
+from openclaw.runtime.root_dependency_bridge import load_notification_service_class
+
 
 JsonDict = Dict[str, Any]
 
@@ -132,8 +134,7 @@ class NotificationPublisher:
         """Use existing local NotificationService implementation."""
         config_file = str(self.config.get("legacy_config_file", "notification_config.json"))
         try:
-            from notification_service import NotificationService
-
+            NotificationService = load_notification_service_class()
             urgent = bool(payload.get("metadata", {}).get("risk_level") in {"orange", "red"})
             service = NotificationService(config_file=config_file)
             service.send_notification(

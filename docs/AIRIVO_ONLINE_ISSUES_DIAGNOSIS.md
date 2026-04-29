@@ -96,10 +96,17 @@ OPENCLAW_ROOT=/opt/airivo/app ./scripts/openclaw_data_update.sh
 | 组件 | 路径/服务 | 说明 |
 |------|----------|------|
 | v49 Streamlit | `start_v49_full.sh` → 8501 | 主策略 UI |
+| Stock API (5101) | `openclaw-stockapi.service` | 主入口问答/股票智能体后端 |
 | 数据更新 | `scripts/openclaw_data_update.sh` | 周一~五 17:10 |
 | Telegram 桥接 | `deploy_stock/telegram_bridge_bot.py` | 需 TELEGRAM_BOT_TOKEN |
 | Nginx 反向代理 | `deploy/nginx/airivo.online.streamlit.conf` | 代理 8501 |
 | DB | `/opt/airivo/data/permanent_stock_database.db` | 主数据库 |
+
+### 口径说明
+
+- `openclaw-qa-stock.service` 不是当前 5101 的正式服务名，不再作为主入口运维检查依据。
+- 当前 5101 正式服务名为：`openclaw-stockapi.service`
+- `/stock`、`/T12`、`/apex` 为其他系统入口，本节不以它们的服务名作为 `airivo.online` 主入口运维裁决依据。
 
 ---
 

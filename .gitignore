@@ -13,6 +13,7 @@ __pycache__/
 config.json
 notification_config.json
 .env
+.airivo-remote.env
 .DS_Store
 .streamlit/
 .pytest_cache/

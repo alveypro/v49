@@ -23,6 +23,16 @@ import logging
 import os
 from pathlib import Path
 
+from openclaw.runtime.root_dependency_bridge import (
+    load_notification_service_class,
+    load_v4_evaluator_class,
+    load_v5_evaluator_class,
+    load_v7_evaluator_class,
+    load_v8_evaluator_class,
+)
+from trading_kernel.schema import apply_trading_kernel_schema
+from trading_kernel.service import create_order, record_fill, run_eod_snapshot_and_reconcile, submit_order
+
 # 配置日志（优先写入 /opt/airivo/logs，可通过环境变量覆盖）
 _log_path = Path(os.getenv("TRADING_ASSISTANT_LOG_PATH", "/opt/airivo/logs/trading_assistant.log"))
 if not _log_path.parent.exists() or not os.access(str(_log_path.parent), os.W_OK):
@@ -40,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 # 导入通知服务
 try:
-    from notification_service import NotificationService
+    NotificationService = load_notification_service_class()
     NOTIFICATION_AVAILABLE = True
 except ImportError:
     logger.warning("⚠️ 通知服务模块未找到，通知功能将被禁用")
@@ -388,6 +398,11 @@ class TradingAssistant:
         
         conn.commit()
         conn.close()
+
+        kernel_conn = sqlite3.connect(self.db_path)
+        apply_trading_kernel_schema(kernel_conn)
+        kernel_conn.commit()
+        kernel_conn.close()
         
         # 初始化默认配置
         self._init_default_config()
@@ -433,6 +448,7 @@ class TradingAssistant:
             'market_cap_min': '5000000000',  # 50亿
             'market_cap_max': '100000000000',  # 1000亿
             'recommend_count': '5',
+            'default_account_id': 'default',
             'single_position_pct': '0.2',  # 单只20%
             'max_position_pct': '0.8',  # 最多80%仓位
             'take_profit_pct': '0.06',  # 6%止盈
@@ -482,6 +498,30 @@ class TradingAssistant:
         conn.close()
         
         logger.info(f"✅ 配置更新: {key} = {value}")
+
+    def _default_account_id(self) -> str:
+        value = self.get_config("default_account_id")
+        return value or "default"
+
+    def _current_trade_date(self) -> str:
+        return datetime.now().strftime("%Y%m%d")
+
+    def _current_display_date(self) -> str:
+        return datetime.now().strftime("%Y-%m-%d")
+
+    def run_eod_kernel_checks(self, snapshot_date: Optional[str] = None) -> Dict[str, Any]:
+        snap_date = snapshot_date or self._current_trade_date()
+        conn_main = sqlite3.connect(self.db_path)
+        try:
+            result = run_eod_snapshot_and_reconcile(
+                conn_main,
+                account_id=self._default_account_id(),
+                snapshot_date=snap_date,
+            )
+            conn_main.commit()
+            return result
+        finally:
+            conn_main.close()
     
     def daily_stock_scan(self, top_n: int = 5) -> List[Dict]:
         """
@@ -516,16 +556,16 @@ class TradingAssistant:
             }
 
             # 共识策略评分器
-            from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
+            ComprehensiveStockEvaluatorV4 = load_v4_evaluator_class()
             try:
-                from comprehensive_stock_evaluator_v5 import ComprehensiveStockEvaluatorV5
+                ComprehensiveStockEvaluatorV5 = load_v5_evaluator_class()
                 v5_ok = True
             except Exception:
                 ComprehensiveStockEvaluatorV5 = None
                 v5_ok = False
                 logger.warning("⚠️ v5评分器未找到，回退使用v4评分器")
-            from comprehensive_stock_evaluator_v7_ultimate import ComprehensiveStockEvaluatorV7Ultimate
-            from comprehensive_stock_evaluator_v8_ultimate import ComprehensiveStockEvaluatorV8Ultimate
+            ComprehensiveStockEvaluatorV7Ultimate = load_v7_evaluator_class()
+            ComprehensiveStockEvaluatorV8Ultimate = load_v8_evaluator_class()
 
             evaluator_v4 = ComprehensiveStockEvaluatorV4()
             evaluator_v5 = ComprehensiveStockEvaluatorV5() if v5_ok else evaluator_v4
@@ -992,48 +1032,67 @@ class TradingAssistant:
             score: 评分
             strategy: 策略
         """
-        # 获取股票名称
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM stock_basic WHERE ts_code = ?", (ts_code,))
-        result = cursor.fetchone()
-        conn.close()
-        
-        stock_name = result[0] if result else ''
-        
-        # 计算成本
+        stock_name = ''
         cost_total = buy_price * quantity
-        
-        # 保存到持仓表
-        conn = sqlite3.connect(self.assistant_db)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO holdings 
-            (ts_code, stock_name, buy_date, buy_price, quantity, cost_total, 
-             current_price, current_value, profit_loss, profit_loss_pct, 
-             status, strategy, score)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'holding', ?, ?)
-        """, (
-            ts_code, stock_name, datetime.now().strftime('%Y-%m-%d'),
-            buy_price, quantity, cost_total, buy_price, cost_total, 
-            0.0, 0.0,  # 初始化profit_loss和profit_loss_pct为0
-            strategy, score
-        ))
-        
-        # 保存到交易记录
-        cursor.execute("""
-            INSERT INTO trade_history
-            (ts_code, stock_name, action, trade_date, price, quantity, amount, 
-             reason, strategy, score)
-            VALUES (?, ?, 'buy', ?, ?, ?, ?, '手动买入', ?, ?)
-        """, (
-            ts_code, stock_name, datetime.now().strftime('%Y-%m-%d'),
-            buy_price, quantity, cost_total, strategy, score
-        ))
-        
-        conn.commit()
-        conn.close()
+        display_date = self._current_display_date()
+        trade_date = self._current_trade_date()
+
+        conn_main = sqlite3.connect(self.db_path)
+        conn_assistant = sqlite3.connect(self.assistant_db)
+        try:
+            cursor_main = conn_main.cursor()
+            cursor_main.execute("SELECT name FROM stock_basic WHERE ts_code = ?", (ts_code,))
+            result = cursor_main.fetchone()
+            stock_name = result[0] if result else ''
+
+            order_id = create_order(
+                conn_main,
+                account_id=self._default_account_id(),
+                ts_code=ts_code,
+                side='buy',
+                trade_date=trade_date,
+                order_qty=quantity,
+                order_price=buy_price,
+                intent_source='manual',
+                reason='手动买入',
+                decision_date=trade_date,
+            )
+            submit_order(conn_main, order_id)
+            record_fill(conn_main, order_id, trade_date, buy_price, quantity, commission=0.0)
+
+            cursor = conn_assistant.cursor()
+            cursor.execute("""
+                INSERT INTO holdings 
+                (ts_code, stock_name, buy_date, buy_price, quantity, cost_total, 
+                 current_price, current_value, profit_loss, profit_loss_pct, 
+                 status, strategy, score)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'holding', ?, ?)
+            """, (
+                ts_code, stock_name, display_date,
+                buy_price, quantity, cost_total, buy_price, cost_total, 
+                0.0, 0.0,
+                strategy, score
+            ))
+
+            cursor.execute("""
+                INSERT INTO trade_history
+                (ts_code, stock_name, action, trade_date, price, quantity, amount, 
+                 reason, strategy, score)
+                VALUES (?, ?, 'buy', ?, ?, ?, ?, '手动买入', ?, ?)
+            """, (
+                ts_code, stock_name, display_date,
+                buy_price, quantity, cost_total, strategy, score
+            ))
+
+            conn_main.commit()
+            conn_assistant.commit()
+        except Exception:
+            conn_main.rollback()
+            conn_assistant.rollback()
+            raise
+        finally:
+            conn_main.close()
+            conn_assistant.close()
         
         logger.info(f"✅ 添加持仓: {stock_name}({ts_code}), {quantity}股 @ ¥{buy_price}")
         self._record_learning_event(
@@ -1056,6 +1115,7 @@ class TradingAssistant:
         logger.info("🔄 更新持仓信息...")
         
         conn_assistant = sqlite3.connect(self.assistant_db)
+        conn_main = sqlite3.connect(self.db_path)
         holdings = pd.read_sql_query(
             "SELECT * FROM holdings WHERE status = 'holding'",
             conn_assistant
@@ -1064,65 +1124,101 @@ class TradingAssistant:
         if holdings.empty:
             logger.info("📊 当前无持仓")
             conn_assistant.close()
+            conn_main.close()
             self._record_learning_event(
                 module="portfolio_management",
                 event_type="holdings_empty",
                 payload={"holding_count": 0},
             )
             return
-        
-        # 获取最新价格
-        conn_main = sqlite3.connect(self.db_path)
-        
+
+        kernel_positions = pd.read_sql_query(
+            """
+            SELECT
+                ts_code,
+                SUM(remaining_qty) AS quantity,
+                CASE
+                    WHEN SUM(remaining_qty) > 0
+                    THEN SUM(remaining_qty * open_price) / SUM(remaining_qty)
+                    ELSE 0
+                END AS buy_price
+            FROM position_lots
+            WHERE account_id = ? AND status = 'open'
+            GROUP BY ts_code
+            """,
+            conn_main,
+            params=(self._default_account_id(),),
+        )
+        kernel_map = {
+            str(row["ts_code"]): {
+                "quantity": int(row["quantity"] or 0),
+                "buy_price": float(row["buy_price"] or 0.0),
+            }
+            for _, row in kernel_positions.iterrows()
+        }
+
+        cursor = conn_assistant.cursor()
         for idx, holding in holdings.iterrows():
-            ts_code = holding['ts_code']
-            
-            # 获取最新价格
-            latest_data = pd.read_sql_query(f"""
-                SELECT close_price FROM daily_trading_data
-                WHERE ts_code = '{ts_code}'
-                ORDER BY trade_date DESC
-                LIMIT 1
-            """, conn_main)
-            
-            if not latest_data.empty:
-                current_price = latest_data.iloc[0]['close_price']
-                current_value = current_price * holding['quantity']
-                profit_loss = current_value - holding['cost_total']
-                profit_loss_pct = profit_loss / holding['cost_total'] if holding['cost_total'] > 0 else 0
-                
-                # 更新数据库
-                cursor = conn_assistant.cursor()
+            ts_code = str(holding['ts_code'])
+            pos = kernel_map.get(ts_code)
+
+            if not pos or pos["quantity"] <= 0:
                 cursor.execute("""
-                    UPDATE holdings
-                    SET current_price = ?,
-                        current_value = ?,
-                        profit_loss = ?,
-                        profit_loss_pct = ?,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (current_price, current_value, profit_loss, 
-                     profit_loss_pct, holding['id']))
-                
-                conn_assistant.commit()
-                
-                logger.info(f"📊 {holding['stock_name']}: ¥{current_price:.2f}, "
-                          f"盈亏{profit_loss_pct*100:.2f}%")
-            else:
-                # 没有找到数据，确保字段不为None
-                logger.warning(f"⚠️ 未找到{holding['stock_name']}的最新数据")
-                cursor = conn_assistant.cursor()
-                cursor.execute("""
-                    UPDATE holdings
-                    SET current_price = COALESCE(current_price, buy_price),
-                        current_value = COALESCE(current_value, cost_total),
-                        profit_loss = COALESCE(profit_loss, 0),
-                        profit_loss_pct = COALESCE(profit_loss_pct, 0),
+                    UPDATE holdings 
+                    SET status = 'sold',
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 """, (holding['id'],))
-                conn_assistant.commit()
+                continue
+
+            latest_data = pd.read_sql_query(
+                """
+                SELECT close_price
+                FROM daily_trading_data
+                WHERE ts_code = ?
+                ORDER BY trade_date DESC
+                LIMIT 1
+                """,
+                conn_main,
+                params=(ts_code,),
+            )
+
+            current_price = (
+                float(latest_data.iloc[0]['close_price'])
+                if not latest_data.empty else float(pos["buy_price"])
+            )
+            quantity = int(pos["quantity"])
+            cost_total = round(float(pos["buy_price"]) * quantity, 2)
+            current_value = round(current_price * quantity, 2)
+            profit_loss = round(current_value - cost_total, 2)
+            profit_loss_pct = profit_loss / cost_total if cost_total > 0 else 0.0
+
+            cursor.execute("""
+                UPDATE holdings
+                SET buy_price = ?,
+                    quantity = ?,
+                    cost_total = ?,
+                    current_price = ?,
+                    current_value = ?,
+                    profit_loss = ?,
+                    profit_loss_pct = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (
+                float(pos["buy_price"]),
+                quantity,
+                cost_total,
+                current_price,
+                current_value,
+                profit_loss,
+                profit_loss_pct,
+                holding['id'],
+            ))
+
+            logger.info(f"📊 {holding['stock_name']}: ¥{current_price:.2f}, "
+                      f"盈亏{profit_loss_pct*100:.2f}%")
         
+        conn_assistant.commit()
         conn_main.close()
         conn_assistant.close()
         
@@ -1222,10 +1318,15 @@ class TradingAssistant:
         conn = sqlite3.connect(self.assistant_db)
         cursor = conn.cursor()
         
-        # 获取持仓信息
         cursor.execute("""
-            SELECT * FROM holdings 
+            SELECT
+                ts_code,
+                MAX(stock_name) AS stock_name,
+                SUM(COALESCE(quantity, 0)) AS quantity,
+                SUM(COALESCE(cost_total, 0)) AS cost_total
+            FROM holdings 
             WHERE ts_code = ? AND status = 'holding'
+            GROUP BY ts_code
         """, (ts_code,))
         
         holding = cursor.fetchone()
@@ -1235,47 +1336,70 @@ class TradingAssistant:
             conn.close()
             return
         
-        # 计算盈亏
-        quantity = holding[5]  # quantity字段
-        cost_total = holding[6]  # cost_total字段
+        quantity = int(holding[2] or 0)
+        cost_total = float(holding[3] or 0)
         sell_amount = sell_price * quantity
         profit_loss = sell_amount - cost_total
-        profit_loss_pct = profit_loss / cost_total
+        profit_loss_pct = profit_loss / cost_total if cost_total > 0 else 0.0
+        display_date = self._current_display_date()
+        trade_date = self._current_trade_date()
+
+        conn_main = sqlite3.connect(self.db_path)
+        try:
+            order_id = create_order(
+                conn_main,
+                account_id=self._default_account_id(),
+                ts_code=ts_code,
+                side='sell',
+                trade_date=trade_date,
+                order_qty=quantity,
+                order_price=sell_price,
+                intent_source='manual',
+                reason=reason,
+                decision_date=trade_date,
+            )
+            submit_order(conn_main, order_id)
+            record_fill(conn_main, order_id, trade_date, sell_price, quantity, commission=0.0, stamp_duty=0.0)
+
+            cursor.execute("""
+                UPDATE holdings
+                SET status = 'sold',
+                    current_price = ?,
+                    current_value = ?,
+                    profit_loss = ?,
+                    profit_loss_pct = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE ts_code = ? AND status = 'holding'
+            """, (sell_price, sell_amount, profit_loss, profit_loss_pct, ts_code))
+
+            cursor.execute("""
+                INSERT INTO trade_history
+                (ts_code, stock_name, action, trade_date, price, quantity, amount,
+                 reason, profit_loss, profit_loss_pct, strategy)
+                VALUES (?, ?, 'sell', ?, ?, ?, ?, ?, ?, ?, 'v4.0')
+            """, (
+                ts_code, holding[1], display_date,
+                sell_price, quantity, sell_amount, reason, profit_loss, profit_loss_pct
+            ))
+
+            conn_main.commit()
+            conn.commit()
+        except Exception:
+            conn_main.rollback()
+            conn.rollback()
+            raise
+        finally:
+            conn_main.close()
+            conn.close()
         
-        # 更新持仓状态
-        cursor.execute("""
-            UPDATE holdings
-            SET status = 'sold',
-                current_price = ?,
-                current_value = ?,
-                profit_loss = ?,
-                profit_loss_pct = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE ts_code = ? AND status = 'holding'
-        """, (sell_price, sell_amount, profit_loss, profit_loss_pct, ts_code))
-        
-        # 记录交易
-        cursor.execute("""
-            INSERT INTO trade_history
-            (ts_code, stock_name, action, trade_date, price, quantity, amount,
-             reason, profit_loss, profit_loss_pct, strategy)
-            VALUES (?, ?, 'sell', ?, ?, ?, ?, ?, ?, ?, 'v4.0')
-        """, (
-            ts_code, holding[2], datetime.now().strftime('%Y-%m-%d'),
-            sell_price, quantity, sell_amount, reason, profit_loss, profit_loss_pct
-        ))
-        
-        conn.commit()
-        conn.close()
-        
-        logger.info(f"✅ 卖出成功: {holding[2]}({ts_code}), "
+        logger.info(f"✅ 卖出成功: {holding[1]}({ts_code}), "
                    f"盈亏{profit_loss_pct*100:.2f}%")
         self._record_learning_event(
             module="trade_history",
             event_type="sell_recorded",
             payload={
                 "action": "sell",
-                "stock_name": holding[2],
+                "stock_name": holding[1],
                 "price": float(sell_price),
                 "quantity": int(quantity),
                 "sell_amount": float(sell_amount),

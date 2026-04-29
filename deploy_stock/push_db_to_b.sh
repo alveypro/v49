@@ -35,5 +35,4 @@ if [ -n "$latest_summary" ] && [ -f "$latest_summary" ]; then
   scp "${SSH_OPTS[@]}" "$latest_summary" "${DST_HOST}:${DST_SUMMARY_DIR}/$(basename "$latest_summary")"
 fi
 
-ssh "${SSH_OPTS[@]}" "$DST_HOST" "systemctl restart openclaw-qa-stock.service && systemctl is-active openclaw-qa-stock.service"
-
+ssh "${SSH_OPTS[@]}" "$DST_HOST" "systemctl restart openclaw-stockapi.service && systemctl is-active openclaw-stockapi.service"

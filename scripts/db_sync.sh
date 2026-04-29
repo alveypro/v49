@@ -2,12 +2,14 @@
 set -euo pipefail
 
 OPENCLAW_ROOT="${OPENCLAW_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+# shellcheck disable=SC1091
+source "$OPENCLAW_ROOT/tools/lib/remote_access.sh"
 LOCAL_DB="${LOCAL_DB:-$OPENCLAW_ROOT/permanent_stock_database.db}"
 BACKUP_DB="${BACKUP_DB:-$OPENCLAW_ROOT/permanent_stock_database.backup.db}"
 REMOTE_DB="${REMOTE_DB:-/opt/openclaw/permanent_stock_database.db}"
-REMOTE_HOST="${REMOTE_HOST:-root@47.90.160.87}"
-SSH_KEY="${SSH_KEY:-}"
-SSH_PASS="${SSH_PASS:-}"
+REMOTE_HOST="${REMOTE_HOST:-$AIRIVO_REMOTE_TARGET}"
+SSH_KEY="${SSH_KEY:-$AIRIVO_REMOTE_KEY}"
+SSH_PASS="${SSH_PASS:-$AIRIVO_REMOTE_PASS}"
 LOG_DIR="$OPENCLAW_ROOT/logs"
 LOG_FILE="$LOG_DIR/db_sync.log"
 LOCK_DIR="$LOG_DIR/.db_sync.lock"
@@ -36,28 +38,21 @@ sqlite3 "$LOCAL_DB" ".backup $BACKUP_DB"
 sqlite3 "$BACKUP_DB" "PRAGMA quick_check;" >> "$LOG_FILE" 2>&1
 
 # Incremental rsync transfer
-SSH_OPTS="-o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new"
-if [ -n "$SSH_KEY" ]; then
-  SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
-fi
-
 REMOTE_TMP="${REMOTE_DB}.sync_tmp"
 REMOTE_DIR="$(dirname "$REMOTE_DB")"
 
 run_ssh() {
-  if [ -n "$SSH_PASS" ]; then
-    sshpass -p "$SSH_PASS" ssh $SSH_OPTS "$REMOTE_HOST" "$1"
-  else
-    ssh $SSH_OPTS "$REMOTE_HOST" "$1"
-  fi
+  AIRIVO_REMOTE_TARGET="$REMOTE_HOST" \
+  AIRIVO_REMOTE_PASS="$SSH_PASS" \
+  AIRIVO_REMOTE_KEY="$SSH_KEY" \
+  airivo_remote_exec_ssh "$1"
 }
 
 run_rsync() {
-  if [ -n "$SSH_PASS" ]; then
-    sshpass -p "$SSH_PASS" rsync -avz --inplace -e "ssh $SSH_OPTS" "$BACKUP_DB" "$REMOTE_HOST:$REMOTE_TMP" >> "$LOG_FILE" 2>&1
-  else
-    rsync -avz --inplace -e "ssh $SSH_OPTS" "$BACKUP_DB" "$REMOTE_HOST:$REMOTE_TMP" >> "$LOG_FILE" 2>&1
-  fi
+  AIRIVO_REMOTE_TARGET="$REMOTE_HOST" \
+  AIRIVO_REMOTE_PASS="$SSH_PASS" \
+  AIRIVO_REMOTE_KEY="$SSH_KEY" \
+  airivo_remote_exec_rsync -avz --inplace "$BACKUP_DB" "$REMOTE_HOST:$REMOTE_TMP" >> "$LOG_FILE" 2>&1
 }
 
 if [ -n "$SSH_PASS" ]; then

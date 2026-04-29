@@ -4,6 +4,7 @@ import json
 
 import pandas as pd
 import streamlit as st
+from openclaw.runtime.root_dependency_bridge import load_notification_service_class
 
 from .helpers import build_notification_config, load_notification_config
 
@@ -390,7 +391,7 @@ def render_assistant_config_tab(assistant) -> None:
     with col2:
         if (enable_email or enable_wechat or enable_dingtalk) and st.button("发送测试通知", type="secondary"):
             try:
-                from notification_service import NotificationService
+                NotificationService = load_notification_service_class()
                 notifier = NotificationService()
                 test_message = """
                  智能交易助手测试通知

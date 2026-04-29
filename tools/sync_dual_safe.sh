@@ -4,12 +4,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# shellcheck disable=SC1091
+source "$ROOT_DIR/tools/lib/remote_access.sh"
+
 # -------- Config (override via env) --------
 REMOTE_NAME="${REMOTE_NAME:-origin}"
 REMOTE_BRANCH="${REMOTE_BRANCH:-main}"
-DEPLOY_HOST="${DEPLOY_HOST:-root@47.90.160.87}"
-DEPLOY_PASS="${DEPLOY_PASS:-}"
-REMOTE_APP_DIR="${REMOTE_APP_DIR:-/opt/openclaw/app}"
+DEPLOY_HOST="${DEPLOY_HOST:-$AIRIVO_REMOTE_TARGET}"
+DEPLOY_PASS="${DEPLOY_PASS:-$AIRIVO_REMOTE_PASS}"
+REMOTE_APP_DIR="${REMOTE_APP_DIR:-$AIRIVO_REMOTE_APP_DIR}"
 REMOTE_SERVICE="${REMOTE_SERVICE:-openclaw-streamlit.service}"
 REMOTE_HEALTH_URL="${REMOTE_HEALTH_URL:-http://127.0.0.1:8501/_stcore/health}"
 ALLOW_DIRTY="${ALLOW_DIRTY:-0}"     # 0: block on dirty tree, 1: allow (still deploys committed HEAD only)
@@ -82,23 +85,28 @@ fi
 
 msg "changed=${#CHANGED_FILES[@]} deleted=${#DELETED_FILES[@]}"
 
-SSH_BASE=(ssh -o StrictHostKeyChecking=no "$DEPLOY_HOST")
-SCP_BASE=(scp -o StrictHostKeyChecking=no)
-if [[ -n "$DEPLOY_PASS" ]]; then
-  SSH_BASE=(sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no "$DEPLOY_HOST")
-  SCP_BASE=(sshpass -p "$DEPLOY_PASS" scp -o StrictHostKeyChecking=no)
-fi
+run_remote_ssh() {
+  AIRIVO_REMOTE_TARGET="$DEPLOY_HOST" \
+  AIRIVO_REMOTE_PASS="$DEPLOY_PASS" \
+  airivo_remote_exec_ssh "$1"
+}
+
+run_remote_scp() {
+  AIRIVO_REMOTE_TARGET="$DEPLOY_HOST" \
+  AIRIVO_REMOTE_PASS="$DEPLOY_PASS" \
+  airivo_remote_exec_scp "$@"
+}
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 REMOTE_BACKUP_DIR="$REMOTE_APP_DIR/backups/manual_sync_$TIMESTAMP"
 msg "creating remote backup dir: $REMOTE_BACKUP_DIR"
-"${SSH_BASE[@]}" "set -e; mkdir -p \"$REMOTE_BACKUP_DIR\""
+run_remote_ssh "set -e; mkdir -p \"$REMOTE_BACKUP_DIR\""
 
 backup_remote_file() {
   local rel="$1"
   local remote_file="$REMOTE_APP_DIR/$rel"
   local backup_file="$REMOTE_BACKUP_DIR/$rel"
-  "${SSH_BASE[@]}" "set -e;
+  run_remote_ssh "set -e;
     if [ -e \"$remote_file\" ]; then
       mkdir -p \"\$(dirname \"$backup_file\")\";
       cp -a \"$remote_file\" \"$backup_file\";
@@ -112,14 +120,14 @@ deploy_one_file() {
   git show "$LOCAL_HEAD:$rel" > "$tmp_file"
 
   local remote_file="$REMOTE_APP_DIR/$rel"
-  "${SSH_BASE[@]}" "set -e; mkdir -p \"\$(dirname \"$remote_file\")\""
-  "${SCP_BASE[@]}" "$tmp_file" "$DEPLOY_HOST:$remote_file"
+  run_remote_ssh "set -e; mkdir -p \"\$(dirname \"$remote_file\")\""
+  run_remote_scp "$tmp_file" "$DEPLOY_HOST:$remote_file"
 
   # Keep executable bit for scripts.
   local mode
   mode="$(git ls-tree "$LOCAL_HEAD" -- "$rel" | awk '{print $1}')"
   if [[ "$mode" == "100755" ]]; then
-    "${SSH_BASE[@]}" "chmod +x \"$remote_file\""
+    run_remote_ssh "chmod +x \"$remote_file\""
   fi
 
   rm -f "$tmp_file"
@@ -129,7 +137,7 @@ verify_one_file() {
   local rel="$1"
   local local_sha remote_sha
   local_sha="$(git show "$LOCAL_HEAD:$rel" | "$HASH_CMD" | awk '{print $1}')"
-  remote_sha="$("${SSH_BASE[@]}" "if command -v sha1sum >/dev/null 2>&1; then sha1sum \"$REMOTE_APP_DIR/$rel\"; else shasum \"$REMOTE_APP_DIR/$rel\"; fi | awk '{print \$1}'")"
+  remote_sha="$(run_remote_ssh "if command -v sha1sum >/dev/null 2>&1; then sha1sum \"$REMOTE_APP_DIR/$rel\"; else shasum \"$REMOTE_APP_DIR/$rel\"; fi | awk '{print \$1}'")"
   [[ "$local_sha" == "$remote_sha" ]] || die "hash mismatch: $rel local=$local_sha remote=$remote_sha"
 }
 
@@ -150,7 +158,7 @@ done
 # 3) Delete removed files on server (after backup)
 for f in ${DELETED_FILES[@]+"${DELETED_FILES[@]}"}; do
   msg "delete $f"
-  "${SSH_BASE[@]}" "rm -f \"$REMOTE_APP_DIR/$f\""
+  run_remote_ssh "rm -f \"$REMOTE_APP_DIR/$f\""
 done
 
 # 4) Verify hashes for deployed files
@@ -160,10 +168,10 @@ done
 
 if [[ "$RESTART_SERVICE" == "1" ]]; then
   msg "restarting service: $REMOTE_SERVICE"
-  "${SSH_BASE[@]}" "set -e; systemctl restart \"$REMOTE_SERVICE\"; sleep 2; systemctl is-active \"$REMOTE_SERVICE\""
+  run_remote_ssh "set -e; systemctl restart \"$REMOTE_SERVICE\"; sleep 2; systemctl is-active \"$REMOTE_SERVICE\""
 
   msg "health check: $REMOTE_HEALTH_URL"
-  HEALTH="$("${SSH_BASE[@]}" "curl -sS --max-time 10 \"$REMOTE_HEALTH_URL\" || true")"
+  HEALTH="$(run_remote_ssh "curl -sS --max-time 10 \"$REMOTE_HEALTH_URL\" || true")"
   if [[ "$HEALTH" != *"ok"* ]]; then
     die "health check failed: $HEALTH"
   fi

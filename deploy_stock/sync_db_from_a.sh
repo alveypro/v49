@@ -21,6 +21,5 @@ chmod 644 "$DST"
 # Optional: quick sanity check
 sqlite3 "$DST" ".tables" | grep -Eq "stock_basic|daily_trading_data"
 
-# Reload qa service to pick newest DB.
-systemctl restart openclaw-qa-stock.service
-
+# Reload stock API service to pick newest DB.
+systemctl restart openclaw-stockapi.service

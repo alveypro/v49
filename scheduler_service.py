@@ -13,8 +13,10 @@ import json
 import os
 from pathlib import Path
 from trading_assistant import TradingAssistant
-from notification_service import NotificationService
 from openclaw.assistant import OpenClawStockAssistant
+from openclaw.runtime.root_dependency_bridge import load_notification_service_class
+
+NotificationService = load_notification_service_class()
 
 # 配置日志
 logging.basicConfig(
@@ -26,6 +28,21 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+def _format_kernel_check_message(result: dict) -> str:
+    snapshot = (result or {}).get("snapshot") or {}
+    reconcile = (result or {}).get("reconcile") or {}
+    issues = reconcile.get("issues") or []
+    lines = [
+        f"snapshot_date={snapshot.get('snapshot_date', '')}",
+        f"rows_upserted={snapshot.get('rows_upserted', 0)}",
+        f"reconcile_ok={reconcile.get('ok', False)}",
+        f"issue_count={len(issues)}",
+    ]
+    for item in issues[:5]:
+        lines.append(f"- {item.get('type', 'unknown')}: {json.dumps(item, ensure_ascii=False)}")
+    return "\n".join(lines)
 
 
 class SchedulerService:
@@ -125,6 +142,18 @@ class SchedulerService:
         logger.info("="*80)
         
         try:
+            kernel_result = self.assistant.run_eod_kernel_checks()
+            reconcile = kernel_result.get("reconcile") or {}
+            if not reconcile.get("ok", False):
+                self.notifier.send_notification(
+                    title="⚠️ 交易内核对账异常",
+                    content=_format_kernel_check_message(kernel_result),
+                    urgent=True
+                )
+                logger.warning("⚠️ 交易内核对账发现异常")
+            else:
+                logger.info("✅ 交易内核快照与对账通过")
+
             # 生成报告
             report = self.assistant.generate_daily_report()
             logger.info("✅ 报告生成完成")

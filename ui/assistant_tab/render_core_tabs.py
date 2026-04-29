@@ -8,7 +8,16 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import streamlit as st
-from risk_params import get_strategy_risk_params, normalize_strategy_name
+from openclaw.runtime.root_dependency_bridge import (
+    load_risk_params_helpers,
+    load_v4_evaluator_class,
+    load_v5_evaluator_class,
+    load_v6_evaluator_class,
+    load_v7_evaluator_class,
+    load_v8_evaluator_class,
+)
+
+get_strategy_risk_params, normalize_strategy_name = load_risk_params_helpers()
 
 from .cache import (
     cached_assistant_daily_recs,
@@ -425,24 +434,19 @@ def _evaluate_single_stock_by_strategy(
 ) -> Dict[str, Any]:
     strategy = strategy.lower().strip()
     if strategy == "v4":
-        from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
-
+        ComprehensiveStockEvaluatorV4 = load_v4_evaluator_class()
         result = ComprehensiveStockEvaluatorV4().evaluate_stock_v4(stock_data)
     elif strategy == "v5":
-        from comprehensive_stock_evaluator_v5 import ComprehensiveStockEvaluatorV5
-
+        ComprehensiveStockEvaluatorV5 = load_v5_evaluator_class()
         result = ComprehensiveStockEvaluatorV5().evaluate_stock_v4(stock_data)
     elif strategy == "v6":
-        from comprehensive_stock_evaluator_v6 import ComprehensiveStockEvaluatorV6
-
+        ComprehensiveStockEvaluatorV6 = load_v6_evaluator_class()
         result = ComprehensiveStockEvaluatorV6().evaluate_stock_v6(stock_data, ts_code)
     elif strategy == "v7":
-        from comprehensive_stock_evaluator_v7_ultimate import ComprehensiveStockEvaluatorV7Ultimate
-
+        ComprehensiveStockEvaluatorV7Ultimate = load_v7_evaluator_class()
         result = ComprehensiveStockEvaluatorV7Ultimate(db_path).evaluate_stock_v7(stock_data, ts_code, industry)
     elif strategy == "v8":
-        from comprehensive_stock_evaluator_v8_ultimate import ComprehensiveStockEvaluatorV8Ultimate
-
+        ComprehensiveStockEvaluatorV8Ultimate = load_v8_evaluator_class()
         result = ComprehensiveStockEvaluatorV8Ultimate(db_path).evaluate_stock_v8(
             stock_data, ts_code=ts_code, index_data=index_data, industry=industry
         )

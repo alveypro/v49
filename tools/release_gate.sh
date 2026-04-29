@@ -15,12 +15,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# shellcheck disable=SC1091
+source "$ROOT_DIR/tools/lib/remote_access.sh"
+
 ROUNDS=3
 SKIP_REMOTE=false
-REMOTE_HOST="${REMOTE_HOST:-root@47.90.160.87}"
-REMOTE_APP_DIR="${REMOTE_APP_DIR:-/opt/openclaw/app}"
-SSH_KEY="${SSH_KEY:-}"
-SSH_PASS="${SSH_PASS:-}"
+REMOTE_HOST="${REMOTE_HOST:-$AIRIVO_REMOTE_TARGET}"
+REMOTE_APP_DIR="${REMOTE_APP_DIR:-$AIRIVO_REMOTE_APP_DIR}"
+SSH_KEY="${SSH_KEY:-$AIRIVO_REMOTE_KEY}"
+SSH_PASS="${SSH_PASS:-$AIRIVO_REMOTE_PASS}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -60,15 +63,11 @@ if [[ "$SKIP_REMOTE" == "true" ]]; then
   log "  服务器: 跳过 (--skip-remote)"
   SERVER_SHORT="(跳过)"
 else
-  _ssh_opts="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
-  [[ -n "$SSH_KEY" ]] && _ssh_opts="$_ssh_opts -i $SSH_KEY"
-
   _run_ssh() {
-    if [[ -n "$SSH_PASS" ]]; then
-      sshpass -p "$SSH_PASS" ssh $_ssh_opts "$REMOTE_HOST" "$1"
-    else
-      ssh $_ssh_opts "$REMOTE_HOST" "$1"
-    fi
+    AIRIVO_REMOTE_TARGET="$REMOTE_HOST" \
+    AIRIVO_REMOTE_PASS="$SSH_PASS" \
+    AIRIVO_REMOTE_KEY="$SSH_KEY" \
+    airivo_remote_exec_ssh "$1"
   }
 
   SERVER_HASH="$(_run_ssh "cd '$REMOTE_APP_DIR' && git rev-parse HEAD 2>/dev/null" 2>/dev/null)" || true

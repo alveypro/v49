@@ -16,6 +16,7 @@ def default_center_config() -> JsonDict:
         "runtime_defaults": {},
         "risk_overrides": {},
         "strategy_weights": {},
+        "strategy_governance": {},
     }
 
 
@@ -138,6 +139,23 @@ def resolve_strategy_weight(strategy: str, center_config: JsonDict, default: flo
         return max(0.0, float(raw))
     except Exception:
         return float(default)
+
+
+def resolve_governance_recommendation(center_config: JsonDict) -> JsonDict:
+    gov = center_config.get("strategy_governance") if isinstance(center_config, dict) else {}
+    if not isinstance(gov, dict):
+        return {}
+    recommended = gov.get("recommended_primary")
+    action = str(gov.get("governance_action", "") or "")
+    if not recommended or action not in {"promote_candidate", "degrade_primary", "keep_primary", "observe"}:
+        return {}
+    return {
+        "current_primary": str(gov.get("current_primary", "") or ""),
+        "recommended_primary": str(recommended),
+        "governance_action": action,
+        "reason": str(gov.get("reason", "") or ""),
+        "as_of": str(gov.get("as_of", "") or ""),
+    }
 
 
 def resolve_run_policy(strategy: str, center_config: JsonDict, default_timeout_sec: int = 900) -> JsonDict:

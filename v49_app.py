@@ -2,58 +2,24 @@
 # -*- coding: utf-8 -*-
 
 """
- 量价策略系统 v49.0 - 长期稳健版
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    真实数据验证·56.6%胜率·5天平均持仓约5天·年化10-15%
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Airivo Quant Decision System / v49 backend.
 
- v49.0 核心突破（基于2000只股票、274个真实信号验证）：
+This Streamlit application is the private operating console for A-share
+volume-price research, candidate generation, risk gating, execution feedback,
+and post-trade review.
 
-【 真实回测数据】
- 样本量：2000只股票
- 信号数：274个（充足）
- 胜率：56.6%（超过目标52%）⭐⭐⭐
- 平均持仓：4.9天（接近5天平均持仓约5天）
- 最大回撤：-3.27%（风险极小）
- 夏普比率：0.59（稳健）
+Important boundaries:
+- Outputs are research and decision-support artifacts, not investment advice.
+- Backtest metrics are diagnostic evidence, not live performance proof.
+- Stale data must downgrade the system to research mode.
+- Real execution feedback and realized outcomes are required before promotion.
 
-【 黄金策略参数（已验证）】
- 评分器：v4.0潜伏策略版
- 评分阈值：60分起（平衡点）
- 持仓周期：5天（数据验证最优）
- 止损：-3%（严格控制）
- 止盈：+4%（快速获利）
- 单只仓位：18-20%（最多5只）
-
-【 核心发现（数据揭示）】
-1.  5天持仓胜率最高53.3%！
-2.  止盈的100%赢（+7.90%）！
-3.  胜率>评分（持仓时间更重要）
-
-【 8维100分评分体系（v4.0潜伏策略）】
-1.  潜伏价值（20分）- 即将启动但未启动
-2.  底部特征（20分）- 价格低位+超跌反弹
-3.  量价配合（15分）- 温和放量+价升
-4.  MACD趋势（15分）- 金叉初期+能量柱递增
-5.  均线多头（10分）- 均线粘合+即将发散
-6.  主力行为（10分）- 大单流入+筹码集中
-7.  启动确认（5分）- 刚开始启动
-8.  涨停基因（5分）- 历史趋势延续能力
-
-【 功能模块（收敛为4个主Tab）】
- Tab1: 核心策略中心（生产策略+AI选股）
- Tab2: 研究与回测（股票池/板块热点/回测对比）
- Tab3: 智能交易助手（执行工作台）
- Tab4: 数据与系统（数据更新/健康检测/指南）
-
-【 版本信息】
-版本号：v49.0 长期稳健版
-发布日期：2025-12-19
-核心升级：集成v4.0评分器+5天平均持仓约5天+真实数据验证
-真实效果：胜率56.6%·年化10-15%·最大回撤<5%
-作者：AI量化专家
-状态： 2000只股票验证·274个真实信号·策略界面完全同步
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Primary workflow:
+1. Update local market data.
+2. Generate a small, explainable candidate pool.
+3. Apply risk gates and manual review.
+4. Record execution feedback.
+5. Refresh realized outcomes and weekly review.
 """
 
 import streamlit as st
@@ -89,6 +55,249 @@ from itertools import product
 from strategies.scan_pipeline import run_stock_scan_pipeline
 from strategies.registry import production_strategies, experimental_strategies
 from ui.assistant_tab import render_single_stock_eval_tab
+from openclaw.runtime.async_task_ui import (
+    mark_scan_submitted as runtime_mark_scan_submitted,
+    render_async_scan_status as runtime_render_async_scan_status,
+    render_async_task_dashboard as runtime_render_async_task_dashboard,
+    render_scan_param_hint as runtime_render_scan_param_hint,
+    scan_params_fingerprint as runtime_scan_params_fingerprint,
+    sync_scan_task_with_params as runtime_sync_scan_task_with_params,
+)
+from openclaw.runtime.async_task_state import (
+    async_backtest_log_paths as runtime_async_backtest_log_paths,
+    async_backtest_state_path as runtime_async_backtest_state_path,
+    async_scan_log_paths as runtime_async_scan_log_paths,
+    async_scan_state_path as runtime_async_scan_state_path,
+    cleanup_async_backtest_jobs as runtime_cleanup_async_backtest_jobs,
+    cleanup_async_scan_tasks as runtime_cleanup_async_scan_tasks,
+    get_async_backtest_job as runtime_get_async_backtest_job,
+    get_async_scan_task as runtime_get_async_scan_task,
+    is_pid_alive as runtime_is_pid_alive,
+    latest_async_backtest_run_id as runtime_latest_async_backtest_run_id,
+    latest_async_scan_run_id as runtime_latest_async_scan_run_id,
+    list_recent_async_backtest_jobs as runtime_list_recent_async_backtest_jobs,
+    list_recent_async_scan_tasks as runtime_list_recent_async_scan_tasks,
+    load_async_backtest_state as runtime_load_async_backtest_state,
+    load_async_scan_state as runtime_load_async_scan_state,
+    merge_async_backtest_job as runtime_merge_async_backtest_job,
+    merge_async_scan_task as runtime_merge_async_scan_task,
+    persist_async_scan_task as runtime_persist_async_scan_task,
+    prune_all_finished_async_tasks as runtime_prune_all_finished_async_tasks,
+    read_async_scan_df as runtime_read_async_scan_df,
+    recover_async_scan_task as runtime_recover_async_scan_task,
+    write_async_backtest_state as runtime_write_async_backtest_state,
+    write_async_scan_state as runtime_write_async_scan_state,
+)
+from openclaw.runtime.async_task_orchestration import (
+    launch_async_backtest_process as runtime_launch_async_backtest_process,
+    launch_async_scan_process as runtime_launch_async_scan_process,
+    restore_recent_async_task_refs as runtime_restore_recent_async_task_refs,
+    start_async_backtest_job as runtime_start_async_backtest_job,
+    start_async_scan_task as runtime_start_async_scan_task,
+)
+from openclaw.runtime.async_env import (
+    build_async_scan_env as runtime_build_async_scan_env,
+    temp_environ as runtime_temp_environ,
+)
+from openclaw.runtime.scan_ui import (
+    render_cached_scan_results as runtime_render_cached_scan_results,
+    render_front_scan_summary as runtime_render_front_scan_summary,
+)
+from openclaw.runtime.scan_cache import (
+    cache_dir as runtime_cache_dir,
+    find_recent_scan_cache as runtime_find_recent_scan_cache,
+    load_scan_cache as runtime_load_scan_cache,
+    load_scan_cache_meta_from_paths as runtime_load_scan_cache_meta_from_paths,
+    load_v7_cache as runtime_load_v7_cache,
+    save_scan_cache as runtime_save_scan_cache,
+    save_v7_cache as runtime_save_v7_cache,
+    scan_cache_key as runtime_scan_cache_key,
+    scan_cache_paths as runtime_scan_cache_paths,
+    v7_cache_key as runtime_v7_cache_key,
+    v7_cache_paths as runtime_v7_cache_paths,
+)
+from openclaw.runtime.airivo_execution_center import (
+    render_airivo_batch_manager as runtime_render_airivo_batch_manager,
+    render_airivo_execution_center as runtime_render_airivo_execution_center,
+    render_airivo_feedback_workbench as runtime_render_airivo_feedback_workbench,
+    render_airivo_today_execution_queues as runtime_render_airivo_today_execution_queues,
+)
+from openclaw.runtime.airivo_session import (
+    append_action_audit as runtime_append_action_audit,
+    guard_action as runtime_guard_action,
+    has_role as runtime_has_role,
+    request_headers as runtime_request_headers,
+    session_meta as runtime_session_meta,
+)
+from openclaw.runtime.scan_result_utils import (
+    add_reason_summary as runtime_add_reason_summary,
+    append_reason_col as runtime_append_reason_col,
+    apply_filter_mode as runtime_apply_filter_mode,
+    apply_filter_mode_with_rescue as runtime_apply_filter_mode_with_rescue,
+    apply_multi_period_filter as runtime_apply_multi_period_filter,
+    get_ts_code_col as runtime_get_ts_code_col,
+    render_result_overview as runtime_render_result_overview,
+    signal_density_hint as runtime_signal_density_hint,
+    standardize_result_df as runtime_standardize_result_df,
+)
+from openclaw.runtime.shared_utils import (
+    df_to_csv_bytes as runtime_df_to_csv_bytes,
+    fmt_file_mtime as runtime_fmt_file_mtime,
+    now_text as runtime_now_text,
+    now_ts as runtime_now_ts,
+    safe_file_mtime as runtime_safe_file_mtime,
+    safe_parse_dt as runtime_safe_parse_dt,
+)
+from openclaw.runtime.backtest_policy import (
+    apply_portfolio_risk_budget as runtime_apply_portfolio_risk_budget,
+    apply_tradable_segment_to_strategy_session as runtime_apply_tradable_segment_to_strategy_session,
+    auto_backtest_scheduler_tick as runtime_auto_backtest_scheduler_tick,
+    build_calibrated_strength_df as runtime_build_calibrated_strength_df,
+    load_portfolio_risk_budget as runtime_load_portfolio_risk_budget,
+    pick_tradable_segment_from_strength as runtime_pick_tradable_segment_from_strength,
+)
+from openclaw.runtime.backtest_data_context import (
+    get_db_last_trade_date as runtime_get_db_last_trade_date,
+    load_backtest_history_df as runtime_load_backtest_history_df,
+    load_latest_production_backtest_audit as runtime_load_latest_production_backtest_audit,
+)
+from openclaw.runtime.dataframe_utils import (
+    ensure_price_aliases as runtime_ensure_price_aliases,
+    normalize_stock_df as runtime_normalize_stock_df,
+)
+from openclaw.runtime.history_context import (
+    batch_load_stock_histories as runtime_batch_load_stock_histories,
+    load_history_range_bulk as runtime_load_history_range_bulk,
+    load_stock_history as runtime_load_stock_history,
+    load_stock_history_bulk as runtime_load_stock_history_bulk,
+    load_strategy_center_scan_defaults as runtime_load_strategy_center_scan_defaults,
+)
+from openclaw.runtime.production_baseline import (
+    apply_production_baseline_to_session as runtime_apply_production_baseline_to_session,
+    build_unified_from_latest_evolve as runtime_build_unified_from_latest_evolve,
+    get_production_compare_params as runtime_get_production_compare_params,
+    production_baseline_params as runtime_production_baseline_params,
+    rollback_latest_promoted_params as runtime_rollback_latest_promoted_params,
+    save_production_unified_profile as runtime_save_production_unified_profile,
+    trigger_auto_evolve_optimize as runtime_trigger_auto_evolve_optimize,
+)
+from openclaw.services.airivo_feedback_service import (
+    apply_batch_feedback_action as service_apply_batch_feedback_action,
+    refresh_realized_outcomes as service_refresh_realized_outcomes,
+    update_feedback_row as service_update_feedback_row,
+)
+from openclaw.services.airivo_batch_service import (
+    archive_batch as service_archive_batch,
+    evaluate_batch_release_gate as service_evaluate_batch_release_gate,
+    get_canary_scope as service_get_canary_scope,
+    get_override_audits as service_get_override_audits,
+    get_release_outcome_review as service_get_release_outcome_review,
+    set_active_batch as service_set_active_batch,
+    set_canary_batch as service_set_canary_batch,
+)
+from openclaw.services.airivo_execution_read_service import (
+    bucket_feedback_rows as service_bucket_feedback_rows,
+    compare_queue_batches as service_compare_queue_batches,
+    feedback_bucket_summary as service_feedback_bucket_summary,
+    feedback_snapshot as service_feedback_snapshot,
+    latest_execution_queue as service_latest_execution_queue,
+    load_feedback_rows as service_load_feedback_rows,
+    load_queue_batch_rows as service_load_queue_batch_rows,
+    recent_execution_batches as service_recent_execution_batches,
+)
+from openclaw.services.airivo_dashboard_snapshot_service import (
+    data_freshness_snapshot as service_data_freshness_snapshot,
+    latest_candidate_snapshot as service_latest_candidate_snapshot,
+    parse_yyyymmdd as service_parse_yyyymmdd,
+    table_latest as service_table_latest,
+)
+from openclaw.services.airivo_artifact_service import (
+    get_auto_evolve_status as service_get_auto_evolve_status,
+    load_latest_production_promotion as service_load_latest_production_promotion,
+    load_latest_production_report as service_load_latest_production_report,
+    load_latest_tracking_scoreboard as service_load_latest_tracking_scoreboard,
+    load_production_report_by_strategy as service_load_production_report_by_strategy,
+    resolve_app_path as service_resolve_app_path,
+)
+from openclaw.services.evolution_artifact_service import (
+    load_evolve_params as service_load_evolve_params,
+)
+from openclaw.services.stock_pool_service import (
+    compute_forward_return_buckets as service_compute_forward_return_buckets,
+    compute_pool_performance as service_compute_pool_performance,
+    delete_stock_pool_snapshot as service_delete_stock_pool_snapshot,
+    extract_numeric_price as service_extract_numeric_price,
+    get_entry_prices_by_base_date as service_get_entry_prices_by_base_date,
+    list_stock_pool_meta as service_list_stock_pool_meta,
+    load_latest_stock_pool_snapshot as service_load_latest_stock_pool_snapshot,
+    load_stock_pool_performance as service_load_stock_pool_performance,
+    load_stock_pool_performance_detail as service_load_stock_pool_performance_detail,
+    load_stock_pool_snapshot as service_load_stock_pool_snapshot,
+    parse_pool_base_date as service_parse_pool_base_date,
+    pick_entry_price as service_pick_entry_price,
+    save_stock_pool_snapshot as service_save_stock_pool_snapshot,
+    summarize_stock_pool_signal_performance as service_summarize_stock_pool_signal_performance,
+)
+from openclaw.services.market_context_service import (
+    calc_external_bonus as service_calc_external_bonus,
+    get_latest_prices as service_get_latest_prices,
+    load_external_bonus_maps as service_load_external_bonus_maps,
+)
+from openclaw.services.market_data_service import (
+    canonical_ts_code as service_canonical_ts_code,
+    connect_permanent_db as service_connect_permanent_db,
+    expand_ts_code_keys as service_expand_ts_code_keys,
+    iter_sqlite_in_chunks as service_iter_sqlite_in_chunks,
+    load_candidate_stocks as service_load_candidate_stocks,
+    load_real_stock_data as service_load_real_stock_data,
+    safe_daily_table_name as service_safe_daily_table_name,
+    safe_float as service_safe_float,
+)
+from openclaw.services.sim_ledger_service import (
+    add_sim_auto_buy_log as service_add_sim_auto_buy_log,
+    add_sim_trade as service_add_sim_trade,
+    delete_sim_position as service_delete_sim_position,
+    get_sim_account as service_get_sim_account,
+    get_sim_auto_buy_enabled as service_get_sim_auto_buy_enabled,
+    get_sim_auto_buy_logs as service_get_sim_auto_buy_logs,
+    get_sim_auto_buy_max_total_amount as service_get_sim_auto_buy_max_total_amount,
+    get_sim_meta as service_get_sim_meta,
+    get_sim_positions as service_get_sim_positions,
+    get_sim_trades as service_get_sim_trades,
+    init_sim_db as service_init_sim_db,
+    reset_sim_account as service_reset_sim_account,
+    set_sim_auto_buy_enabled as service_set_sim_auto_buy_enabled,
+    set_sim_meta as service_set_sim_meta,
+    update_sim_account as service_update_sim_account,
+    upsert_sim_position as service_upsert_sim_position,
+)
+from openclaw.services.airivo_rebalance_service import (
+    auto_rebalance_scheduler_tick as service_auto_rebalance_scheduler_tick,
+    append_auto_rebalance_log as service_append_auto_rebalance_log,
+    append_production_rebalance_audit_log as service_append_production_rebalance_audit_log,
+    auto_rebalance_log_path as service_auto_rebalance_log_path,
+    compute_production_allocation_plan as service_compute_production_allocation_plan,
+    build_production_rebalance_orders as service_build_production_rebalance_orders,
+    build_weekly_rebalance_quality_dashboard as service_build_weekly_rebalance_quality_dashboard,
+    evaluate_production_rollback_trigger as service_evaluate_production_rollback_trigger,
+    execute_production_rebalance_orders as service_execute_production_rebalance_orders,
+    execute_production_auto_rollback as service_execute_production_auto_rollback,
+    load_latest_auto_rebalance_log as service_load_latest_auto_rebalance_log,
+    load_latest_production_rebalance_audit as service_load_latest_production_rebalance_audit,
+    load_latest_strategy_pool_candidates as service_load_latest_strategy_pool_candidates,
+    load_production_rollback_state as service_load_production_rollback_state,
+    load_recent_production_rebalance_audits as service_load_recent_production_rebalance_audits,
+    precheck_production_rebalance_orders as service_precheck_production_rebalance_orders,
+    production_rebalance_audit_log_path as service_production_rebalance_audit_log_path,
+    production_rollback_state_path as service_production_rollback_state_path,
+    production_strategy_health_multipliers as service_production_strategy_health_multipliers,
+    resolve_market_regime as service_resolve_market_regime,
+    run_auto_rebalance_pipeline as service_run_auto_rebalance_pipeline,
+    save_production_rollback_state as service_save_production_rollback_state,
+    score_production_rebalance_execution as service_score_production_rebalance_execution,
+    write_production_allocation_report as service_write_production_allocation_report,
+    write_production_rebalance_report as service_write_production_rebalance_report,
+)
 
 # 加载 .env 环境变量（Kimi API Key 等）
 try:
@@ -112,6 +321,57 @@ AUTO_EVOLVE_LOCK_PATH = os.getenv("AUTO_EVOLVE_LOCK_PATH", "/tmp/auto_evolve.loc
 ASYNC_SCAN_RESULT_DIR = os.path.join(os.path.dirname(__file__), "logs", "openclaw", "async_scan")
 ASYNC_SCAN_KEEP_SECONDS = int(os.getenv("OPENCLAW_ASYNC_SCAN_KEEP_SECONDS", "21600"))
 ASYNC_SCAN_WORKERS = max(1, int(os.getenv("OPENCLAW_ASYNC_SCAN_WORKERS", "1")))
+AIRIVO_ROLE_RANK = {"viewer": 1, "operator": 2, "admin": 3}
+AIRIVO_ACTION_AUDIT_LOG = os.getenv(
+    "AIRIVO_ACTION_AUDIT_LOG",
+    str(Path(os.getenv("AIRIVO_AUTH_AUDIT_LOG", "/var/log/airivo_auth_audit.jsonl")).with_name("airivo_action_audit.jsonl")),
+)
+
+
+def _airivo_request_headers() -> Dict[str, str]:
+    return runtime_request_headers()
+
+
+def _airivo_session_meta() -> Dict[str, str]:
+    return runtime_session_meta(AIRIVO_ROLE_RANK)
+
+
+def _airivo_has_role(required_role: str) -> bool:
+    return runtime_has_role(required_role, AIRIVO_ROLE_RANK)
+
+
+def _airivo_append_action_audit(
+    action: str,
+    ok: bool,
+    target: str = "",
+    detail: str = "",
+    reason: str = "",
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
+    runtime_append_action_audit(
+        action=action,
+        ok=ok,
+        role_rank=AIRIVO_ROLE_RANK,
+        audit_log_path=AIRIVO_ACTION_AUDIT_LOG,
+        fallback_log_path=str(Path(__file__).resolve().parent / "logs" / "openclaw" / "airivo_action_audit.jsonl"),
+        target=target,
+        detail=detail,
+        reason=reason,
+        extra=extra,
+    )
+
+
+def _airivo_guard_action(required_role: str, action: str, target: str = "", reason: str = "") -> bool:
+    return runtime_guard_action(
+        required_role=required_role,
+        action=action,
+        role_rank=AIRIVO_ROLE_RANK,
+        audit_log_path=AIRIVO_ACTION_AUDIT_LOG,
+        fallback_log_path=str(Path(__file__).resolve().parent / "logs" / "openclaw" / "airivo_action_audit.jsonl"),
+        target=target,
+        reason=reason,
+    )
+DEFAULT_ASYNC_SCAN_ENABLED = os.getenv("OPENCLAW_DEFAULT_ASYNC_SCAN", "1") != "0"
 STOCK_POOL_DIR = os.path.join(os.path.dirname(__file__), "logs", "openclaw", "stock_pool")
 _ASYNC_SCAN_TASKS: Dict[str, Dict[str, Any]] = {}
 _ASYNC_SCAN_LOCK = threading.Lock()
@@ -133,11 +393,11 @@ ASYNC_BACKTEST_KEEP_SECONDS = int(os.getenv("OPENCLAW_ASYNC_BACKTEST_KEEP_SECOND
 
 
 def _now_ts() -> float:
-    return time.time()
+    return runtime_now_ts()
 
 
 def _now_text() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return runtime_now_text()
 
 
 @lru_cache(maxsize=1)
@@ -170,73 +430,41 @@ def _get_build_fingerprint() -> Dict[str, str]:
 
 
 def _cleanup_async_scan_tasks() -> None:
-    now = _now_ts()
-    with _ASYNC_SCAN_LOCK:
-        stale_ids = []
-        for run_id, item in _ASYNC_SCAN_TASKS.items():
-            status = str(item.get("status", ""))
-            ended_at = float(item.get("ended_at", 0) or 0)
-            if status in {"success", "failed", "cancelled"} and ended_at > 0 and (now - ended_at) > ASYNC_SCAN_KEEP_SECONDS:
-                stale_ids.append(run_id)
-        for run_id in stale_ids:
-            task = _ASYNC_SCAN_TASKS.pop(run_id, {})
-            for k in ("result_csv", "meta_json", "state_json"):
-                p = task.get(k)
-                if isinstance(p, str) and p and os.path.exists(p):
-                    try:
-                        os.remove(p)
-                    except Exception:
-                        pass
+    runtime_cleanup_async_scan_tasks(
+        async_scan_tasks=_ASYNC_SCAN_TASKS,
+        async_scan_lock=_ASYNC_SCAN_LOCK,
+        keep_seconds=ASYNC_SCAN_KEEP_SECONDS,
+        now_ts=_now_ts(),
+    )
 
 
 def _get_async_scan_task(run_id: str) -> Optional[Dict[str, Any]]:
-    if not run_id:
-        return None
-    _cleanup_async_scan_tasks()
-    with _ASYNC_SCAN_LOCK:
-        item = _ASYNC_SCAN_TASKS.get(run_id)
-        if not item:
-            return None
-        return dict(item)
+    return runtime_get_async_scan_task(
+        run_id,
+        async_scan_tasks=_ASYNC_SCAN_TASKS,
+        async_scan_lock=_ASYNC_SCAN_LOCK,
+        keep_seconds=ASYNC_SCAN_KEEP_SECONDS,
+        now_ts=_now_ts(),
+    )
 
 
 def _load_async_scan_state(run_id: str) -> Dict[str, Any]:
-    state_path = _async_scan_state_path(run_id)
-    if not os.path.exists(state_path):
-        return {}
-    try:
-        with open(state_path, "r", encoding="utf-8") as f:
-            return json.load(f) or {}
-    except Exception:
-        return {}
+    return runtime_load_async_scan_state(run_id, ASYNC_SCAN_RESULT_DIR)
 
 
 def _write_async_scan_state(run_id: str, state: Dict[str, Any]) -> Dict[str, Any]:
-    os.makedirs(ASYNC_SCAN_RESULT_DIR, exist_ok=True)
-    state_path = _async_scan_state_path(run_id)
-    tmp_path = f"{state_path}.tmp"
-    payload = dict(state or {})
-    payload["run_id"] = run_id
-    payload["state_json"] = state_path
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    os.replace(tmp_path, state_path)
-    return payload
+    return runtime_write_async_scan_state(run_id, state, ASYNC_SCAN_RESULT_DIR)
 
 
 def _merge_async_scan_task(run_id: str, base: Optional[Dict[str, Any]] = None, **updates: Any) -> Dict[str, Any]:
-    merged: Dict[str, Any] = {}
-    if base:
-        merged.update(base)
-    else:
-        merged.update(_load_async_scan_state(run_id))
-    merged.update(updates)
-    merged = _write_async_scan_state(run_id, merged)
-    with _ASYNC_SCAN_LOCK:
-        current = dict(_ASYNC_SCAN_TASKS.get(run_id) or {})
-        current.update(merged)
-        _ASYNC_SCAN_TASKS[run_id] = current
-        return dict(current)
+    return runtime_merge_async_scan_task(
+        run_id,
+        base=base,
+        updates=updates,
+        async_scan_tasks=_ASYNC_SCAN_TASKS,
+        async_scan_lock=_ASYNC_SCAN_LOCK,
+        result_dir=ASYNC_SCAN_RESULT_DIR,
+    )
 
 
 def _update_async_scan_task(run_id: str, **updates: Any) -> None:
@@ -244,318 +472,82 @@ def _update_async_scan_task(run_id: str, **updates: Any) -> None:
 
 
 def _async_scan_state_path(run_id: str) -> str:
-    os.makedirs(ASYNC_SCAN_RESULT_DIR, exist_ok=True)
-    return os.path.join(ASYNC_SCAN_RESULT_DIR, f"{run_id}.state.json")
+    return runtime_async_scan_state_path(run_id, ASYNC_SCAN_RESULT_DIR)
 
 
 def _persist_async_scan_task(run_id: str) -> None:
-    try:
-        with _ASYNC_SCAN_LOCK:
-            item = dict(_ASYNC_SCAN_TASKS.get(run_id) or {})
-        if not item:
-            return
-        _write_async_scan_state(run_id, item)
-    except Exception:
-        pass
-
-
-def _is_pid_alive(pid: Any) -> bool:
-    try:
-        pid_int = int(pid or 0)
-    except Exception:
-        return False
-    if pid_int <= 0:
-        return False
-    try:
-        os.kill(pid_int, 0)
-        return True
-    except OSError:
-        return False
-
-
-def _async_backtest_state_path(run_id: str) -> str:
-    os.makedirs(ASYNC_BACKTEST_RESULT_DIR, exist_ok=True)
-    return os.path.join(ASYNC_BACKTEST_RESULT_DIR, f"{run_id}.state.json")
-
-
-def _load_async_backtest_state(run_id: str) -> Dict[str, Any]:
-    state_path = _async_backtest_state_path(run_id)
-    if not os.path.exists(state_path):
-        return {}
-    try:
-        with open(state_path, "r", encoding="utf-8") as f:
-            return json.load(f) or {}
-    except Exception:
-        return {}
-
-
-def _write_async_backtest_state(run_id: str, state: Dict[str, Any]) -> Dict[str, Any]:
-    os.makedirs(ASYNC_BACKTEST_RESULT_DIR, exist_ok=True)
-    state_path = _async_backtest_state_path(run_id)
-    tmp_path = f"{state_path}.tmp"
-    payload = dict(state or {})
-    payload["run_id"] = run_id
-    payload["state_json"] = state_path
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    os.replace(tmp_path, state_path)
-    return payload
-
-
-def _merge_async_backtest_job(run_id: str, base: Optional[Dict[str, Any]] = None, **updates: Any) -> Dict[str, Any]:
-    merged: Dict[str, Any] = {}
-    if base:
-        merged.update(base)
-    else:
-        merged.update(_load_async_backtest_state(run_id))
-    merged.update(updates)
-    merged = _write_async_backtest_state(run_id, merged)
-    with _ASYNC_BACKTEST_LOCK:
-        current = dict(_ASYNC_BACKTEST_JOBS.get(run_id) or {})
-        current.update(merged)
-        _ASYNC_BACKTEST_JOBS[run_id] = current
-        return dict(current)
-
-
-def _async_backtest_log_paths(run_id: str) -> Tuple[str, str]:
-    os.makedirs(ASYNC_BACKTEST_RESULT_DIR, exist_ok=True)
-    return (
-        os.path.join(ASYNC_BACKTEST_RESULT_DIR, f"{run_id}.stdout.log"),
-        os.path.join(ASYNC_BACKTEST_RESULT_DIR, f"{run_id}.stderr.log"),
+    runtime_persist_async_scan_task(
+        run_id,
+        async_scan_tasks=_ASYNC_SCAN_TASKS,
+        async_scan_lock=_ASYNC_SCAN_LOCK,
+        result_dir=ASYNC_SCAN_RESULT_DIR,
     )
 
 
+def _is_pid_alive(pid: Any) -> bool:
+    return runtime_is_pid_alive(pid)
+
+
+def _async_backtest_state_path(run_id: str) -> str:
+    return runtime_async_backtest_state_path(run_id, ASYNC_BACKTEST_RESULT_DIR)
+
+
+def _load_async_backtest_state(run_id: str) -> Dict[str, Any]:
+    return runtime_load_async_backtest_state(run_id, ASYNC_BACKTEST_RESULT_DIR)
+
+
+def _write_async_backtest_state(run_id: str, state: Dict[str, Any]) -> Dict[str, Any]:
+    return runtime_write_async_backtest_state(run_id, state, ASYNC_BACKTEST_RESULT_DIR)
+
+
+def _merge_async_backtest_job(run_id: str, base: Optional[Dict[str, Any]] = None, **updates: Any) -> Dict[str, Any]:
+    return runtime_merge_async_backtest_job(
+        run_id,
+        base=base,
+        updates=updates,
+        async_backtest_jobs=_ASYNC_BACKTEST_JOBS,
+        async_backtest_lock=_ASYNC_BACKTEST_LOCK,
+        result_dir=ASYNC_BACKTEST_RESULT_DIR,
+    )
+
+
+def _async_backtest_log_paths(run_id: str) -> Tuple[str, str]:
+    return runtime_async_backtest_log_paths(run_id, ASYNC_BACKTEST_RESULT_DIR)
+
+
 def _cleanup_async_backtest_jobs() -> None:
-    now = _now_ts()
-    with _ASYNC_BACKTEST_LOCK:
-        stale_ids: List[str] = []
-        for run_id, job in _ASYNC_BACKTEST_JOBS.items():
-            status = str(job.get("status", "") or "")
-            ended_at = float(job.get("ended_at", 0) or 0)
-            if status in {"success", "failed", "cancelled"} and ended_at > 0 and (now - ended_at) > ASYNC_BACKTEST_KEEP_SECONDS:
-                stale_ids.append(run_id)
-        for run_id in stale_ids:
-            _ASYNC_BACKTEST_JOBS.pop(run_id, None)
-    for p in glob.glob(os.path.join(ASYNC_BACKTEST_RESULT_DIR, "*.state.json")):
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                obj = json.load(f) or {}
-        except Exception:
-            continue
-        status = str(obj.get("status", "") or "")
-        ended_at = float(obj.get("ended_at", 0) or 0)
-        if status not in {"success", "failed", "cancelled"} or ended_at <= 0:
-            continue
-        if (now - ended_at) <= ASYNC_BACKTEST_KEEP_SECONDS:
-            continue
-        base = p[: -len(".state.json")]
-        for suffix in (".state.json", ".stdout.log", ".stderr.log"):
-            fp = f"{base}{suffix}"
-            if os.path.exists(fp):
-                try:
-                    os.remove(fp)
-                except Exception:
-                    pass
+    runtime_cleanup_async_backtest_jobs(
+        async_backtest_jobs=_ASYNC_BACKTEST_JOBS,
+        async_backtest_lock=_ASYNC_BACKTEST_LOCK,
+        result_dir=ASYNC_BACKTEST_RESULT_DIR,
+        keep_seconds=ASYNC_BACKTEST_KEEP_SECONDS,
+        now_ts=_now_ts(),
+    )
 
 
 def _prune_all_finished_async_tasks() -> Dict[str, int]:
-    removed = {"scan": 0, "backtest": 0}
-    with _ASYNC_SCAN_LOCK:
-        finished_scan_ids = [
-            run_id for run_id, task in _ASYNC_SCAN_TASKS.items()
-            if str(task.get("status", "") or "") in {"success", "failed", "cancelled"}
-        ]
-        for run_id in finished_scan_ids:
-            task = _ASYNC_SCAN_TASKS.pop(run_id, {})
-            for key in ("result_csv", "meta_json", "state_json", "stdout_log", "stderr_log"):
-                path = str(task.get(key, "") or "")
-                if path and os.path.exists(path):
-                    try:
-                        os.remove(path)
-                    except Exception:
-                        pass
-            removed["scan"] += 1
-    for p in glob.glob(os.path.join(ASYNC_SCAN_RESULT_DIR, "*.state.json")):
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                obj = json.load(f) or {}
-        except Exception:
-            continue
-        if str(obj.get("status", "") or "") not in {"success", "failed", "cancelled"}:
-            continue
-        base = p[: -len(".state.json")]
-        for suffix in (".state.json", ".stdout.log", ".stderr.log"):
-            fp = f"{base}{suffix}"
-            if os.path.exists(fp):
-                try:
-                    os.remove(fp)
-                except Exception:
-                    pass
-        for key in ("result_csv", "meta_json"):
-            fp = str(obj.get(key, "") or "")
-            if fp and os.path.exists(fp):
-                try:
-                    os.remove(fp)
-                except Exception:
-                    pass
-
-    with _ASYNC_BACKTEST_LOCK:
-        finished_backtest_ids = [
-            run_id for run_id, job in _ASYNC_BACKTEST_JOBS.items()
-            if str(job.get("status", "") or "") in {"success", "failed", "cancelled"}
-        ]
-        for run_id in finished_backtest_ids:
-            _ASYNC_BACKTEST_JOBS.pop(run_id, None)
-            removed["backtest"] += 1
-    for p in glob.glob(os.path.join(ASYNC_BACKTEST_RESULT_DIR, "*.state.json")):
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                obj = json.load(f) or {}
-        except Exception:
-            continue
-        if str(obj.get("status", "") or "") not in {"success", "failed", "cancelled"}:
-            continue
-        base = p[: -len(".state.json")]
-        for suffix in (".state.json", ".stdout.log", ".stderr.log"):
-            fp = f"{base}{suffix}"
-            if os.path.exists(fp):
-                try:
-                    os.remove(fp)
-                except Exception:
-                    pass
-    return removed
+    return runtime_prune_all_finished_async_tasks(
+        async_scan_tasks=_ASYNC_SCAN_TASKS,
+        async_scan_lock=_ASYNC_SCAN_LOCK,
+        async_scan_result_dir=ASYNC_SCAN_RESULT_DIR,
+        async_backtest_jobs=_ASYNC_BACKTEST_JOBS,
+        async_backtest_lock=_ASYNC_BACKTEST_LOCK,
+        async_backtest_result_dir=ASYNC_BACKTEST_RESULT_DIR,
+    )
 
 
 @contextmanager
 def _temp_environ(overrides: Dict[str, Any]):
-    snapshot: Dict[str, Optional[str]] = {}
-    try:
-        for k, v in (overrides or {}).items():
-            if v is None:
-                continue
-            snapshot[k] = os.environ.get(k)
-            os.environ[k] = str(v)
+    with runtime_temp_environ(overrides):
         yield
-    finally:
-        for k, old in snapshot.items():
-            if old is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = old
 
 
 def _build_async_scan_env(strategy: str, params: Dict[str, Any]) -> Dict[str, Any]:
-    p = params or {}
-    env: Dict[str, Any] = {}
-    if strategy == "v4":
-        env = {
-            "V4_SCORE_THRESHOLD": p.get("score_threshold"),
-            "V4_TOP_PERCENT": p.get("top_percent"),
-            "V4_SELECT_MODE": p.get("select_mode"),
-            "V4_SCAN_ALL": "1" if p.get("scan_all", True) else "0",
-            "V4_CAP_MIN": p.get("cap_min"),
-            "V4_CAP_MAX": p.get("cap_max"),
-            "V4_ENABLE_CONSISTENCY": "1" if p.get("enable_consistency", True) else "0",
-            "V4_MIN_ALIGN": p.get("min_align", 2),
-        }
-    elif strategy == "v5":
-        env = {
-            "V5_SCORE_THRESHOLD": p.get("score_threshold"),
-            "V5_TOP_PERCENT": p.get("top_percent"),
-            "V5_SELECT_MODE": p.get("select_mode"),
-            "V5_CAP_MIN": p.get("cap_min"),
-            "V5_CAP_MAX": p.get("cap_max"),
-            "V5_ENABLE_CONSISTENCY": "1" if p.get("enable_consistency", True) else "0",
-            "V5_MIN_ALIGN": p.get("min_align", 2),
-        }
-    elif strategy == "v8":
-        score_range = p.get("score_threshold", [55, 70])
-        if not isinstance(score_range, (list, tuple)) or len(score_range) != 2:
-            score_range = [55, 70]
-        env = {
-            "V8_SCORE_MIN": score_range[0],
-            "V8_SCORE_MAX": score_range[1],
-            "V8_TOP_PERCENT": p.get("top_percent"),
-            "V8_SELECT_MODE": p.get("select_mode"),
-            "V8_SCAN_ALL": "1" if p.get("scan_all", True) else "0",
-            "V8_CAP_MIN": p.get("cap_min"),
-            "V8_CAP_MAX": p.get("cap_max"),
-            "V8_ENABLE_CONSISTENCY": "1" if p.get("enable_consistency", True) else "0",
-            "V8_MIN_ALIGN": p.get("min_align", 2),
-        }
-    elif strategy == "v9":
-        env = {
-            "V9_SCORE_THRESHOLD": p.get("score_threshold"),
-            "V9_TOP_PERCENT": p.get("top_percent"),
-            "V9_SELECT_MODE": p.get("select_mode"),
-            "V9_SCAN_ALL": "1" if p.get("scan_all", True) else "0",
-            "V9_CAP_MIN": p.get("cap_min"),
-            "V9_CAP_MAX": p.get("cap_max"),
-            "V9_ENABLE_CONSISTENCY": "1" if p.get("enable_consistency", True) else "0",
-            "V9_MIN_ALIGN": p.get("min_align", 2),
-            "V9_HOLDING_DAYS": p.get("holding_days", 20),
-            "V9_LOOKBACK_DAYS": p.get("lookback_days", 160),
-            "V9_MIN_TURNOVER": p.get("min_turnover", 5.0),
-            "V9_CANDIDATE_COUNT": p.get("candidate_count", 800),
-        }
-    elif strategy == "combo":
-        env = {
-            "COMBO_CANDIDATE_COUNT": p.get("candidate_count", 800),
-            "COMBO_MIN_TURNOVER": p.get("min_turnover", 5.0),
-            "COMBO_MIN_AGREE": p.get("min_agree", 3),
-            "COMBO_CAP_MIN": p.get("cap_min", 0),
-            "COMBO_CAP_MAX": p.get("cap_max", 0),
-            "COMBO_SELECT_MODE": p.get("select_mode", "双重筛选(阈值+Top%)"),
-            "COMBO_THRESHOLD": p.get("combo_threshold", 68),
-            "COMBO_TOP_PERCENT": p.get("top_percent", 2),
-            "COMBO_LOOKBACK_DAYS": p.get("lookback_days", 120),
-            "COMBO_DISAGREE_STD_WEIGHT": p.get("disagree_std_weight", 0.35),
-            "COMBO_DISAGREE_COUNT_WEIGHT": p.get("disagree_count_weight", 1.0),
-            "COMBO_MARKET_ADJUST_STRENGTH": p.get("market_adjust_strength", 0.5),
-            "COMBO_ENABLE_CONSISTENCY": "1" if p.get("enable_consistency", True) else "0",
-            "COMBO_MIN_ALIGN": p.get("min_align", 2),
-            "COMBO_AUTO_WEIGHTS": "1" if p.get("auto_weights", True) else "0",
-            "COMBO_W_V4": p.get("w_v4", 0.15),
-            "COMBO_W_V5": p.get("w_v5", 0.15),
-            "COMBO_W_V7": p.get("w_v7", 0.30),
-            "COMBO_W_V8": p.get("w_v8", 0.25),
-            "COMBO_W_V9": p.get("w_v9", 0.15),
-            "COMBO_THR_V4": p.get("thr_v4", 60),
-            "COMBO_THR_V5": p.get("thr_v5", 60),
-            "COMBO_THR_V7": p.get("thr_v7", 65),
-            "COMBO_THR_V8": p.get("thr_v8", 65),
-            "COMBO_THR_V9": p.get("thr_v9", 60),
-        }
-    elif strategy == "v6":
-        env = {
-            "V6_SCORE_THRESHOLD": p.get("score_threshold", 85),
-            "V6_TOP_PERCENT": p.get("top_percent", 2),
-            "V6_SELECT_MODE": p.get("select_mode", "双重筛选(阈值+Top%)"),
-            "V6_CAP_MIN": p.get("cap_min", 0),
-            "V6_CAP_MAX": p.get("cap_max", 0),
-            "V6_ENABLE_CONSISTENCY": "1" if p.get("enable_consistency", True) else "0",
-            "V6_MIN_ALIGN": p.get("min_align", 2),
-        }
-    elif strategy == "v7":
-        env = {
-            "V7_SCORE_THRESHOLD": p.get("score_threshold", 60),
-            "V7_TOP_PERCENT": p.get("top_percent", 2),
-            "V7_SELECT_MODE": p.get("select_mode", "双重筛选(阈值+Top%)"),
-            "V7_SCAN_ALL": "1" if p.get("scan_all", True) else "0",
-            "V7_CAP_MIN": p.get("cap_min", 0),
-            "V7_CAP_MAX": p.get("cap_max", 0),
-            "V7_ENABLE_CONSISTENCY": "1" if p.get("enable_consistency", True) else "0",
-            "V7_MIN_ALIGN": p.get("min_align", 2),
-        }
-    return {k: v for k, v in env.items() if v is not None}
+    return runtime_build_async_scan_env(strategy, params)
 
 
 def _async_scan_log_paths(run_id: str) -> Tuple[str, str]:
-    os.makedirs(ASYNC_SCAN_RESULT_DIR, exist_ok=True)
-    return (
-        os.path.join(ASYNC_SCAN_RESULT_DIR, f"{run_id}.stdout.log"),
-        os.path.join(ASYNC_SCAN_RESULT_DIR, f"{run_id}.stderr.log"),
-    )
+    return runtime_async_scan_log_paths(run_id, ASYNC_SCAN_RESULT_DIR)
 
 
 def _launch_async_scan_process(run_id: str, strategy: str, params: Dict[str, Any], score_col: str) -> Dict[str, Any]:
@@ -673,528 +665,108 @@ def _run_async_scan_job(run_id: str, strategy: str, params: Dict[str, Any], scor
 
 
 def _start_async_scan_task(strategy: str, params: Dict[str, Any], score_col: str) -> Tuple[bool, str, str]:
-    _cleanup_async_scan_tasks()
-    # Debounce duplicate submits: if same-strategy task is already running with same params, reuse it.
-    for rid, t in list(_ASYNC_SCAN_TASKS.items()):
-        if t.get("strategy") != strategy:
-            continue
-        if t.get("status") not in {"queued", "running"}:
-            continue
-        old_params = t.get("params", {}) or {}
-        if _scan_params_fingerprint(old_params) == _scan_params_fingerprint(params or {}):
-            return False, f"同参数任务已在运行：{rid}", str(rid)
-    # Avoid replacing in-flight jobs: require explicit cancel to start a new run.
-    for rid, t in list(_ASYNC_SCAN_TASKS.items()):
-        if t.get("strategy") == strategy and t.get("status") == "running":
-            return False, f"已有运行中任务：{rid}。请先等待完成或点击“取消当前后台任务”。", str(rid)
-
-    run_id = f"{strategy}_{datetime.now().strftime('%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
-    invalidated_ids: List[str] = []
-    task_data: Dict[str, Any] = {}
-    with _ASYNC_SCAN_LOCK:
-        # Latest click wins for queued items only; running task must be cancelled explicitly.
-        for rid, t in list(_ASYNC_SCAN_TASKS.items()):
-            if t.get("strategy") == strategy and t.get("status") in {"queued"}:
-                _ASYNC_SCAN_TASKS[rid]["status"] = "cancelled"
-                _ASYNC_SCAN_TASKS[rid]["stage"] = "cancelled"
-                _ASYNC_SCAN_TASKS[rid]["progress"] = 100
-                _ASYNC_SCAN_TASKS[rid]["message"] = f"已被新任务替代：{run_id}"
-                _ASYNC_SCAN_TASKS[rid]["ended_at"] = _now_ts()
-                invalidated_ids.append(rid)
-
-        task_data = {
-            "run_id": run_id,
-            "strategy": strategy,
-            "status": "queued",
-            "stage": "queued",
-            "progress": 0,
-            "message": "排队中",
-            "created_at": _now_ts(),
-            "created_at_text": _now_text(),
-            "ended_at": 0,
-            "params": params or {},
-            "score_col": score_col,
-            "result_csv": "",
-            "meta_json": "",
-            "state_json": _async_scan_state_path(run_id),
-            "meta": {},
-            "error": "",
-            "row_count": 0,
-        }
-        _ASYNC_SCAN_TASKS[run_id] = dict(task_data)
-    for rid in invalidated_ids:
-        _persist_async_scan_task(rid)
-    _persist_async_scan_task(run_id)
-    try:
-        launch_info = _launch_async_scan_process(run_id, strategy, params or {}, score_col)
-        _merge_async_scan_task(
-            run_id,
-            task_data,
-            status="running",
-            stage="scan",
-            progress=1,
-            message="任务已启动",
-            pid=int(launch_info["pid"]),
-            worker_started_at=_now_text(),
-            stdout_log=str(launch_info["stdout_log"]),
-            stderr_log=str(launch_info["stderr_log"]),
-        )
-    except Exception as exc:
-        _merge_async_scan_task(
-            run_id,
-            task_data,
-            status="failed",
-            stage="error",
-            progress=100,
-            message=f"任务启动失败: {exc}",
-            error=traceback.format_exc(limit=12),
-            ended_at=_now_ts(),
-        )
-        return False, f"后台任务启动失败：{exc}", run_id
-    return True, f"已提交后台扫描任务：{run_id}", run_id
+    return runtime_start_async_scan_task(
+        strategy=strategy,
+        params=params,
+        score_col=score_col,
+        async_scan_tasks=_ASYNC_SCAN_TASKS,
+        async_scan_lock=_ASYNC_SCAN_LOCK,
+        cleanup_async_scan_tasks=_cleanup_async_scan_tasks,
+        scan_params_fingerprint=_scan_params_fingerprint,
+        now_ts=_now_ts,
+        now_text=_now_text,
+        async_scan_state_path=_async_scan_state_path,
+        persist_async_scan_task=_persist_async_scan_task,
+        launch_async_scan_process=_launch_async_scan_process,
+        merge_async_scan_task=_merge_async_scan_task,
+    )
 
 
 def _read_async_scan_df(task: Dict[str, Any]) -> Optional[pd.DataFrame]:
-    p = task.get("result_csv")
-    if not isinstance(p, str) or not p or not os.path.exists(p):
-        return None
-    try:
-        return pd.read_csv(p)
-    except Exception:
-        return None
+    return runtime_read_async_scan_df(task)
 
 
 def _recover_async_scan_task(run_id: str) -> Optional[Dict[str, Any]]:
-    if not run_id:
-        return None
-    try:
-        state_path = _async_scan_state_path(run_id)
-        state_obj: Dict[str, Any] = _load_async_scan_state(run_id)
-
-        pattern = os.path.join(ASYNC_SCAN_RESULT_DIR, f"*_{run_id}_*.meta.json")
-        meta_candidates = glob.glob(pattern)
-        meta: Dict[str, Any] = {}
-        meta_path = ""
-        if meta_candidates:
-            meta_path = sorted(meta_candidates, key=lambda p: os.path.getmtime(p), reverse=True)[0]
-            with open(meta_path, "r", encoding="utf-8") as f:
-                meta = json.load(f) or {}
-
-        if not meta and not state_obj:
-            return None
-
-        merged: Dict[str, Any] = {}
-        merged.update(state_obj)
-        merged.update(meta)
-
-        strategy = str(merged.get("strategy", "") or run_id.split("_", 1)[0])
-        score_col = str(merged.get("score_col", "综合评分"))
-        row_count = int(merged.get("row_count", 0) or 0)
-        status = str(merged.get("status", "success" if meta else "failed"))
-        csv_from_meta = str(merged.get("result_csv", "") or "")
-        csv_guess = meta_path.replace(".meta.json", ".csv") if meta_path else ""
-        result_csv = csv_from_meta if (csv_from_meta and os.path.exists(csv_from_meta)) else (csv_guess if csv_guess and os.path.exists(csv_guess) else "")
-
-        pid = int(merged.get("pid", 0) or 0)
-        if status in {"queued", "running"} and pid > 0 and _is_pid_alive(pid):
-            status = "running"
-            msg = f"后台任务仍在运行（PID={pid}）"
-        elif status in {"queued", "running"}:
-            status = "failed"
-            msg = "任务在服务重启前中断，请重新发起扫描"
-        else:
-            msg = f"任务结果已从磁盘恢复（{merged.get('finished_at', '未知时间')}）"
-
-        item = {
-            "run_id": run_id,
-            "strategy": strategy,
-            "status": status,
-            "stage": "done" if status == "success" else ("scan" if status == "running" else "error"),
-            "progress": int(merged.get("progress", 100 if status != "running" else 1) or 0),
-            "message": msg,
-            "created_at": 0,
-            "created_at_text": "",
-            "ended_at": float(merged.get("ended_at", _now_ts()) or 0),
-            "params": merged.get("params", {}) or {},
-            "score_col": score_col,
-            "result_csv": result_csv,
-            "meta_json": meta_path,
-            "state_json": state_path,
-            "meta": merged.get("meta", {}) or {},
-            "error": str(merged.get("error", "") or ""),
-            "row_count": row_count,
-            "pid": pid,
-            "stdout_log": str(merged.get("stdout_log", "") or ""),
-            "stderr_log": str(merged.get("stderr_log", "") or ""),
-        }
-        with _ASYNC_SCAN_LOCK:
-            _ASYNC_SCAN_TASKS[run_id] = item
-        return dict(item)
-    except Exception:
-        return None
+    return runtime_recover_async_scan_task(
+        run_id,
+        result_dir=ASYNC_SCAN_RESULT_DIR,
+        async_scan_tasks=_ASYNC_SCAN_TASKS,
+        async_scan_lock=_ASYNC_SCAN_LOCK,
+        now_ts=_now_ts(),
+    )
 
 
 def _render_async_scan_status(task_key: str, title: str, score_col: str) -> Optional[pd.DataFrame]:
-    run_id = st.session_state.get(task_key, "")
-    if not run_id:
-        return None
-    task = _get_async_scan_task(run_id)
-    if not task:
-        task = _recover_async_scan_task(run_id)
-        if not task:
-            st.warning(f"后台任务 {run_id} 不存在，可能未成功提交或已清理。请重新发起扫描。")
-            st.session_state[task_key] = ""
-            return None
-    else:
-        # Reconcile stale in-memory failure with persisted success artifacts.
-        if str(task.get("status", "")) in {"failed", "cancelled"}:
-            recovered = _recover_async_scan_task(run_id)
-            if recovered and str(recovered.get("status", "")) == "success":
-                task = recovered
-        elif str(task.get("status", "")) in {"queued", "running"}:
-            pid = int(task.get("pid", 0) or 0)
-            if pid > 0 and not _is_pid_alive(pid):
-                recovered = _recover_async_scan_task(run_id)
-                if recovered:
-                    task = recovered
-
-    # Interrupted tasks should not keep blocking UI during parameter tuning.
-    _status_now = str(task.get("status", ""))
-    _msg_now = str(task.get("message", ""))
-    if _status_now == "failed" and "服务重启前中断" in _msg_now:
-        st.session_state[task_key] = ""
-        return None
-
-    st.markdown("---")
-    st.markdown(f"### 后台扫描任务（{title}）")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric("任务ID", run_id)
-    with c2:
-        st.metric("状态", str(task.get("status", "-")))
-    with c3:
-        st.metric("进度", f"{int(task.get('progress', 0))}%")
-    with c4:
-        st.metric("结果数", f"{int(task.get('row_count', 0))} 条")
-    st.progress(max(0, min(100, int(task.get("progress", 0)))) / 100.0)
-    status = str(task.get("status", ""))
-    if status in {"queued", "running"}:
-        cancel_key = f"cancel_{task_key}_{run_id}"
-        if st.button("取消当前后台任务", key=cancel_key, use_container_width=False):
-            pid = int(task.get("pid", 0) or 0)
-            if pid > 0 and _is_pid_alive(pid):
-                try:
-                    os.killpg(pid, signal.SIGTERM)
-                except Exception:
-                    try:
-                        os.kill(pid, signal.SIGTERM)
-                    except Exception:
-                        pass
-            _update_async_scan_task(
-                run_id,
-                status="cancelled",
-                stage="cancelled",
-                progress=100,
-                message="任务已手动取消",
-                ended_at=_now_ts(),
-            )
-            st.session_state[task_key] = ""
-            st.warning("已取消当前任务。请调整参数后重新点击“开始扫描”。")
-            st.rerun()
-    # Final safeguard: if status is failed but result artifacts exist, auto-promote to success.
-    if status in {"failed", "cancelled"}:
-        recovered = _recover_async_scan_task(run_id)
-        if recovered and str(recovered.get("status", "")) == "success":
-            task = recovered
-            status = "success"
-        else:
-            maybe_df = _read_async_scan_df(task)
-            if maybe_df is not None and not maybe_df.empty:
-                task = dict(task)
-                task["status"] = "success"
-                task["message"] = "已检测到结果文件，自动恢复成功状态"
-                _update_async_scan_task(run_id, status="success", message=task["message"])
-                status = "success"
-
-    if status not in {"failed", "cancelled"}:
-        st.caption(str(task.get("message", "")))
-
-    if status in {"queued", "running"}:
-        if hasattr(st, "autorefresh"):
-            st.autorefresh(interval=5000, key=f"refresh_{run_id}")
-        else:
-            st.info("任务运行中，请手动刷新页面查看进度。")
-        return None
-    if status == "failed":
-        msg = str(task.get("message", "后台任务失败"))
-        st.error(msg)
-        err = str(task.get("error", "") or "")
-        if err:
-            with st.expander("查看错误详情", expanded=False):
-                st.code(err)
-        return None
-    if status != "success":
-        return None
-
-    result_df = _read_async_scan_df(task)
-    if result_df is None or result_df.empty:
-        st.warning("后台扫描完成，但结果为空")
-        return pd.DataFrame()
-
-    st.success(f"后台扫描完成，返回 {len(result_df)} 条")
-    show_df = result_df.drop(columns=["原始数据"], errors="ignore")
-    show_df = _standardize_result_df(show_df, score_col=score_col)
-    st.dataframe(show_df, use_container_width=True, hide_index=True)
-    _set_stock_pool_candidate(
-        strategy=str(task.get("strategy", "") or "").lower(),
-        params=task.get("params", {}) or {},
-        score_col=str(task.get("score_col", score_col) or score_col),
-        df=result_df,
+    return runtime_render_async_scan_status(
+        task_key=task_key,
+        title=title,
+        score_col=score_col,
+        get_async_scan_task=_get_async_scan_task,
+        recover_async_scan_task=_recover_async_scan_task,
+        is_pid_alive=_is_pid_alive,
+        update_async_scan_task=_update_async_scan_task,
+        now_ts=_now_ts,
+        read_async_scan_df=_read_async_scan_df,
+        standardize_result_df=_standardize_result_df,
+        df_to_csv_bytes=_df_to_csv_bytes,
+        set_stock_pool_candidate=_set_stock_pool_candidate,
     )
-    return result_df
 
 
 def _list_recent_async_scan_tasks(limit: int = 12) -> pd.DataFrame:
-    rows: List[Dict[str, Any]] = []
-    for p in sorted(glob.glob(os.path.join(ASYNC_SCAN_RESULT_DIR, "*.state.json")), key=os.path.getmtime, reverse=True)[: max(1, int(limit))]:
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                obj = json.load(f) or {}
-        except Exception:
-            continue
-        ended_at = float(obj.get("ended_at", 0) or 0)
-        rows.append({
-            "任务ID": str(obj.get("run_id", "") or ""),
-            "类型": "扫描",
-            "策略": str(obj.get("strategy", "") or "").upper(),
-            "状态": str(obj.get("status", "") or ""),
-            "结果数": int(obj.get("row_count", 0) or 0),
-            "开始时间": str(obj.get("created_at_text", "") or ""),
-            "结束时间": datetime.fromtimestamp(ended_at).strftime("%Y-%m-%d %H:%M:%S") if ended_at > 0 else "",
-            "结果文件": str(obj.get("result_csv", "") or ""),
-            "错误": str(obj.get("error", "") or ""),
-        })
-    return pd.DataFrame(rows)
+    return runtime_list_recent_async_scan_tasks(ASYNC_SCAN_RESULT_DIR, limit)
 
 
 def _list_recent_async_backtest_jobs(limit: int = 12) -> pd.DataFrame:
-    rows: List[Dict[str, Any]] = []
-    for p in sorted(glob.glob(os.path.join(ASYNC_BACKTEST_RESULT_DIR, "*.state.json")), key=os.path.getmtime, reverse=True)[: max(1, int(limit))]:
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                obj = json.load(f) or {}
-        except Exception:
-            continue
-        payload = obj.get("payload") or {}
-        ended_at = float(obj.get("ended_at", 0) or 0)
-        created_at = float(obj.get("created_at", 0) or 0)
-        rows.append({
-            "任务ID": str(obj.get("run_id", "") or ""),
-            "类型": "回测",
-            "策略": str(payload.get("strategy", obj.get("job_kind", "")) or ""),
-            "状态": str(obj.get("status", "") or ""),
-            "结果数": "",
-            "开始时间": datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M:%S") if created_at > 0 else "",
-            "结束时间": datetime.fromtimestamp(ended_at).strftime("%Y-%m-%d %H:%M:%S") if ended_at > 0 else "",
-            "结果文件": str(obj.get("state_json", "") or ""),
-            "错误": str(obj.get("error", "") or ""),
-        })
-    return pd.DataFrame(rows)
+    return runtime_list_recent_async_backtest_jobs(ASYNC_BACKTEST_RESULT_DIR, limit)
 
 
 def _render_async_task_dashboard(limit: int = 10) -> None:
-    _cleanup_async_backtest_jobs()
-    scan_df = _list_recent_async_scan_tasks(limit=limit)
-    backtest_df = _list_recent_async_backtest_jobs(limit=limit)
-    merged = pd.concat([scan_df, backtest_df], ignore_index=True) if (not scan_df.empty or not backtest_df.empty) else pd.DataFrame()
-    with st.expander("最近后台任务", expanded=False):
-        action_col1, action_col2 = st.columns([1, 3])
-        with action_col1:
-            if st.button("清理已完成任务", key="prune_finished_async_tasks", use_container_width=True):
-                removed = _prune_all_finished_async_tasks()
-                st.success(f"已清理扫描 {removed['scan']} 个，回测 {removed['backtest']} 个。")
-                st.rerun()
-        with action_col2:
-            st.caption("仅清理 success / failed / cancelled 任务，不影响运行中的后台任务。")
-        if merged.empty:
-            st.caption("暂无后台扫描/回测任务记录。")
-            return
-        show_df = merged.copy()
-        show_df["错误"] = show_df["错误"].astype(str).str.slice(0, 120)
-        total = len(show_df)
-        running_count = int(show_df["状态"].astype(str).isin(["queued", "running"]).sum())
-        success_count = int(show_df["状态"].astype(str).eq("success").sum())
-        failed_count = int(show_df["状态"].astype(str).eq("failed").sum())
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.metric("任务总数", total)
-        with m2:
-            st.metric("运行中", running_count)
-        with m3:
-            st.metric("成功", success_count)
-        with m4:
-            st.metric("失败", failed_count)
-        st.dataframe(show_df, use_container_width=True, hide_index=True)
-        running_df = show_df[show_df["状态"].astype(str).isin(["queued", "running"])]
-        if not running_df.empty:
-            st.caption(f"仍在运行任务数：{len(running_df)}")
-            if hasattr(st, "autorefresh"):
-                st.autorefresh(interval=5000, key="async_task_dashboard_refresh")
+    runtime_render_async_task_dashboard(
+        limit=limit,
+        cleanup_async_backtest_jobs=_cleanup_async_backtest_jobs,
+        list_recent_async_scan_tasks=_list_recent_async_scan_tasks,
+        list_recent_async_backtest_jobs=_list_recent_async_backtest_jobs,
+        prune_all_finished_async_tasks=_prune_all_finished_async_tasks,
+    )
 
 
 def _latest_async_scan_run_id(strategy: str, statuses: Optional[set[str]] = None) -> str:
-    target = str(strategy or "").lower()
-    allowed = statuses or {"queued", "running", "success"}
-    best_path = ""
-    best_mtime = -1.0
-    for p in glob.glob(os.path.join(ASYNC_SCAN_RESULT_DIR, "*.state.json")):
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                obj = json.load(f) or {}
-        except Exception:
-            continue
-        if str(obj.get("strategy", "") or "").lower() != target:
-            continue
-        if str(obj.get("status", "") or "") not in allowed:
-            continue
-        try:
-            mt = os.path.getmtime(p)
-        except Exception:
-            mt = 0.0
-        if mt > best_mtime:
-            best_mtime = mt
-            best_path = p
-    if not best_path:
-        return ""
-    try:
-        with open(best_path, "r", encoding="utf-8") as f:
-            obj = json.load(f) or {}
-        return str(obj.get("run_id", "") or "")
-    except Exception:
-        return ""
+    return runtime_latest_async_scan_run_id(strategy, ASYNC_SCAN_RESULT_DIR, statuses)
 
 
 def _latest_async_backtest_run_id(job_kind: str, statuses: Optional[set[str]] = None) -> str:
-    target = str(job_kind or "").lower()
-    allowed = statuses or {"queued", "running", "success"}
-    best_path = ""
-    best_mtime = -1.0
-    for p in glob.glob(os.path.join(ASYNC_BACKTEST_RESULT_DIR, "*.state.json")):
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                obj = json.load(f) or {}
-        except Exception:
-            continue
-        if str(obj.get("job_kind", "") or "").lower() != target:
-            continue
-        if str(obj.get("status", "") or "") not in allowed:
-            continue
-        try:
-            mt = os.path.getmtime(p)
-        except Exception:
-            mt = 0.0
-        if mt > best_mtime:
-            best_mtime = mt
-            best_path = p
-    if not best_path:
-        return ""
-    try:
-        with open(best_path, "r", encoding="utf-8") as f:
-            obj = json.load(f) or {}
-        return str(obj.get("run_id", "") or "")
-    except Exception:
-        return ""
+    return runtime_latest_async_backtest_run_id(job_kind, ASYNC_BACKTEST_RESULT_DIR, statuses)
 
 
 def _restore_recent_async_task_refs() -> None:
-    scan_key_map = {
-        "v4_async_task_id": "v4",
-        "v5_async_task_id": "v5",
-        "v6_async_task_id": "v6",
-        "v7_async_task_id": "v7",
-        "v8_async_task_id": "v8",
-        "v9_async_task_id": "v9",
-        "combo_async_task_id": "combo",
-    }
-    restore_allowed = {
-        "v4": True,
-        "v5": bool(st.session_state.get("v5_async_scan", False)),
-        "v6": True,
-        "v7": True,
-        "v8": bool(st.session_state.get("v8_async_scan", False)),
-        "v9": bool(st.session_state.get("v9_async_scan", False)),
-        "combo": bool(st.session_state.get("combo_async_scan", False)),
-    }
-    for task_key, strategy in scan_key_map.items():
-        if not restore_allowed.get(strategy, True):
-            continue
-        if str(st.session_state.get(task_key, "") or "").strip():
-            continue
-        run_id = _latest_async_scan_run_id(strategy)
-        if run_id:
-            st.session_state[task_key] = run_id
-    if not str(st.session_state.get("single_backtest_async_job_id", "") or "").strip():
-        run_id = _latest_async_backtest_run_id("single")
-        if run_id:
-            st.session_state["single_backtest_async_job_id"] = run_id
-    if not str(st.session_state.get("comparison_async_job_id", "") or "").strip():
-        run_id = _latest_async_backtest_run_id("comparison")
-        if run_id:
-            st.session_state["comparison_async_job_id"] = run_id
+    runtime_restore_recent_async_task_refs(
+        session_state=st.session_state,
+        latest_async_scan_run_id=lambda strategy: _latest_async_scan_run_id(strategy),
+        latest_async_backtest_run_id=lambda job_kind: _latest_async_backtest_run_id(job_kind),
+    )
 
 
 def _scan_params_fingerprint(params: Dict[str, Any]) -> str:
-    try:
-        text = json.dumps(params or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    except Exception:
-        text = str(params or {})
-    return hashlib.md5(text.encode("utf-8")).hexdigest()
+    return runtime_scan_params_fingerprint(params)
 
 
 def _sync_scan_task_with_params(task_key: str, params: Dict[str, Any], strategy_label: str) -> None:
-    fp_key = f"{task_key}__params_fp"
-    dirty_key = f"{task_key}__params_dirty"
-    msg_key = f"{task_key}__params_msg"
-    current_fp = _scan_params_fingerprint(params)
-    prev_fp = st.session_state.get(fp_key)
-    st.session_state[fp_key] = current_fp
-
-    if prev_fp is None:
-        st.session_state.setdefault(dirty_key, False)
-        return
-    if prev_fp == current_fp:
-        return
-
-    st.session_state[dirty_key] = True
-    run_id = str(st.session_state.get(task_key, "") or "")
-    if run_id:
-        task = _get_async_scan_task(run_id)
-        if not task:
-            task = _recover_async_scan_task(run_id)
-        if task and str(task.get("status", "")) in {"queued", "running"}:
-            st.session_state[msg_key] = (
-                f"{strategy_label}参数已变更：当前任务继续按旧参数运行；新参数将在你下次点击“开始扫描”时生效。"
-            )
-            return
-        st.session_state[task_key] = ""
-    st.session_state[msg_key] = f"{strategy_label}参数已变更：旧任务状态已清除，点击“开始扫描”后才会提交新任务。"
+    runtime_sync_scan_task_with_params(
+        task_key=task_key,
+        params=params,
+        strategy_label=strategy_label,
+        get_async_scan_task=_get_async_scan_task,
+        recover_async_scan_task=_recover_async_scan_task,
+    )
 
 
 def _render_scan_param_hint(task_key: str) -> None:
-    msg_key = f"{task_key}__params_msg"
-    dirty_key = f"{task_key}__params_dirty"
-    msg = str(st.session_state.get(msg_key, "") or "")
-    if msg:
-        st.info(msg)
-        st.session_state[msg_key] = ""
-    elif st.session_state.get(dirty_key, False):
-        st.caption("参数已变更，尚未开始扫描。")
+    runtime_render_scan_param_hint(task_key=task_key)
 
 
 def _mark_scan_submitted(task_key: str, params: Dict[str, Any]) -> None:
-    st.session_state[f"{task_key}__params_fp"] = _scan_params_fingerprint(params)
-    st.session_state[f"{task_key}__params_dirty"] = False
-    st.session_state[f"{task_key}__params_msg"] = ""
+    runtime_mark_scan_submitted(task_key=task_key, params=params)
 
 
 def _stock_pool_paths(pool_id: str) -> Tuple[str, str]:
@@ -1208,494 +780,294 @@ def _stock_pool_paths(pool_id: str) -> Tuple[str, str]:
 def _set_stock_pool_candidate(strategy: str, params: Dict[str, Any], score_col: str, df: pd.DataFrame) -> None:
     if df is None or df.empty:
         return
-    st.session_state["stock_pool_candidate"] = {
+    candidate = {
         "strategy": (strategy or "unknown").lower(),
         "params": params or {},
         "score_col": score_col or "综合评分",
         "df": df.copy(),
     }
+    st.session_state["stock_pool_candidate"] = candidate
+    _maybe_auto_publish_manual_scan_queue(candidate)
+
+
+def _airivo_candidate_fingerprint(candidate: Dict[str, Any]) -> str:
+    try:
+        df = candidate.get("df")
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            return ""
+        payload = {
+            "strategy": str(candidate.get("strategy") or ""),
+            "params": candidate.get("params") or {},
+            "score_col": str(candidate.get("score_col") or ""),
+            "rows": int(len(df)),
+            "columns": list(df.columns),
+            "frame_hash": hashlib.md5(pd.util.hash_pandas_object(df.fillna(""), index=True).values.tobytes()).hexdigest(),
+        }
+        return hashlib.md5(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+    except Exception:
+        return ""
+
+
+def _airivo_should_auto_publish_manual_scan(candidate: Dict[str, Any]) -> Tuple[bool, str]:
+    if os.getenv("OPENCLAW_AUTO_PUBLISH_MANUAL_SCAN", "1") == "0":
+        return False, "自动发布已关闭"
+    strategy = str(candidate.get("strategy") or "").strip().lower()
+    if strategy not in {"v9", "v8", "v5", "combo"}:
+        return False, "仅生产策略允许自动发布"
+    runtime_mode = str(st.session_state.get("airivo_runtime_mode", "research") or "research").strip().lower()
+    if runtime_mode != "production":
+        return False, "当前不是生产门禁，需人工确认后发布"
+    df = candidate.get("df")
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return False, "扫描结果为空"
+    if len(df) > 120:
+        return False, "结果过多，需人工确认后发布"
+    fp = _airivo_candidate_fingerprint(candidate)
+    if not fp:
+        return False, "无法生成候选指纹"
+    if fp == str(st.session_state.get("airivo_last_auto_publish_fp", "") or ""):
+        return False, "该扫描结果已自动发布过"
+    return True, ""
+
+
+def _maybe_auto_publish_manual_scan_queue(candidate: Dict[str, Any]) -> None:
+    ok_to_publish, reason = _airivo_should_auto_publish_manual_scan(candidate)
+    if not ok_to_publish:
+        st.session_state["airivo_auto_publish_status"] = {"mode": "manual", "message": reason}
+        return
+    runtime_snapshot = {
+        "risk_level": str(st.session_state.get("airivo_runtime_mode", "production") or "production").upper()
+    }
+    risk_level = str(st.session_state.get("airivo_risk_level", "") or "").strip().upper()
+    if risk_level:
+        runtime_snapshot["risk_level"] = risk_level
+    ok, msg = _publish_manual_scan_to_execution_queue(candidate, PERMANENT_DB_PATH, runtime_snapshot)
+    if ok:
+        st.session_state["airivo_last_auto_publish_fp"] = _airivo_candidate_fingerprint(candidate)
+        st.session_state["airivo_auto_publish_status"] = {"mode": "auto", "message": msg}
+    else:
+        st.session_state["airivo_auto_publish_status"] = {"mode": "error", "message": msg}
+
+
+def _airivo_parse_market_cap_yi(value: Any) -> float:
+    text = str(value or "").strip().replace("亿元", "").replace("亿", "")
+    if not text or text == "-":
+        return 0.0
+    try:
+        return float(text)
+    except Exception:
+        return 0.0
+
+
+def _airivo_build_manual_opportunities(candidate: Dict[str, Any]) -> List[Dict[str, Any]]:
+    df = candidate.get("df")
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return []
+    strategy = str(candidate.get("strategy") or "manual").strip().lower()
+    score_col = str(candidate.get("score_col") or "综合评分")
+    work = df.copy()
+    code_col = "股票代码" if "股票代码" in work.columns else ("TS代码" if "TS代码" in work.columns else ("ts_code" if "ts_code" in work.columns else ""))
+    name_col = "股票名称" if "股票名称" in work.columns else ("name" if "name" in work.columns else "")
+    industry_col = "行业" if "行业" in work.columns else ("industry" if "industry" in work.columns else "")
+    if not code_col:
+        return []
+    work["_ts_code"] = work[code_col].astype(str).str.strip()
+    work["_stock_name"] = work[name_col].astype(str).str.strip() if name_col else ""
+    work["_industry"] = work[industry_col].astype(str).str.strip() if industry_col else ""
+    work["_score"] = pd.to_numeric(work.get(score_col), errors="coerce")
+    if "排名" in work.columns:
+        work["_rank"] = pd.to_numeric(work["排名"], errors="coerce")
+    else:
+        work["_rank"] = pd.Series(range(1, len(work) + 1), index=work.index, dtype=float)
+    if "流通市值" in work.columns:
+        work["_circ_mv_yi"] = work["流通市值"].map(_airivo_parse_market_cap_yi)
+    else:
+        work["_circ_mv_yi"] = 0.0
+    work = work.dropna(subset=["_score"])
+    work = work[work["_ts_code"] != ""].sort_values(by=["_score", "_rank"], ascending=[False, True], kind="stable").head(30)
+    opportunities: List[Dict[str, Any]] = []
+    for idx, row in enumerate(work.to_dict(orient="records"), 1):
+        rank = int(float(row.get("_rank") or idx))
+        target_weight = max(0.10, round(0.45 - (idx - 1) * 0.03, 2))
+        reason = str(row.get("理由摘要") or row.get("筛选理由") or row.get("reason") or "").strip()
+        opportunities.append(
+            {
+                "ts_code": str(row.get("_ts_code") or ""),
+                "stock_name": str(row.get("_stock_name") or ""),
+                "industry": str(row.get("_industry") or ""),
+                "score": float(row.get("_score") or 0.0),
+                "rank_idx": rank,
+                "weighted_score": float(row.get("_score") or 0.0),
+                "strategies": [strategy],
+                "strategy": strategy,
+                "target_weight": target_weight,
+                "circ_mv": float(row.get("_circ_mv_yi") or 0.0) * 10000.0,
+                "reason": reason,
+            }
+        )
+    return opportunities
+
+
+def _publish_manual_scan_to_execution_queue(candidate: Dict[str, Any], db_path: str, runtime_snapshot: Dict[str, Any]) -> Tuple[bool, str]:
+    opportunities = _airivo_build_manual_opportunities(candidate)
+    if not opportunities:
+        return False, "当前扫描结果无法解析为执行候选。请先完成一次有效扫描。"
+    try:
+        from openclaw.overnight_decision import (
+            apply_feature_enrichment,
+            apply_trade_window_analysis,
+            build_overnight_decision,
+            export_execution_feedback_template,
+            load_active_holdings,
+            load_return_calibration,
+            next_trade_date,
+            persist_overnight_decision,
+            refresh_realized_outcomes,
+            seed_execution_feedback,
+        )
+
+        strategy = str(candidate.get("strategy") or "manual").strip().lower()
+        batch_id = f"{datetime.now().strftime('%Y-%m-%d')}#manual#{uuid.uuid4().hex[:6]}"
+        trade_date = next_trade_date(datetime.now().strftime("%Y-%m-%d"))
+        risk_level = str(runtime_snapshot.get("risk_level") or "YELLOW").lower()
+        with _connect_permanent_db() as conn:
+            opportunities = apply_feature_enrichment(conn, opportunities=opportunities)
+            active_holdings = load_active_holdings(conn)
+            calibration = load_return_calibration(conn, horizon_days=1, lookback_days=180, min_samples=6)
+            payload = build_overnight_decision(
+                trade_date=trade_date,
+                opportunities=opportunities,
+                active_holdings=active_holdings,
+                risk={"risk_level": risk_level},
+                calibration=calibration,
+                top_n=2,
+            )
+            payload = apply_trade_window_analysis(conn, payload=payload, lookback_days=20)
+            persist_overnight_decision(
+                conn,
+                decision_date=batch_id,
+                payload=payload,
+                source_type="manual_scan",
+                source_run_id=batch_id,
+                source_label=strategy,
+                activate=True,
+                approved_by="system",
+                release_note=f"manual_scan auto publish:{strategy}",
+                output_dir=logs_dir,
+                current_primary=strategy,
+            )
+            seed_execution_feedback(
+                conn,
+                decision_date=batch_id,
+                payload=payload,
+                source_type="manual_scan",
+                source_run_id=batch_id,
+            )
+            refresh_realized_outcomes(conn, lookback_days=60)
+            logs_dir = Path(os.path.dirname(__file__)) / "logs" / "openclaw"
+            export_execution_feedback_template(
+                output_dir=logs_dir,
+                decision_date=batch_id,
+                payload=payload,
+            )
+        try:
+            _airivo_latest_execution_queue_cached.clear()
+            _airivo_feedback_snapshot_cached.clear()
+        except Exception:
+            pass
+        st.session_state["airivo_manual_queue_batch"] = batch_id
+        return True, f"已将手动扫描发布为今日执行队列：source=manual_scan/{strategy}, batch={batch_id}"
+    except Exception as exc:
+        return False, f"发布手动扫描队列失败：{exc}"
 
 
 def _save_stock_pool_snapshot(strategy: str, params: Dict[str, Any], score_col: str, df: pd.DataFrame, note: str = "") -> Tuple[bool, str]:
-    try:
-        if df is None or df.empty:
-            return False, "当前结果为空，无法保存到股票池"
-        pool_id = f"{(strategy or 'unknown').lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
-        csv_path, meta_path = _stock_pool_paths(pool_id)
-        df.to_csv(csv_path, index=False)
-
-        score_vals = pd.to_numeric(df.get(score_col, pd.Series(dtype=float)), errors="coerce")
-        score_vals = score_vals.dropna()
-        meta = {
-            "pool_id": pool_id,
-            "created_at": _now_text(),
-            "strategy": (strategy or "unknown").lower(),
-            "score_col": score_col,
-            "params": params or {},
-            "row_count": int(len(df)),
-            "avg_score": float(score_vals.mean()) if len(score_vals) > 0 else None,
-            "max_score": float(score_vals.max()) if len(score_vals) > 0 else None,
-            "min_score": float(score_vals.min()) if len(score_vals) > 0 else None,
-            "note": (note or "").strip(),
-            "csv_path": csv_path,
-        }
-        with open(meta_path, "w", encoding="utf-8") as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
-        return True, pool_id
-    except Exception as exc:
-        return False, f"保存失败: {exc}"
+    return service_save_stock_pool_snapshot(
+        stock_pool_dir=STOCK_POOL_DIR,
+        now_text=_now_text,
+        strategy=strategy,
+        params=params,
+        score_col=score_col,
+        df=df,
+        note=note,
+    )
 
 
 def _list_stock_pool_meta() -> List[Dict[str, Any]]:
-    try:
-        os.makedirs(STOCK_POOL_DIR, exist_ok=True)
-        out: List[Dict[str, Any]] = []
-        for meta_path in sorted(glob.glob(os.path.join(STOCK_POOL_DIR, "*.meta.json")), reverse=True):
-            try:
-                with open(meta_path, "r", encoding="utf-8") as f:
-                    meta = json.load(f) or {}
-                meta["_meta_path"] = meta_path
-                out.append(meta)
-            except Exception:
-                continue
-        out.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
-        return out
-    except Exception:
-        return []
+    return service_list_stock_pool_meta(STOCK_POOL_DIR)
 
 
 def _load_stock_pool_snapshot(pool_id: str) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
-    try:
-        csv_path, meta_path = _stock_pool_paths(pool_id)
-        if not (os.path.exists(csv_path) and os.path.exists(meta_path)):
-            return None, {}
-        with open(meta_path, "r", encoding="utf-8") as f:
-            meta = json.load(f) or {}
-        df = pd.read_csv(csv_path)
-        return df, meta
-    except Exception:
-        return None, {}
+    return service_load_stock_pool_snapshot(STOCK_POOL_DIR, pool_id)
 
 
 def _delete_stock_pool_snapshot(pool_id: str) -> Tuple[bool, str]:
-    try:
-        csv_path, meta_path = _stock_pool_paths(pool_id)
-        for p in (csv_path, meta_path):
-            if os.path.exists(p):
-                os.remove(p)
-        return True, "已删除"
-    except Exception as exc:
-        return False, f"删除失败: {exc}"
+    return service_delete_stock_pool_snapshot(STOCK_POOL_DIR, pool_id)
 
 
 def _extract_numeric_price(series: pd.Series) -> pd.Series:
-    return (
-        series.astype(str)
-        .str.replace("元", "", regex=False)
-        .str.replace(",", "", regex=False)
-        .str.extract(r"([-+]?\d+(?:\.\d+)?)", expand=False)
-        .astype(float)
-    )
+    return service_extract_numeric_price(series)
 
 
 def _pick_entry_price(df: pd.DataFrame) -> pd.Series:
-    for col in ["入池价格", "建仓价", "买入价", "最新价格", "当前价", "现价", "价格", "close_price", "close"]:
-        if col in df.columns:
-            s = pd.to_numeric(_extract_numeric_price(df[col]), errors="coerce")
-            if s.notna().any():
-                return s
-    return pd.Series([np.nan] * len(df), index=df.index, dtype=float)
+    return service_pick_entry_price(df)
 
 
 def _get_entry_prices_by_base_date(ts_codes: List[str], base_date: str) -> Dict[str, float]:
-    if not ts_codes or not base_date:
-        return {}
-    query_codes: List[str] = []
-    for code in ts_codes:
-        canonical = _canonical_ts_code(code)
-        if canonical and canonical not in query_codes:
-            query_codes.append(canonical)
-    if not query_codes:
-        return {}
-    conn = _connect_permanent_db()
-    try:
-        from data.dao import detect_daily_table  # type: ignore
-        table = _safe_daily_table_name(detect_daily_table(conn))
-    except Exception:
-        table = "daily_trading_data"
-    dfs: List[pd.DataFrame] = []
-    try:
-        for chunk in _iter_sqlite_in_chunks(query_codes, max_vars=900):
-            placeholders = ",".join(["?"] * len(chunk))
-            query = f"""
-                WITH ranked AS (
-                    SELECT ts_code, trade_date, close_price,
-                           ROW_NUMBER() OVER (PARTITION BY ts_code ORDER BY trade_date DESC) AS rn
-                    FROM {table}
-                    WHERE ts_code IN ({placeholders}) AND trade_date <= ?
-                )
-                SELECT ts_code, close_price
-                FROM ranked
-                WHERE rn = 1
-            """
-            params: List[Any] = list(chunk) + [str(base_date)]
-            df_chunk = pd.read_sql_query(query, conn, params=params)
-            if df_chunk is not None and not df_chunk.empty:
-                dfs.append(df_chunk)
-        df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
-    except Exception:
-        conn.close()
-        return {}
-    conn.close()
-    by_code: Dict[str, float] = {}
-    if df is not None and not df.empty:
-        for _, r in df.iterrows():
-            c = str(r.get("ts_code", "") or "")
-            p = _safe_float(r.get("close_price"), np.nan)
-            if c and not np.isnan(p):
-                by_code[c] = p
-    out: Dict[str, float] = {}
-    for code in ts_codes:
-        keys = _expand_ts_code_keys(code)
-        price = np.nan
-        for k in keys:
-            v = by_code.get(k)
-            if v is not None and not np.isnan(_safe_float(v, np.nan)):
-                price = _safe_float(v, np.nan)
-                break
-        if not np.isnan(price):
-            for k in keys:
-                out[k] = price
-    return out
+    return service_get_entry_prices_by_base_date(
+        ts_codes=ts_codes,
+        base_date=base_date,
+        connect_permanent_db=_connect_permanent_db,
+        safe_daily_table_name=_safe_daily_table_name,
+        iter_sqlite_in_chunks=_iter_sqlite_in_chunks,
+        canonical_ts_code=_canonical_ts_code,
+        expand_ts_code_keys=_expand_ts_code_keys,
+        safe_float=_safe_float,
+    )
 
 
 def _compute_pool_performance(df: pd.DataFrame, base_date: str = "") -> Tuple[pd.DataFrame, Dict[str, float]]:
-    work = df.copy()
-    code_col = "股票代码" if "股票代码" in work.columns else ("ts_code" if "ts_code" in work.columns else "")
-    name_col = "股票名称" if "股票名称" in work.columns else ("name" if "name" in work.columns else "")
-    if not code_col:
-        return pd.DataFrame(), {}
-
-    work["entry_price"] = _pick_entry_price(work)
-    # Always prefer database entry price on base_date to keep one pricing basis.
-    if base_date:
-        code_list = work[code_col].dropna().astype(str).tolist()
-        entry_map = _get_entry_prices_by_base_date(code_list, base_date=base_date)
-        if entry_map:
-            db_entry = work[code_col].astype(str).map(lambda c: _safe_float(entry_map.get(c), np.nan))
-            work["entry_price"] = db_entry.where(db_entry.notna(), work["entry_price"])
-    codes = work[code_col].dropna().astype(str).tolist()
-    latest_map = _get_latest_prices(codes)
-    latest_info = work[code_col].astype(str).map(lambda c: latest_map.get(c) or {})
-    work["latest_price"] = latest_info.map(lambda item: _safe_float(item.get("price"), np.nan))
-    work["latest_trade_date"] = latest_info.map(lambda item: str(item.get("trade_date", "") or ""))
-    work["ret_pct"] = (work["latest_price"] / work["entry_price"] - 1.0) * 100.0
-    perf = work[[code_col] + ([name_col] if name_col else []) + ["entry_price", "latest_price", "latest_trade_date", "ret_pct"]].copy()
-    perf = perf.dropna(subset=["ret_pct"])
-
-    if perf.empty:
-        return perf, {}
-
-    rets = perf["ret_pct"].astype(float)
-    wins = rets[rets > 0]
-    losses = rets[rets <= 0]
-    win_rate = float((rets > 0).mean() * 100.0)
-    avg_ret = float(rets.mean())
-    avg_win = float(wins.mean()) if len(wins) > 0 else 0.0
-    avg_loss = float(losses.mean()) if len(losses) > 0 else 0.0
-    profit_factor = float(wins.sum() / abs(losses.sum())) if len(losses) > 0 and abs(losses.sum()) > 1e-9 else float("inf")
-    expectancy = float((win_rate / 100.0) * avg_win + (1.0 - win_rate / 100.0) * avg_loss)
-    latest_trade_dates = perf["latest_trade_date"].astype(str).str.strip()
-    latest_trade_dates = latest_trade_dates[latest_trade_dates != ""]
-    latest_trade_date_max = str(latest_trade_dates.max()) if len(latest_trade_dates) > 0 else ""
-    stale_count = 0
-    if base_date and len(latest_trade_dates) > 0:
-        stale_count = int((latest_trade_dates <= str(base_date)).sum())
-    stale_ratio = float(stale_count / max(len(latest_trade_dates), 1) * 100.0) if len(latest_trade_dates) > 0 else 0.0
-
-    summary = {
-        "count": float(len(rets)),
-        "win_count": float(len(wins)),
-        "loss_count": float(len(losses)),
-        "win_rate": win_rate,
-        "avg_ret": avg_ret,
-        "median_ret": float(rets.median()),
-        "avg_win": avg_win,
-        "avg_loss": avg_loss,
-        "profit_factor": profit_factor,
-        "expectancy": expectancy,
-        "max_gain": float(rets.max()),
-        "max_drawdown": float(rets.min()),
-        "latest_trade_date": latest_trade_date_max,
-        "stale_count": float(stale_count),
-        "stale_ratio": stale_ratio,
-    }
-    return perf, summary
+    return service_compute_pool_performance(
+        df=df,
+        base_date=base_date,
+        pick_entry_price=_pick_entry_price,
+        get_entry_prices_by_base_date=lambda codes, entry_base_date: _get_entry_prices_by_base_date(
+            codes,
+            entry_base_date,
+        ),
+        safe_float=_safe_float,
+        get_latest_prices=_get_latest_prices,
+    )
 
 
 def _parse_pool_base_date(meta: Dict[str, Any]) -> str:
-    created_at = str(meta.get("created_at", "") or "").strip()
-    if created_at:
-        try:
-            dt = datetime.strptime(created_at[:19], "%Y-%m-%d %H:%M:%S")
-            return dt.strftime("%Y%m%d")
-        except Exception:
-            pass
-    finished_at = str(meta.get("finished_at", "") or "").strip()
-    if finished_at:
-        try:
-            dt = datetime.strptime(finished_at[:19], "%Y-%m-%d %H:%M:%S")
-            return dt.strftime("%Y%m%d")
-        except Exception:
-            pass
-    return datetime.now().strftime("%Y%m%d")
+    return service_parse_pool_base_date(meta)
 
 
 def _compute_forward_return_buckets(ts_codes: List[str], base_date: str, horizons: List[int]) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    if not ts_codes:
-        return pd.DataFrame(), pd.DataFrame()
-    query_codes: List[str] = []
-    for code in ts_codes:
-        canonical = _canonical_ts_code(code)
-        if canonical and canonical not in query_codes:
-            query_codes.append(canonical)
-    if not query_codes:
-        return pd.DataFrame(), pd.DataFrame()
-    hs = sorted([int(h) for h in horizons if int(h) >= 1])
-    if not hs:
-        return pd.DataFrame(), pd.DataFrame()
-    max_h = max(hs)
-
-    conn = _connect_permanent_db()
-    try:
-        from data.dao import detect_daily_table  # type: ignore
-        table = _safe_daily_table_name(detect_daily_table(conn))
-    except Exception:
-        table = "daily_trading_data"
-
-    case_cols = [
-        "MAX(CASE WHEN rn=1 THEN close_price END) AS p0",
-        "MAX(CASE WHEN rn=1 THEN trade_date END) AS d0",
-    ]
-    for h in hs:
-        case_cols.append(f"MAX(CASE WHEN rn={h+1} THEN close_price END) AS p{h}")
-        case_cols.append(f"MAX(CASE WHEN rn={h+1} THEN trade_date END) AS d{h}")
-    case_sql = ",\n                ".join(case_cols)
-
-    raw_parts: List[pd.DataFrame] = []
-    for chunk in _iter_sqlite_in_chunks(query_codes, max_vars=900):
-        placeholders = ",".join(["?"] * len(chunk))
-        query = f"""
-            WITH ranked AS (
-                SELECT ts_code, trade_date, close_price,
-                       ROW_NUMBER() OVER (PARTITION BY ts_code ORDER BY trade_date ASC) AS rn
-                FROM {table}
-                WHERE ts_code IN ({placeholders}) AND trade_date >= ?
-            )
-            SELECT ts_code,
-                   {case_sql}
-            FROM ranked
-            WHERE rn <= ?
-            GROUP BY ts_code
-        """
-        params: List[Any] = list(chunk) + [str(base_date), int(max_h + 1)]
-        df_chunk = pd.read_sql_query(query, conn, params=params)
-        if df_chunk is not None and not df_chunk.empty:
-            raw_parts.append(df_chunk)
-    conn.close()
-    raw = pd.concat(raw_parts, ignore_index=True) if raw_parts else pd.DataFrame()
-
-    if raw is None or raw.empty:
-        return pd.DataFrame(), pd.DataFrame()
-
-    details = raw.copy()
-    details["p0"] = pd.to_numeric(details["p0"], errors="coerce")
-    for h in hs:
-        pcol = f"p{h}"
-        details[pcol] = pd.to_numeric(details[pcol], errors="coerce")
-        details[f"ret_t{h}_pct"] = (details[pcol] / details["p0"] - 1.0) * 100.0
-
-    summary_rows = []
-    for h in hs:
-        rcol = f"ret_t{h}_pct"
-        vals = pd.to_numeric(details[rcol], errors="coerce").dropna()
-        if len(vals) == 0:
-            summary_rows.append(
-                {
-                    "周期": f"T+{h}",
-                    "覆盖数": 0,
-                    "覆盖率%": 0.0,
-                    "胜率%": 0.0,
-                    "平均收益%": np.nan,
-                    "中位数%": np.nan,
-                    "最大收益%": np.nan,
-                    "最大回撤%": np.nan,
-                }
-            )
-            continue
-        win_rate = float((vals > 0).mean() * 100.0)
-        summary_rows.append(
-            {
-                "周期": f"T+{h}",
-                "覆盖数": int(len(vals)),
-                "覆盖率%": float(len(vals) / max(len(details), 1) * 100.0),
-                "胜率%": win_rate,
-                "平均收益%": float(vals.mean()),
-                "中位数%": float(vals.median()),
-                "最大收益%": float(vals.max()),
-                "最大回撤%": float(vals.min()),
-            }
-        )
-    summary = pd.DataFrame(summary_rows)
-    return details, summary
+    bucket_df, detail_df = service_compute_forward_return_buckets(
+        ts_codes=ts_codes,
+        base_date=base_date,
+        horizons=horizons,
+        connect_permanent_db=_connect_permanent_db,
+        safe_daily_table_name=_safe_daily_table_name,
+        canonical_ts_code=_canonical_ts_code,
+        iter_sqlite_in_chunks=_iter_sqlite_in_chunks,
+    )
+    return detail_df, bucket_df
 
 
 def _render_stock_pool_workspace() -> None:
-    st.header("股票池分析")
-    st.caption("保存每次扫描结果，并持续跟踪策略真实表现（胜率/盈亏比/期望收益等）")
-
-    candidate_raw = st.session_state.get("stock_pool_candidate")
-    candidate: Dict[str, Any] = candidate_raw if isinstance(candidate_raw, dict) else {}
-    candidate_df = candidate.get("df")
-    has_candidate_df = isinstance(candidate_df, pd.DataFrame) and not candidate_df.empty
-    save_col1, save_col2 = st.columns([2, 1])
-    with save_col1:
-        note = st.text_input(
-            "本次备注（可选）",
-            value="",
-            key="stock_pool_save_note",
-            placeholder="例如：v9放宽Top%到5%，观察信号密度与收益变化",
-        )
-    with save_col2:
-        disabled = not has_candidate_df
-        if st.button("保存当前扫描结果", key="save_to_stock_pool", use_container_width=True, disabled=disabled):
-            ok, msg = _save_stock_pool_snapshot(
-                strategy=str(candidate.get("strategy", "unknown")),
-                params=candidate.get("params", {}) or {},
-                score_col=str(candidate.get("score_col", "综合评分")),
-                df=candidate_df,
-                note=note,
-            )
-            if ok:
-                st.success(f"保存成功：{msg}")
-            else:
-                st.error(msg)
-
-    metas = _list_stock_pool_meta()
-    if not metas:
-        st.info("股票池暂无历史记录。先在策略中心扫描一次，然后来这里保存。")
-        return
-
-    summary_df = pd.DataFrame(
-        [
-            {
-                "策略": str(m.get("strategy", "")).upper(),
-                "时间": m.get("created_at", ""),
-                "样本数": int(m.get("row_count", 0) or 0),
-                "平均分": m.get("avg_score"),
-                "备注": m.get("note", ""),
-            }
-            for m in metas
-        ]
+    render_stock_pool_workspace_page(
+        save_stock_pool_snapshot=_save_stock_pool_snapshot,
+        list_stock_pool_meta=_list_stock_pool_meta,
+        load_stock_pool_snapshot=_load_stock_pool_snapshot,
+        parse_pool_base_date=_parse_pool_base_date,
+        compute_pool_performance=_compute_pool_performance,
+        compute_forward_return_buckets=_compute_forward_return_buckets,
+        df_to_csv_bytes=_df_to_csv_bytes,
+        delete_stock_pool_snapshot=_delete_stock_pool_snapshot,
     )
-    strategy_agg = summary_df.groupby("策略", as_index=False).agg({"样本数": "sum", "平均分": "mean", "时间": "count"}).rename(columns={"时间": "保存次数"})
-    st.markdown("**策略保存概览**")
-    st.dataframe(strategy_agg, use_container_width=True, hide_index=True)
-
-    options = [f"{m.get('pool_id')} | {str(m.get('strategy', '')).upper()} | {m.get('created_at', '')} | {m.get('row_count', 0)}条" for m in metas]
-    selected = st.selectbox("选择股票池快照", options, key="stock_pool_selected")
-    pool_id = selected.split(" | ")[0]
-    df, meta = _load_stock_pool_snapshot(pool_id)
-    if df is None or df.empty:
-        st.warning("该记录不存在或为空")
-        return
-
-    st.caption(f"策略：{str(meta.get('strategy', '')).upper()}  | 分数字段：{meta.get('score_col', '综合评分')}  | 参数：{json.dumps(meta.get('params', {}), ensure_ascii=False)}")
-    base_date = _parse_pool_base_date(meta)
-    perf_df, perf = _compute_pool_performance(df, base_date=base_date)
-    if perf:
-        m1, m2, m3, m4, m5, m6 = st.columns(6)
-        m1.metric("样本", f"{int(perf['count'])}")
-        m2.metric("胜率", f"{perf['win_rate']:.1f}%")
-        m3.metric("平均收益", f"{perf['avg_ret']:.2f}%")
-        m4.metric("盈亏比", "∞" if np.isinf(perf["profit_factor"]) else f"{perf['profit_factor']:.2f}")
-        m5.metric("期望收益", f"{perf['expectancy']:.2f}%")
-        m6.metric("最大回撤", f"{perf['max_drawdown']:.2f}%")
-        if not perf_df.empty:
-            st.markdown("**标的浮盈亏跟踪（按当前最新价）**")
-            show = perf_df.copy()
-            if len(show.columns) == 6:
-                show.columns = ["股票代码", "股票名称", "入池价", "最新价", "最新价日期", "浮动收益%"]
-            else:
-                show.columns = ["股票代码", "入池价", "最新价", "最新价日期", "浮动收益%"]
-            latest_trade_date = str(perf.get("latest_trade_date", "") or "")
-            if latest_trade_date:
-                st.caption(f"最新价来源：日线收盘价，当前可用最新交易日 {latest_trade_date}")
-            stale_count = int(perf.get("stale_count", 0) or 0)
-            total_count = int(perf.get("count", 0) or 0)
-            if total_count > 0 and stale_count >= total_count:
-                st.warning("当前最新交易日与入池基准日一致，浮盈亏可能接近0%。若为交易日盘中，请先同步当日数据后再查看。")
-            st.dataframe(show.sort_values("浮动收益%", ascending=False), use_container_width=True, hide_index=True)
-            chart_df = show[["股票代码", "浮动收益%"]].set_index("股票代码").tail(50)
-            st.bar_chart(chart_df)
-    else:
-        st.info("当前快照缺少可解析的入池价格，暂时无法计算盈亏统计。建议使用包含“最新价格/现价”的扫描结果保存。")
-
-    code_col = "股票代码" if "股票代码" in df.columns else ("ts_code" if "ts_code" in df.columns else "")
-    if code_col:
-        codes = df[code_col].dropna().astype(str).tolist()
-        detail_ret, bucket_df = _compute_forward_return_buckets(codes, base_date=base_date, horizons=[1, 3, 5])
-        st.markdown("**分桶统计（按入池日期）**")
-        st.caption(f"基准日期：{base_date}（按交易日计算 T+1/T+3/T+5）")
-        if bucket_df is not None and not bucket_df.empty:
-            st.dataframe(bucket_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("该快照暂时无法计算分桶统计（可能样本日期过新或历史数据缺失）。")
-
-        if detail_ret is not None and not detail_ret.empty:
-            show_cols = ["ts_code", "d0", "p0", "d1", "p1", "ret_t1_pct", "d3", "p3", "ret_t3_pct", "d5", "p5", "ret_t5_pct"]
-            show_cols = [c for c in show_cols if c in detail_ret.columns]
-            det = detail_ret[show_cols].copy()
-            det = det.rename(
-                columns={
-                    "ts_code": "股票代码",
-                    "d0": "入池日",
-                    "p0": "入池价",
-                    "d1": "T+1日期",
-                    "p1": "T+1价",
-                    "ret_t1_pct": "T+1收益%",
-                    "d3": "T+3日期",
-                    "p3": "T+3价",
-                    "ret_t3_pct": "T+3收益%",
-                    "d5": "T+5日期",
-                    "p5": "T+5价",
-                    "ret_t5_pct": "T+5收益%",
-                }
-            )
-            st.markdown("**分桶明细（逐股）**")
-            st.dataframe(det, use_container_width=True, hide_index=True)
-
-    view_df = df.drop(columns=["原始数据"], errors="ignore")
-    st.markdown("**快照原始结果**")
-    st.dataframe(view_df, use_container_width=True, hide_index=True)
-    c3, c4 = st.columns(2)
-    with c3:
-        st.download_button(
-            "导出该快照CSV",
-            data=_df_to_csv_bytes(view_df),
-            file_name=f"股票池_{pool_id}.csv",
-            mime="text/csv; charset=utf-8",
-            key=f"pool_export_{pool_id}",
-            use_container_width=True,
-        )
-    with c4:
-        if st.button("删除该快照", key=f"pool_delete_{pool_id}", use_container_width=True):
-            ok, msg = _delete_stock_pool_snapshot(pool_id)
-            if ok:
-                st.success(msg)
-                st.rerun()
-            else:
-                st.error(msg)
 
 
 def _is_pid_running(pid: int) -> bool:
@@ -1816,11 +1188,23 @@ def _enable_tab_persistence(storage_prefix: str = "openclaw_v49_tabs") -> None:
     )
 
 
-def _set_focus_once(main_tab: Optional[str] = None, assistant_tab: Optional[str] = None) -> None:
+def _set_focus_once(
+    main_tab: Optional[str] = None,
+    assistant_tab: Optional[str] = None,
+    production_tab: Optional[str] = None,
+    research_tab: Optional[str] = None,
+    ops_tab: Optional[str] = None,
+) -> None:
     if main_tab:
         st.session_state["desired_main_tab"] = main_tab
     if assistant_tab:
         st.session_state["desired_assistant_tab"] = assistant_tab
+    if production_tab:
+        st.session_state["desired_production_tab"] = production_tab
+    if research_tab:
+        st.session_state["desired_research_tab"] = research_tab
+    if ops_tab:
+        st.session_state["desired_ops_tab"] = ops_tab
 
 
 def _is_low_value_remote_answer(text: str) -> bool:
@@ -1851,9 +1235,11 @@ def _is_advanced_protocol_answer(text: str) -> bool:
 
 
 def _df_to_csv_bytes(df: pd.DataFrame) -> bytes:
-    """Return UTF-8 CSV bytes with BOM for Excel compatibility."""
-    csv_text = df.to_csv(index=False)
-    return ('\ufeff' + csv_text).encode('utf-8')
+    return runtime_df_to_csv_bytes(df)
+
+
+def _safe_file_mtime(path: str) -> float:
+    return runtime_safe_file_mtime(path)
 
 
 @st.cache_resource(show_spinner=False)
@@ -1910,101 +1296,35 @@ def _mark_front_scan_completed(
         "result_count": int(len(results_df)),
         "candidate_count": int(meta.get("candidate_count", len(results_df)) or len(results_df)),
         "filter_failed": int(meta.get("filter_failed", 0) or 0),
+        "elapsed_ms": int(meta.get("elapsed_ms", 0) or 0),
+        "cache_hit": bool(meta.get("cache_hit", False)),
+        "cache_mode": str(meta.get("cache_mode") or ""),
+        "lookback_days": int(meta.get("lookback_days", 0) or 0),
         "score_col": score_col,
     }
 
 
 def _render_front_scan_summary(strategy: str, title: str) -> None:
-    summary = st.session_state.get(f"{strategy}_front_scan_summary")
-    results_df = st.session_state.get(f"{strategy}_front_scan_results")
-    if not isinstance(summary, dict) or not isinstance(results_df, pd.DataFrame) or results_df.empty:
-        return
-    st.markdown("---")
-    st.markdown(f"### 最近一次扫描结果（{title}）")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric("完成时间", str(summary.get("finished_at", "") or "-"))
-    with c2:
-        st.metric("候选数", int(summary.get("candidate_count", len(results_df)) or len(results_df)))
-    with c3:
-        st.metric("结果数", int(summary.get("result_count", len(results_df)) or len(results_df)))
-    with c4:
-        st.metric("过滤淘汰", int(summary.get("filter_failed", 0) or 0))
+    runtime_render_front_scan_summary(strategy=strategy, title=title)
 
 
 def _ensure_price_aliases(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep close/close_price (and common OHLCV aliases) both available."""
-    if df is None:
-        return df
-    out = df.copy()
-    alias_pairs = [
-        ("close_price", "close"),
-        ("open_price", "open"),
-        ("high_price", "high"),
-        ("low_price", "low"),
-        ("vol", "volume"),
-    ]
-    for a, b in alias_pairs:
-        if a in out.columns and b not in out.columns:
-            out[b] = out[a]
-        elif b in out.columns and a not in out.columns:
-            out[a] = out[b]
-    return out
+    return runtime_ensure_price_aliases(df)
 
 
 def _normalize_stock_df(df: pd.DataFrame) -> pd.DataFrame:
-    if df is None or df.empty:
-        return df
-    df = _ensure_price_aliases(df)
-    if "trade_date" in df.columns:
-        df = df.sort_values("trade_date").reset_index(drop=True)
-    for col in (
-        "close_price", "close",
-        "open_price", "open",
-        "high_price", "high",
-        "low_price", "low",
-        "vol", "volume", "pct_chg", "amount", "turnover_rate"
-    ):
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    df = df.ffill().bfill()
-    df = _ensure_price_aliases(df)
-    return df
+    return runtime_normalize_stock_df(df)
 
 
 def _load_stock_history(conn: sqlite3.Connection, ts_code: str, limit: int, columns: str) -> pd.DataFrame:
-    try:
-        from data.history import load_stock_recent as _load_stock_recent_v2  # type: ignore
-        db_rows = conn.execute("PRAGMA database_list").fetchall()
-        db_path = str(db_rows[0][2]) if db_rows and len(db_rows[0]) >= 3 else ""
-        if db_path:
-            df = _load_stock_recent_v2(
-                db_path=db_path,
-                ts_code=ts_code,
-                limit=int(limit),
-                columns=columns,
-            )
-            return _normalize_stock_df(df)
-    except Exception:
-        pass
-    try:
-        from data.dao import DataAccessError, detect_daily_table  # type: ignore
-        try:
-            table = detect_daily_table(conn)
-        except DataAccessError:
-            table = "daily_trading_data"
-        table = _safe_daily_table_name(table)
-    except Exception:
-        table = "daily_trading_data"
-    query = f"""
-        SELECT {columns}
-        FROM {table}
-        WHERE ts_code = ?
-        ORDER BY trade_date DESC
-        LIMIT {int(limit)}
-    """
-    df = pd.read_sql_query(query, conn, params=(ts_code,))
-    return _normalize_stock_df(df)
+    return runtime_load_stock_history(
+        conn=conn,
+        ts_code=ts_code,
+        limit=limit,
+        columns=columns,
+        normalize_stock_df=_normalize_stock_df,
+        safe_daily_table_name=_safe_daily_table_name,
+    )
 
 
 def _load_stock_history_fallback(
@@ -2020,51 +1340,15 @@ def _load_stock_history_bulk(
     columns: str,
     table: str = "daily_trading_data",
 ) -> Dict[str, pd.DataFrame]:
-    try:
-        from data.history import load_stock_history_bulk as _load_stock_history_bulk_v2  # type: ignore
-        return _load_stock_history_bulk_v2(
-            conn=conn,
-            ts_codes=ts_codes,
-            limit=limit,
-            columns=columns,
-            normalize_fn=_normalize_stock_df,
-            bulk_chunk=BULK_HISTORY_CHUNK,
-            table=table,
-        )
-    except Exception:
-        pass
-    if not ts_codes:
-        return {}
-    out: Dict[str, pd.DataFrame] = {}
-    cols = columns
-    use_window = True
-    chunk_size = max(1, min(int(BULK_HISTORY_CHUNK), 900))
-    for i in range(0, len(ts_codes), chunk_size):
-        chunk = ts_codes[i:i + chunk_size]
-        placeholders = ",".join(["?"] * len(chunk))
-        if use_window:
-            query = f"""
-                SELECT {cols} FROM (
-                    SELECT {cols},
-                           ROW_NUMBER() OVER (PARTITION BY ts_code ORDER BY trade_date DESC) AS rn
-                    FROM {table}
-                    WHERE ts_code IN ({placeholders})
-                ) t
-                WHERE rn <= {int(limit)}
-                ORDER BY ts_code, trade_date DESC
-            """
-            try:
-                df = pd.read_sql_query(query, conn, params=chunk)
-            except Exception:
-                use_window = False
-                df = pd.DataFrame()
-        else:
-            df = pd.DataFrame()
-        if df is None or df.empty:
-            continue
-        for ts_code, g in df.groupby("ts_code"):
-            out[ts_code] = _normalize_stock_df(g)
-    return out
+    return runtime_load_stock_history_bulk(
+        conn=conn,
+        ts_codes=ts_codes,
+        limit=limit,
+        columns=columns,
+        bulk_history_chunk=BULK_HISTORY_CHUNK,
+        normalize_stock_df=_normalize_stock_df,
+        table=table,
+    )
 
 
 def _load_history_range_bulk(
@@ -2075,53 +1359,20 @@ def _load_history_range_bulk(
     columns: str,
     table: str = "daily_trading_data",
 ) -> Dict[str, pd.DataFrame]:
-    try:
-        from data.history import load_history_range_bulk as _load_history_range_bulk_v2  # type: ignore
-        return _load_history_range_bulk_v2(
-            conn=conn,
-            ts_codes=ts_codes,
-            start_date=start_date,
-            end_date=end_date,
-            columns=columns,
-            normalize_fn=_normalize_stock_df,
-            bulk_chunk=BULK_HISTORY_CHUNK,
-            table=table,
-        )
-    except Exception:
-        pass
-    if not ts_codes:
-        return {}
-    out: Dict[str, pd.DataFrame] = {}
-    cols = columns
-    chunk_size = max(1, min(int(BULK_HISTORY_CHUNK), 900 - 2))
-    for i in range(0, len(ts_codes), chunk_size):
-        chunk = ts_codes[i:i + chunk_size]
-        placeholders = ",".join(["?"] * len(chunk))
-        query = f"""
-            SELECT {cols}
-            FROM {table}
-            WHERE ts_code IN ({placeholders})
-              AND trade_date >= ?
-              AND trade_date <= ?
-            ORDER BY ts_code, trade_date
-        """
-        df = pd.read_sql_query(query, conn, params=chunk + [start_date, end_date])
-        if df is None or df.empty:
-            continue
-        for ts_code, g in df.groupby("ts_code"):
-            out[ts_code] = _normalize_stock_df(g)
-    return out
+    return runtime_load_history_range_bulk(
+        conn=conn,
+        ts_codes=ts_codes,
+        start_date=start_date,
+        end_date=end_date,
+        columns=columns,
+        bulk_history_chunk=BULK_HISTORY_CHUNK,
+        normalize_stock_df=_normalize_stock_df,
+        table=table,
+    )
 
 
 def _load_evolve_params(filename: str) -> Dict[str, Any]:
-    try:
-        evolve_path = os.path.join(os.path.dirname(__file__), "evolution", filename)
-        if os.path.exists(evolve_path):
-            with open(evolve_path, "r", encoding="utf-8") as f:
-                return json.load(f) or {}
-    except Exception:
-        pass
-    return {}
+    return service_load_evolve_params(os.path.dirname(__file__), filename)
 
 
 _STRATEGY_CENTER_CACHE: Optional[Dict[str, Any]] = None
@@ -2130,105 +1381,33 @@ _STRATEGY_CENTER_CACHE: Optional[Dict[str, Any]] = None
 def _load_strategy_center_scan_defaults(strategy: str) -> Tuple[Dict[str, Any], str]:
     """Load runtime scan defaults from strategy center config."""
     global _STRATEGY_CENTER_CACHE
-    try:
-        if _STRATEGY_CENTER_CACHE is None:
-            cfg_path = os.path.join(os.path.dirname(__file__), "openclaw", "config", "strategy_center.yaml")
-            cfg: Dict[str, Any] = {}
-            try:
-                from strategies.center_config import load_center_config as _load_center_config  # type: ignore
-                cfg = _load_center_config(Path(cfg_path)) if os.path.exists(cfg_path) else {}
-            except Exception:
-                cfg = {}
-            _STRATEGY_CENTER_CACHE = cfg if isinstance(cfg, dict) else {}
-
-        runtime_defaults = (_STRATEGY_CENTER_CACHE or {}).get("runtime_defaults", {})
-        if not isinstance(runtime_defaults, dict):
-            return {}, "none"
-        params = runtime_defaults.get(strategy, {})
-        if not isinstance(params, dict):
-            return {}, "none"
-        out: Dict[str, Any] = {}
-        for k in ("score_threshold", "sample_size", "holding_days"):
-            if k in params:
-                out[k] = params.get(k)
-        if out:
-            return out, "strategy_center"
-    except Exception:
-        pass
-    return {}, "none"
+    out, source, cache = runtime_load_strategy_center_scan_defaults(
+        app_root=os.path.dirname(__file__),
+        strategy=strategy,
+        strategy_center_cache=_STRATEGY_CENTER_CACHE,
+    )
+    _STRATEGY_CENTER_CACHE = cache
+    return out, source
 
 
 def _fmt_file_mtime(path: str) -> str:
-    try:
-        if os.path.exists(path):
-            return datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M:%S")
-    except Exception:
-        pass
-    return ""
+    return runtime_fmt_file_mtime(path)
 
 
 def _safe_parse_dt(text: str) -> Optional[datetime]:
-    t = str(text or "").strip()
-    if not t:
-        return None
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y%m%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
-        try:
-            return datetime.strptime(t[:19], fmt)
-        except Exception:
-            continue
-    return None
+    return runtime_safe_parse_dt(text)
 
 
 def _load_backtest_history_df(days: int = 240, use_cache: bool = True) -> pd.DataFrame:
-    from data.dao import DataAccessError, detect_daily_table  # type: ignore
-    cache_ttl_sec = int(os.getenv("OPENCLAW_BACKTEST_HISTORY_CACHE_TTL", "300"))
-    safe_days = max(30, int(days))
-    db_mtime = 0.0
-    try:
-        db_mtime = float(os.path.getmtime(PERMANENT_DB_PATH))
-    except Exception:
-        db_mtime = 0.0
-    now_ts = _now_ts()
-    if use_cache:
-        cached_df = _BACKTEST_HISTORY_CACHE.get("df")
-        cached_at = float(_BACKTEST_HISTORY_CACHE.get("created_at", 0.0) or 0.0)
-        cached_days = int(_BACKTEST_HISTORY_CACHE.get("days", 0) or 0)
-        cached_db_mtime = float(_BACKTEST_HISTORY_CACHE.get("db_mtime", 0.0) or 0.0)
-        if (
-            isinstance(cached_df, pd.DataFrame)
-            and not cached_df.empty
-            and cached_days == safe_days
-            and abs(cached_db_mtime - db_mtime) < 1e-6
-            and (now_ts - cached_at) <= cache_ttl_sec
-        ):
-            return cached_df.copy()
-
-    conn = _connect_permanent_db()
-    try:
-        try:
-            daily_table = detect_daily_table(conn)
-        except DataAccessError as e:
-            raise RuntimeError(f"无法识别日线数据表: {e}")
-        start_date = (datetime.now() - timedelta(days=safe_days)).strftime('%Y%m%d')
-        query = f"""
-            SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
-                   dtd.open_price, dtd.high_price, dtd.low_price,
-                   dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
-            FROM {daily_table} dtd
-            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-            WHERE dtd.trade_date >= ?
-            ORDER BY dtd.ts_code, dtd.trade_date
-        """
-        df = pd.read_sql_query(query, conn, params=(start_date,))
-        out = _ensure_price_aliases(df)
-        if use_cache and isinstance(out, pd.DataFrame) and not out.empty:
-            _BACKTEST_HISTORY_CACHE["created_at"] = now_ts
-            _BACKTEST_HISTORY_CACHE["db_mtime"] = db_mtime
-            _BACKTEST_HISTORY_CACHE["days"] = safe_days
-            _BACKTEST_HISTORY_CACHE["df"] = out.copy()
-        return out
-    finally:
-        conn.close()
+    return runtime_load_backtest_history_df(
+        app_root=os.path.dirname(__file__),
+        permanent_db_path=PERMANENT_DB_PATH,
+        connect_permanent_db=_connect_permanent_db,
+        ensure_price_aliases=_ensure_price_aliases,
+        now_ts=_now_ts,
+        days=days,
+        use_cache=use_cache,
+    )
 
 
 def _run_single_backtest_worker(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -2382,727 +1561,103 @@ def _run_comparison_backtest_worker(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _launch_async_backtest_process(run_id: str, job_kind: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    py_bin = os.path.join(root_dir, ".venv", "bin", "python")
-    if not os.path.exists(py_bin):
-        py_bin = sys.executable or shutil.which("python3") or "/usr/bin/python3"
-    stdout_log, stderr_log = _async_backtest_log_paths(run_id)
-    env = os.environ.copy()
-    env.update({
-        "OPENCLAW_ASYNC_BACKTEST_WORKER": "1",
-        "OPENCLAW_ASYNC_BACKTEST_RUN_ID": str(run_id),
-        "OPENCLAW_ASYNC_BACKTEST_JOB_KIND": str(job_kind),
-    })
-    with open(stdout_log, "ab") as out_f, open(stderr_log, "ab") as err_f:
-        proc = subprocess.Popen(
-            [py_bin, os.path.join(root_dir, "v49_app.py")],
-            cwd=root_dir,
-            env=env,
-            stdout=out_f,
-            stderr=err_f,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    return {"pid": int(proc.pid), "stdout_log": stdout_log, "stderr_log": stderr_log}
+    return runtime_launch_async_backtest_process(
+        app_root=os.path.dirname(os.path.abspath(__file__)),
+        run_id=run_id,
+        job_kind=job_kind,
+        async_backtest_log_paths=_async_backtest_log_paths,
+        python_executable=sys.executable,
+    )
 
 
 def _start_async_backtest_job(job_kind: str, payload: Dict[str, Any]) -> Tuple[bool, str, str]:
-    with _ASYNC_BACKTEST_LOCK:
-        for rid, job in list(_ASYNC_BACKTEST_JOBS.items()):
-            if str(job.get("status")) == "running":
-                return False, "已有回测任务在运行，请等待完成", ""
-        run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
-        job_data = {
-            "run_id": run_id,
-            "job_kind": str(job_kind),
-            "payload": dict(payload or {}),
-            "status": "queued",
-            "created_at": _now_ts(),
-            "ended_at": 0.0,
-            "result": None,
-            "error": "",
-            "traceback": "",
-        }
-        _ASYNC_BACKTEST_JOBS[run_id] = dict(job_data)
-    _merge_async_backtest_job(run_id, job_data)
-    try:
-        launch_info = _launch_async_backtest_process(run_id, str(job_kind), payload or {})
-        _merge_async_backtest_job(
-            run_id,
-            job_data,
-            status="running",
-            pid=int(launch_info["pid"]),
-            worker_started_at=_now_text(),
-            stdout_log=str(launch_info["stdout_log"]),
-            stderr_log=str(launch_info["stderr_log"]),
-        )
-    except Exception as exc:
-        _merge_async_backtest_job(
-            run_id,
-            job_data,
-            status="failed",
-            error=str(exc),
-            traceback=traceback.format_exc(),
-            ended_at=_now_ts(),
-        )
-        return False, f"后台回测启动失败：{exc}", run_id
-    return True, f"后台回测已启动（任务ID={run_id}）", run_id
+    return runtime_start_async_backtest_job(
+        job_kind=job_kind,
+        payload=payload,
+        async_backtest_jobs=_ASYNC_BACKTEST_JOBS,
+        async_backtest_lock=_ASYNC_BACKTEST_LOCK,
+        now_ts=_now_ts,
+        now_text=_now_text,
+        merge_async_backtest_job=_merge_async_backtest_job,
+        launch_async_backtest_process=_launch_async_backtest_process,
+    )
 
 
 def _get_async_backtest_job(run_id: str) -> Optional[Dict[str, Any]]:
-    run_id = str(run_id or "")
-    if not run_id:
-        return None
-    _cleanup_async_backtest_jobs()
-    with _ASYNC_BACKTEST_LOCK:
-        item = _ASYNC_BACKTEST_JOBS.get(run_id)
-        if item:
-            job = dict(item)
-        else:
-            job = {}
-    if not job:
-        state = _load_async_backtest_state(run_id)
-        if not state:
-            return None
-        job = dict(state)
-        with _ASYNC_BACKTEST_LOCK:
-            _ASYNC_BACKTEST_JOBS[run_id] = dict(job)
-    pid = int(job.get("pid", 0) or 0)
-    status = str(job.get("status", "") or "")
-    if status == "running" and pid > 0 and not _is_pid_alive(pid):
-        state = _load_async_backtest_state(run_id)
-        if state:
-            job = dict(state)
-        if str(job.get("status", "")) == "running":
-            job = _merge_async_backtest_job(
-                run_id,
-                job,
-                status="failed",
-                error=str(job.get("error", "") or "回测任务在服务重启前中断"),
-                ended_at=float(job.get("ended_at", 0.0) or _now_ts()),
-            )
-    return dict(job)
+    return runtime_get_async_backtest_job(
+        run_id,
+        async_backtest_jobs=_ASYNC_BACKTEST_JOBS,
+        async_backtest_lock=_ASYNC_BACKTEST_LOCK,
+        result_dir=ASYNC_BACKTEST_RESULT_DIR,
+        keep_seconds=ASYNC_BACKTEST_KEEP_SECONDS,
+        now_ts=_now_ts(),
+    )
 
 def _load_latest_production_report() -> Tuple[Dict[str, Any], str, str]:
-    evo_dir = os.path.join(os.path.dirname(__file__), "evolution")
-    file_map = {
-        "V9": "v9_best.json",
-        "V8": "v8_best.json",
-        "V5": "v5_best.json",
-        "COMBO": "combo_best.json",
-    }
-    best_payload: Dict[str, Any] = {}
-    best_strategy = ""
-    best_mtime = 0.0
-    best_mtime_text = ""
-    for strategy, fname in file_map.items():
-        path = os.path.join(evo_dir, fname)
-        try:
-            if not os.path.exists(path):
-                continue
-            mtime = os.path.getmtime(path)
-            with open(path, "r", encoding="utf-8") as f:
-                payload = json.load(f) or {}
-            if mtime > best_mtime and isinstance(payload, dict):
-                best_mtime = mtime
-                best_payload = payload
-                best_strategy = strategy
-                best_mtime_text = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
-            continue
-    return best_payload, best_strategy, best_mtime_text
+    return service_load_latest_production_report(os.path.dirname(__file__))
 
 
 def _load_production_report_by_strategy(strategy: str) -> Tuple[Dict[str, Any], str, str]:
-    evo_dir = os.path.join(os.path.dirname(__file__), "evolution")
-    file_map: Dict[str, List[Tuple[str, str]]] = {
-        "V9": [
-            ("best", "v9_best.json"),
-            ("last_attempt", "v9_last_attempt.json"),
-            ("candidate", "v9_candidate.json"),
-        ],
-        "V8": [
-            ("best", "v8_best.json"),
-            ("last_attempt", "v8_last_attempt.json"),
-            ("candidate", "v8_candidate.json"),
-        ],
-        "V5": [
-            ("best", "v5_best.json"),
-            ("last_attempt", "v5_last_attempt.json"),
-            ("candidate", "v5_candidate.json"),
-        ],
-        "COMBO": [
-            ("best", "combo_best.json"),
-            ("last_attempt", "combo_last_attempt.json"),
-            ("candidate", "combo_candidate.json"),
-        ],
-    }
-    s = str(strategy or "").strip().upper()
-    candidates = file_map.get(s, [])
-    for source_type, filename in candidates:
-        path = os.path.join(evo_dir, filename)
-        if not os.path.exists(path):
-            continue
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                payload = json.load(f) or {}
-            mtime = datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M:%S")
-            return (payload if isinstance(payload, dict) else {}), mtime, source_type
-        except Exception:
-            continue
-    return {}, "", "missing"
+    return service_load_production_report_by_strategy(os.path.dirname(__file__), strategy)
 
 
 def _load_latest_production_promotion(strategy_filter: str = "") -> Dict[str, Any]:
-    evo_dir = os.path.join(os.path.dirname(__file__), "evolution")
-    promo_path = os.path.join(evo_dir, "promotion_history.jsonl")
-    allow = {"V9", "V8", "V5", "COMBO"}
-    target = str(strategy_filter or "").strip().upper()
-    if not os.path.exists(promo_path):
-        return {}
-    try:
-        with open(promo_path, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            pos = max(0, size - 65536)
-            f.seek(pos)
-            tail = f.read().decode("utf-8", errors="ignore")
-        lines = [ln.strip() for ln in tail.splitlines() if ln.strip()]
-        for ln in reversed(lines):
-            try:
-                obj = json.loads(ln)
-                decision = (obj.get("decision") or {}) if isinstance(obj, dict) else {}
-                strategy = str(decision.get("strategy", "")).upper()
-                if strategy in allow and (not target or strategy == target):
-                    return decision
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return {}
+    return service_load_latest_production_promotion(os.path.dirname(__file__), strategy_filter)
 
 
 def _get_auto_evolve_status() -> Dict[str, Any]:
-    lock_path = AUTO_EVOLVE_LOCK_PATH
-    log_path = os.path.join(os.path.dirname(__file__), "auto_evolve.log")
-    risk_path = os.path.join(os.path.dirname(__file__), "evolution", "risk_sentinel.json")
-    legacy_evolve_path = os.path.join(os.path.dirname(__file__), "evolution", "last_run.json")
-
-    lock_exists = os.path.exists(lock_path)
-    pid = ""
-    pid_alive = False
-    if lock_exists:
-        try:
-            with open(lock_path, "r", encoding="utf-8") as f:
-                pid = (f.read() or "").strip()
-            if pid.isdigit():
-                pid_alive = _is_pid_running(int(pid))
-        except Exception:
-            pid = ""
-            pid_alive = False
-
-    if pid_alive:
-        runtime_state = "运行中"
-    elif lock_exists:
-        # Auto-clean stale lock to avoid persistent false "历史锁" noise.
-        try:
-            os.remove(lock_path)
-            lock_exists = False
-        except Exception:
-            pass
-        runtime_state = "空闲（检测到历史锁）"
-    else:
-        runtime_state = "空闲"
-
-    data, data_strategy, data_mtime = _load_latest_production_report()
-    if not data:
-        data = _load_evolve_params("last_run.json")
-        data_strategy = "V4"
-        data_mtime = _fmt_file_mtime(legacy_evolve_path)
-    run_at = str(data.get("run_at", "") or "")
-    run_dt = _safe_parse_dt(run_at)
-    age_mins = None
-    if run_dt is not None:
-        age_mins = int(max(0.0, (datetime.now() - run_dt).total_seconds() // 60))
-
-    risk_level = "unknown"
-    risk_level_effective = "unknown"
-    risk_rules: List[str] = []
-    risk_run_at = ""
-    risk_age_mins = None
-    risk_stale = False
-    try:
-        if os.path.exists(risk_path):
-            with open(risk_path, "r", encoding="utf-8") as f:
-                risk_data = json.load(f) or {}
-            risk_level = str(risk_data.get("risk_level", "unknown") or "unknown")
-            risk_rules = [str(x) for x in (risk_data.get("triggered_rules") or [])]
-            risk_run_at = str(risk_data.get("run_at", "") or "")
-            risk_dt = _safe_parse_dt(risk_run_at)
-            stale_mins = int(os.getenv("OPENCLAW_RISK_SENTINEL_STALE_MINUTES", "180"))
-            if risk_dt is not None:
-                risk_age_mins = int(max(0.0, (datetime.now() - risk_dt).total_seconds() // 60))
-                risk_stale = bool(risk_age_mins > stale_mins)
-            risk_level_effective = "unknown" if risk_stale else risk_level
-    except Exception:
-        pass
-
-    last_promo: Dict[str, Any] = _load_latest_production_promotion()
-
-    return {
-        "runtime_state": runtime_state,
-        "pid": pid,
-        "pid_alive": pid_alive,
-        "run_at": run_at,
-        "run_age_mins": age_mins,
-        "last_run_mtime": data_mtime,
-        "run_source": data_strategy or "N/A",
-        "log_mtime": _fmt_file_mtime(log_path),
-        "risk_level": risk_level,
-        "risk_level_effective": risk_level_effective,
-        "risk_rules": risk_rules,
-        "risk_run_at": risk_run_at,
-        "risk_age_mins": risk_age_mins,
-        "risk_stale": risk_stale,
-        "last_promotion": last_promo,
-        "data": data,
-    }
+    return service_get_auto_evolve_status(
+        app_root=os.path.dirname(__file__),
+        auto_evolve_lock_path=AUTO_EVOLVE_LOCK_PATH,
+        is_pid_running=_is_pid_running,
+        load_latest_production_report=_load_latest_production_report,
+        load_evolve_params=_load_evolve_params,
+        fmt_file_mtime=_fmt_file_mtime,
+        safe_parse_dt=_safe_parse_dt,
+        load_latest_production_promotion=lambda: _load_latest_production_promotion(),
+    )
 
 
 def _resolve_app_path(path_text: str) -> str:
-    p = str(path_text or "").strip()
-    if not p:
-        return ""
-    if os.path.isabs(p):
-        return p
-    root_dir = os.path.dirname(__file__)
-    p1 = os.path.join(root_dir, p)
-    if os.path.exists(p1):
-        return p1
-    p2 = os.path.join(os.getcwd(), p)
-    if os.path.exists(p2):
-        return p2
-    return p1
+    return service_resolve_app_path(os.path.dirname(__file__), path_text)
 
 
 def _load_latest_tracking_scoreboard(max_files: int = 60) -> Tuple[pd.DataFrame, str, str]:
-    root_dir = os.path.dirname(__file__)
-    log_dirs = [
-        os.path.join(root_dir, "logs", "openclaw"),
-        os.path.join(os.getcwd(), "logs", "openclaw"),
-    ]
-    log_dir = ""
-    for d in log_dirs:
-        if os.path.isdir(d):
-            log_dir = d
-            break
-    if not log_dir:
-        return pd.DataFrame(), "", ""
-
-    exec_files = sorted(glob.glob(os.path.join(log_dir, "partner_execution_*.json")), reverse=True)[: max(1, int(max_files))]
-    for fp in exec_files:
-        try:
-            with open(fp, "r", encoding="utf-8") as f:
-                obj = json.load(f) or {}
-            tracking = obj.get("tracking") or {}
-            scoreboard = tracking.get("scoreboard") or {}
-            artifacts = obj.get("artifacts") or {}
-            csv_path_raw = str(scoreboard.get("csv") or artifacts.get("strategy_scoreboard_csv") or "").strip()
-            if not csv_path_raw:
-                continue
-            csv_path = _resolve_app_path(csv_path_raw)
-            if not csv_path or (not os.path.exists(csv_path)):
-                continue
-            df = pd.read_csv(csv_path)
-            if df is None or df.empty:
-                continue
-            if "strategy" not in df.columns:
-                continue
-            return df, fp, csv_path
-        except Exception:
-            continue
-    return pd.DataFrame(), "", ""
+    return service_load_latest_tracking_scoreboard(
+        os.path.dirname(__file__),
+        max_files=max_files,
+        resolve_app_path_fn=_resolve_app_path,
+    )
 
 
 def _summarize_stock_pool_signal_performance(detail_df: pd.DataFrame) -> pd.DataFrame:
-    if detail_df is None or detail_df.empty:
-        return pd.DataFrame()
-    out_rows: List[Dict[str, Any]] = []
-    group_cols = ["strategy", "horizon_days"]
-    for (strategy, horizon), grp in detail_df.groupby(group_cols):
-        vals = pd.to_numeric(grp["ret_pct"], errors="coerce").dropna()
-        if vals.empty:
-            continue
-        ex_vals = pd.to_numeric(grp["excess_ret_pct"], errors="coerce").dropna()
-        dd_vals = pd.to_numeric(grp["max_dd_pct"], errors="coerce").dropna()
-        settled = pd.to_numeric(grp.get("is_settled", pd.Series([], dtype=float)), errors="coerce")
-        settled_ratio = float(settled.fillna(0).mean() * 100.0) if len(settled) > 0 else np.nan
-        out_rows.append(
-            {
-                "strategy": str(strategy),
-                "horizon_days": int(horizon),
-                "samples": int(len(vals)),
-                "settled_ratio_pct": settled_ratio,
-                "win_rate_pct": float((vals > 0).mean() * 100.0),
-                "avg_ret_pct": float(vals.mean()),
-                "median_ret_pct": float(vals.median()),
-                "avg_excess_ret_pct": float(ex_vals.mean()) if len(ex_vals) > 0 else np.nan,
-                "p25_ret_pct": float(vals.quantile(0.25)),
-                "p75_ret_pct": float(vals.quantile(0.75)),
-                "avg_max_dd_pct": float(dd_vals.mean()) if len(dd_vals) > 0 else np.nan,
-                "tail_loss_p10_pct": float(vals.quantile(0.10)),
-            }
-        )
-    return pd.DataFrame(out_rows)
+    return service_summarize_stock_pool_signal_performance(detail_df)
 
 
 def _load_stock_pool_performance_detail(max_files: int = 240) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
-    benchmark_code = "000001.SH"
-    max_signals = int(os.getenv("OPENCLAW_STOCK_POOL_PERF_MAX_SIGNALS", "40000"))
-    root_dir = os.path.dirname(__file__)
-    pool_dirs = [
-        os.path.join(root_dir, "logs", "openclaw", "stock_pool"),
-        os.path.join(os.getcwd(), "logs", "openclaw", "stock_pool"),
-    ]
-    pool_dir = ""
-    for d in pool_dirs:
-        if os.path.isdir(d):
-            pool_dir = d
-            break
-    if not pool_dir:
-        return pd.DataFrame(), pd.DataFrame(), ""
-
-    meta_files = sorted(glob.glob(os.path.join(pool_dir, "*.meta.json")), reverse=True)[: max(1, int(max_files))]
-    signal_rows: List[Dict[str, Any]] = []
-    source_meta = ""
-    for mf in meta_files:
-        try:
-            with open(mf, "r", encoding="utf-8") as f:
-                meta = json.load(f) or {}
-            strategy = str(meta.get("strategy", "")).strip().lower()
-            if strategy not in {"v9", "v8", "v5", "combo"}:
-                continue
-            created_at = str(meta.get("created_at", "") or "")
-            signal_date = ""
-            if created_at:
-                signal_date = created_at[:10].replace("-", "")
-            if len(signal_date) != 8:
-                continue
-            params = meta.get("params") or {}
-            holding_days = int(float(params.get("holding_days", 10) or 10))
-            csv_path = str(meta.get("csv_path", "")).strip()
-            if not csv_path:
-                csv_path = mf.replace(".meta.json", ".csv")
-            if not os.path.isabs(csv_path):
-                csv_path = os.path.join(root_dir, csv_path)
-            if not os.path.exists(csv_path):
-                continue
-            df_pool = pd.read_csv(csv_path)
-            if df_pool is None or df_pool.empty:
-                continue
-            code_col = "股票代码" if "股票代码" in df_pool.columns else ("ts_code" if "ts_code" in df_pool.columns else "")
-            if not code_col:
-                continue
-            name_col = "股票名称" if "股票名称" in df_pool.columns else ("name" if "name" in df_pool.columns else "")
-            industry_col = ""
-            for c in ["所属行业", "行业", "industry", "行业板块"]:
-                if c in df_pool.columns:
-                    industry_col = c
-                    break
-            market_cap_col = ""
-            for c in ["总市值(亿)", "市值(亿)", "流通市值(亿)", "总市值", "流通市值", "market_cap", "cap"]:
-                if c in df_pool.columns:
-                    market_cap_col = c
-                    break
-            score_col_meta = str(meta.get("score_col", "") or "").strip()
-            score_col = score_col_meta if score_col_meta in df_pool.columns else ""
-            if not score_col:
-                for c in ["综合评分", "共识评分", "score"]:
-                    if c in df_pool.columns:
-                        score_col = c
-                        break
-            rank_col = ""
-            for c in ["排名", "rank", "序号"]:
-                if c in df_pool.columns:
-                    rank_col = c
-                    break
-
-            for _, row in df_pool.iterrows():
-                ts_code = str(row.get(code_col, "") or "").strip()
-                if not ts_code or ts_code.lower() in {"nan", "none", ""}:
-                    continue
-                signal_rows.append(
-                    {
-                        "strategy": strategy,
-                        "ts_code": ts_code,
-                        "stock_name": str(row.get(name_col, "")).strip() if name_col else "",
-                        "industry": str(row.get(industry_col, "")).strip() if industry_col else "",
-                        "score": _safe_float(row.get(score_col), np.nan) if score_col else np.nan,
-                        "market_cap_yi": _safe_float(row.get(market_cap_col), np.nan) if market_cap_col else np.nan,
-                        "rank": int(_safe_float(row.get(rank_col), 0)) if rank_col else 0,
-                        "signal_date": signal_date,
-                        "horizon_days": max(1, holding_days),
-                        "meta_file": mf,
-                    }
-                )
-                if len(signal_rows) >= max_signals:
-                    break
-            if len(signal_rows) >= max_signals:
-                if not source_meta:
-                    source_meta = mf
-                break
-            if not source_meta:
-                source_meta = mf
-        except Exception:
-            continue
-
-    if not signal_rows:
-        return pd.DataFrame(), pd.DataFrame(), ""
-
-    signals_df = pd.DataFrame(signal_rows).drop_duplicates(subset=["strategy", "ts_code", "signal_date", "horizon_days"])
-    if signals_df.empty:
-        return pd.DataFrame(), pd.DataFrame(), ""
-
-    codes = sorted(signals_df["ts_code"].dropna().astype(str).unique().tolist())
-    if not codes:
-        return pd.DataFrame(), pd.DataFrame(), source_meta
-    min_signal_date = str(signals_df["signal_date"].min())
-
-    try:
-        from data.dao import DataAccessError, detect_daily_table  # type: ignore
-    except Exception:
-        return pd.DataFrame(), pd.DataFrame(), source_meta
-
-    conn = _connect_permanent_db()
-    try:
-        try:
-            daily_table = detect_daily_table(conn)
-        except DataAccessError:
-            return pd.DataFrame(), pd.DataFrame(), source_meta
-        placeholders = ",".join(["?"] * len(codes))
-        query = f"""
-            SELECT ts_code, trade_date, close_price
-            FROM {daily_table}
-            WHERE trade_date >= ?
-              AND (ts_code IN ({placeholders}) OR ts_code = ?)
-            ORDER BY ts_code, trade_date
-        """
-        params: List[Any] = [min_signal_date] + codes + [benchmark_code]
-        px = pd.read_sql_query(query, conn, params=params)
-    finally:
-        conn.close()
-
-    if px is None or px.empty:
-        return pd.DataFrame(), pd.DataFrame(), source_meta
-    px["trade_date"] = px["trade_date"].astype(str)
-    px["close_price"] = pd.to_numeric(px["close_price"], errors="coerce")
-    px = px.dropna(subset=["close_price"])
-    if px.empty:
-        return pd.DataFrame(), pd.DataFrame(), source_meta
-
-    by_code: Dict[str, pd.DataFrame] = {}
-    for ts_code, grp in px.groupby("ts_code"):
-        g = grp.sort_values("trade_date").reset_index(drop=True)
-        by_code[str(ts_code)] = g
-
-    idx_df = by_code.get(benchmark_code)
-    perf_rows: List[Dict[str, Any]] = []
-    for r in signals_df.to_dict("records"):
-        ts_code = str(r.get("ts_code", ""))
-        signal_date = str(r.get("signal_date", ""))
-        horizon = int(r.get("horizon_days", 10))
-        g = by_code.get(ts_code)
-        if g is None or g.empty:
-            continue
-        match = g.index[g["trade_date"] >= signal_date].tolist()
-        if not match:
-            continue
-        i0 = int(match[0])
-        i1 = i0 + horizon
-        is_settled = True
-        if i1 >= len(g):
-            i1 = len(g) - 1
-            is_settled = False
-        actual_horizon = int(max(0, i1 - i0))
-        if actual_horizon < 1:
-            continue
-        p0 = float(g.at[i0, "close_price"])
-        p1 = float(g.at[i1, "close_price"])
-        if p0 <= 0:
-            continue
-        ret_pct = (p1 / p0 - 1.0) * 100.0
-        path = g.iloc[i0 : i1 + 1].copy()
-        path_ret = (pd.to_numeric(path["close_price"], errors="coerce") / p0 - 1.0) * 100.0
-        max_dd_pct = float(path_ret.min()) if len(path_ret) > 0 else np.nan
-        max_up_pct = float(path_ret.max()) if len(path_ret) > 0 else np.nan
-
-        excess_ret = None
-        bench_ret = None
-        if idx_df is not None and not idx_df.empty:
-            idx_match = idx_df.index[idx_df["trade_date"] >= signal_date].tolist()
-            if idx_match:
-                j0 = int(idx_match[0])
-                j1 = j0 + horizon
-                if j1 < len(idx_df):
-                    b0 = float(idx_df.at[j0, "close_price"])
-                    b1 = float(idx_df.at[j1, "close_price"])
-                    if b0 > 0:
-                        bench_ret = (b1 / b0 - 1.0) * 100.0
-                        excess_ret = ret_pct - bench_ret
-        perf_rows.append(
-            {
-                "strategy": str(r.get("strategy", "")),
-                "ts_code": ts_code,
-                "stock_name": str(r.get("stock_name", "")),
-                "industry": str(r.get("industry", "")),
-                "signal_date": signal_date,
-                "entry_trade_date": str(g.at[i0, "trade_date"]),
-                "exit_trade_date": str(g.at[i1, "trade_date"]),
-                "horizon_days": horizon,
-                "actual_horizon_days": actual_horizon,
-                "is_settled": bool(is_settled),
-                "score": _safe_float(r.get("score"), np.nan),
-                "market_cap_yi": _safe_float(r.get("market_cap_yi"), np.nan),
-                "rank": int(r.get("rank", 0) or 0),
-                "entry_price": p0,
-                "exit_price": p1,
-                "ret_pct": ret_pct,
-                "bench_ret_pct": bench_ret,
-                "excess_ret_pct": excess_ret,
-                "max_dd_pct": max_dd_pct,
-                "max_up_pct": max_up_pct,
-                "meta_file": str(r.get("meta_file", "")),
-            }
-        )
-
-    detail_df = pd.DataFrame(perf_rows)
-    if detail_df.empty:
-        return pd.DataFrame(), pd.DataFrame(), source_meta
-
-    summary_df = _summarize_stock_pool_signal_performance(detail_df)
-    return summary_df, detail_df, source_meta
+    return service_load_stock_pool_performance_detail(
+        app_root=os.path.dirname(__file__),
+        max_files=max_files,
+        safe_float=_safe_float,
+        connect_permanent_db=_connect_permanent_db,
+    )
 
 
 def _load_stock_pool_performance(max_files: int = 240) -> Tuple[pd.DataFrame, str]:
-    summary_df, _, source_meta = _load_stock_pool_performance_detail(max_files=max_files)
-    return summary_df, source_meta
+    return service_load_stock_pool_performance(
+        app_root=os.path.dirname(__file__),
+        max_files=max_files,
+        safe_float=_safe_float,
+        connect_permanent_db=_connect_permanent_db,
+    )
 
 
 def _load_latest_stock_pool_snapshot(max_files: int = 300) -> pd.DataFrame:
-    root_dir = os.path.dirname(__file__)
-    pool_dir = os.path.join(root_dir, "logs", "openclaw", "stock_pool")
-    if not os.path.isdir(pool_dir):
-        return pd.DataFrame()
-    meta_files = sorted(glob.glob(os.path.join(pool_dir, "*.meta.json")), reverse=True)[: max(1, int(max_files))]
-    latest: Dict[str, Dict[str, Any]] = {}
-    for mf in meta_files:
-        try:
-            with open(mf, "r", encoding="utf-8") as f:
-                meta = json.load(f) or {}
-            strategy = str(meta.get("strategy", "")).strip().lower()
-            if strategy not in {"v9", "v8", "v5", "combo"}:
-                continue
-            if strategy in latest:
-                continue
-            params = meta.get("params") or {}
-            latest[strategy] = {
-                "策略": strategy,
-                "最近池子时间": str(meta.get("created_at", "") or ""),
-                "池子行数": int(meta.get("row_count", 0) or 0),
-                "持有天数": int(float(params.get("holding_days", 0) or 0)),
-                "meta": mf,
-            }
-        except Exception:
-            continue
-    if not latest:
-        return pd.DataFrame()
-    out = pd.DataFrame(list(latest.values()))
-    if out.empty:
-        return out
-    return out.sort_values("策略")
+    return service_load_latest_stock_pool_snapshot(os.path.dirname(__file__), max_files=max_files)
 
 
 def _load_latest_production_backtest_audit() -> Tuple[pd.DataFrame, str]:
-    root_dir = os.path.dirname(__file__)
-    logs_dir = os.path.join(root_dir, "logs", "openclaw")
-    if not os.path.isdir(logs_dir):
-        return pd.DataFrame(), ""
-
-    prod = ["v9", "v8", "v5", "combo"]
-    rows: List[Dict[str, Any]] = []
-    sources: List[str] = []
-
-    def _risk_level(sample_size: int, win_rate: float, max_drawdown: float, failed_windows: int) -> str:
-        if sample_size < 30 or max_drawdown > 0.30 or failed_windows > 0:
-            return "red"
-        if win_rate < 0.50 or max_drawdown > 0.20:
-            return "yellow"
-        return "green"
-
-    def _next_action(strategy: str, win_rate: float, max_drawdown: float) -> str:
-        if strategy == "v5":
-            if max_drawdown > 0.25:
-                return "先降持仓到5天验证回撤，再评估3天。"
-            return "可小流量灰度验证。"
-        if strategy == "v8":
-            return "暂停晋升；扩大阈值到55-70并启用滚动验证。"
-        if strategy == "v9":
-            return "暂停晋升；先降信号密度并将回撤压到25%内。"
-        return "保留共识层观察，补滚动样本外后再定。"
-
-    for s in prod:
-        files = sorted(glob.glob(os.path.join(logs_dir, f"backtest_sweep_{s}_*.json")))
-        if not files:
-            continue
-        latest = files[-1]
-        try:
-            with open(latest, "r", encoding="utf-8") as f:
-                payload = json.load(f) or {}
-            best = payload.get("best") or {}
-            if not isinstance(best, dict):
-                continue
-            sample_size = int(best.get("sample_size", 0) or 0)
-            win_rate = float(best.get("win_rate", 0.0) or 0.0)
-            max_drawdown = float(best.get("max_drawdown", 0.0) or 0.0)
-            objective = float(best.get("objective", 0.0) or 0.0)
-            signal_density = float(best.get("signal_density", 0.0) or 0.0)
-            failed_windows = int(best.get("rolling_failed_windows", 0) or 0)
-            total_windows = int(best.get("rolling_test_windows", 0) or 0)
-            holding_days = int(best.get("holding_days", 0) or 0)
-            threshold = float(best.get("score_threshold", 0.0) or 0.0)
-            approved = (
-                sample_size >= 50
-                and win_rate >= 0.52
-                and max_drawdown <= 0.25
-                and failed_windows <= 0
-            )
-            risk = _risk_level(sample_size, win_rate, max_drawdown, failed_windows)
-            rows.append(
-                {
-                    "策略": s,
-                    "样本": sample_size,
-                    "胜率(%)": round(win_rate * 100.0, 1),
-                    "最大回撤(%)": round(max_drawdown * 100.0, 1),
-                    "信号密度": round(signal_density, 3),
-                    "目标值": round(objective, 3),
-                    "滚动失败窗": f"{failed_windows}/{total_windows}",
-                    "参数(阈值/持仓)": f"{int(round(threshold))}/{holding_days}",
-                    "评估风险": risk.upper(),
-                    "建议晋升": "YES" if approved else "NO",
-                    "建议动作": _next_action(s, win_rate, max_drawdown),
-                }
-            )
-            sources.append(os.path.basename(latest))
-        except Exception:
-            continue
-
-    if not rows:
-        return pd.DataFrame(), ""
-    out = pd.DataFrame(rows)
-    order_map = {k: i for i, k in enumerate(prod)}
-    out["__order"] = out["策略"].map(order_map).fillna(999).astype(int)
-    out = out.sort_values("__order").drop(columns=["__order"])
-    return out, " | ".join(sources[-4:])
+    return runtime_load_latest_production_backtest_audit(app_root=os.path.dirname(__file__))
 
 
 def _render_production_backtest_audit_panel() -> None:
@@ -3129,237 +1684,60 @@ def _render_production_backtest_audit_panel() -> None:
 
 
 def _production_rollback_state_path() -> str:
-    evo_dir = os.path.join(os.path.dirname(__file__), "evolution")
-    os.makedirs(evo_dir, exist_ok=True)
-    return os.path.join(evo_dir, "production_auto_rollback_state.json")
+    return service_production_rollback_state_path(os.path.dirname(__file__))
 
 
 def _load_production_rollback_state() -> Dict[str, Any]:
-    path = _production_rollback_state_path()
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return dict(json.load(f) or {})
-    except Exception:
-        pass
-    return {}
+    return service_load_production_rollback_state(os.path.dirname(__file__))
 
 
 def _save_production_rollback_state(payload: Dict[str, Any]) -> None:
-    path = _production_rollback_state_path()
-    tmp = f"{path}.tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(payload or {}, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
+    service_save_production_rollback_state(os.path.dirname(__file__), payload)
 
 
 def _evaluate_production_rollback_trigger() -> Dict[str, Any]:
-    df, _ = _load_latest_production_backtest_audit()
-    if df is None or df.empty:
-        return {"triggered": False, "reason": "no_audit_data", "targets": [], "signature": ""}
-    mapping = {"v5": "V5", "v8": "V8", "v9": "V9", "combo": "COMBO"}
-    targets: List[str] = []
-    red_count = 0
-    no_count = 0
-    for _, row in df.iterrows():
-        sk = str(row.get("策略", "")).strip().lower()
-        if sk not in mapping:
-            continue
-        risk = str(row.get("评估风险", "GREEN")).strip().upper()
-        approved = str(row.get("建议晋升", "NO")).strip().upper() == "YES"
-        if risk == "RED":
-            red_count += 1
-        if not approved:
-            no_count += 1
-        if (risk == "RED") and (not approved) and sk in {"v8", "v9", "combo"}:
-            targets.append(mapping[sk])
-    triggered = bool((red_count >= 2 and no_count >= 3) or len(targets) >= 2)
-    sig = f"{datetime.now().strftime('%Y%m%d')}|red={red_count}|no={no_count}|targets={','.join(sorted(set(targets)))}"
-    reason = "red_no_gate_breach" if triggered else "within_risk_budget"
-    return {
-        "triggered": triggered,
-        "reason": reason,
-        "targets": sorted(set(targets)),
-        "red_count": int(red_count),
-        "no_count": int(no_count),
-        "signature": sig,
-    }
+    return service_evaluate_production_rollback_trigger(
+        load_latest_production_backtest_audit=_load_latest_production_backtest_audit,
+    )
 
 
 def _execute_production_auto_rollback(force: bool = False) -> Tuple[bool, str, Dict[str, Any]]:
-    eval_info = _evaluate_production_rollback_trigger()
-    if not force and not bool(eval_info.get("triggered", False)):
-        return False, "未触发自动回滚条件。", eval_info
-
-    targets = list(eval_info.get("targets") or [])
-    if not targets:
-        return False, "没有可回滚目标策略。", eval_info
-
-    state = _load_production_rollback_state()
-    sig = str(eval_info.get("signature", "") or "")
-    if (not force) and sig and sig == str(state.get("last_signature", "")):
-        return False, "当前触发签名已执行过回滚，已跳过。", eval_info
-
-    done: List[str] = []
-    failed: List[str] = []
-    for sk in targets:
-        ok, msg = _rollback_latest_promoted_params(sk)
-        if ok:
-            done.append(sk)
-        else:
-            failed.append(f"{sk}:{msg}")
-    state_payload = {
-        "last_run_at": _now_text(),
-        "last_signature": sig,
-        "last_targets": targets,
-        "last_done": done,
-        "last_failed": failed,
-        "reason": eval_info.get("reason"),
-    }
-    try:
-        _save_production_rollback_state(state_payload)
-    except Exception:
-        pass
-    if failed and not done:
-        return False, f"回滚失败：{' | '.join(failed)}", eval_info
-    retrain_enabled = bool(st.session_state.get("prod_retrain_after_rollback", os.getenv("OPENCLAW_RETRAIN_AFTER_ROLLBACK", "0") == "1"))
-    retrain_msg = ""
-    if done and retrain_enabled:
-        ok_rt, msg_rt = _trigger_auto_evolve_optimize(force_now=True)
-        retrain_msg = f" | 自动重训：{msg_rt}" if ok_rt else f" | 自动重训未启动：{msg_rt}"
-    if failed and done:
-        return True, f"部分回滚完成：成功{','.join(done)}；失败{' | '.join(failed)}{retrain_msg}", eval_info
-    return True, f"自动回滚完成：{','.join(done)}{retrain_msg}", eval_info
+    return service_execute_production_auto_rollback(
+        app_root=os.path.dirname(__file__),
+        force=force,
+        evaluate_rollback_trigger=_evaluate_production_rollback_trigger,
+        rollback_latest_promoted_params=_rollback_latest_promoted_params,
+        now_text=_now_text,
+        retrain_enabled=bool(st.session_state.get("prod_retrain_after_rollback", os.getenv("OPENCLAW_RETRAIN_AFTER_ROLLBACK", "0") == "1")),
+        trigger_auto_evolve_optimize=_trigger_auto_evolve_optimize,
+    )
 
 
 def _resolve_market_regime(regime_choice: str) -> str:
-    c = str(regime_choice or "").strip().lower()
-    if c in {"bull", "bear", "oscillation"}:
-        return c
-    try:
-        analyzer = CompleteVolumePriceAnalyzer()
-        env = str(analyzer.get_market_environment()).strip().lower()
-        if env in {"bull", "bear", "oscillation"}:
-            return env
-    except Exception:
-        pass
-    return "oscillation"
+    return service_resolve_market_regime(
+        regime_choice,
+        market_environment_provider=lambda: str(CompleteVolumePriceAnalyzer().get_market_environment()),
+    )
 
 
 def _compute_production_allocation_plan(
     capital_total: float,
     regime_choice: str = "auto",
 ) -> Dict[str, Any]:
-    audit_df, _ = _load_latest_production_backtest_audit()
-    if audit_df is None or audit_df.empty:
-        return {"ok": False, "error": "no_audit_data"}
-
-    regime = _resolve_market_regime(regime_choice)
-    base_map = {
-        "bull": {"v5": 0.45, "v8": 0.10, "v9": 0.25, "combo": 0.20},
-        "oscillation": {"v5": 0.35, "v8": 0.10, "v9": 0.35, "combo": 0.20},
-        "bear": {"v5": 0.20, "v8": 0.20, "v9": 0.35, "combo": 0.25},
-    }
-    base = dict(base_map.get(regime, base_map["oscillation"]))
-
-    rb = _load_portfolio_risk_budget()
-    max_positions = int(rb.get("max_positions", 20))
-    max_ind_ratio = float(rb.get("max_industry_ratio", 0.35))
-
-    rows: List[Dict[str, Any]] = []
-    for sk in ("v5", "v8", "v9", "combo"):
-        row = audit_df[audit_df["策略"].astype(str).str.lower() == sk]
-        if row.empty:
-            continue
-        r = row.iloc[0]
-        wr = float(r.get("胜率(%)", 0.0) or 0.0)
-        dd = float(r.get("最大回撤(%)", 0.0) or 0.0)
-        risk = str(r.get("评估风险", "GREEN")).upper()
-        promo = str(r.get("建议晋升", "NO")).upper() == "YES"
-
-        wr_mul = max(0.50, min(1.25, wr / 52.0))
-        dd_mul = max(0.30, min(1.20, (25.0 / max(1.0, dd))))
-        risk_mul = 1.00 if risk == "GREEN" else (0.65 if risk == "YELLOW" else 0.35)
-        promo_mul = 1.00 if promo else 0.80
-
-        raw = float(base.get(sk, 0.0)) * wr_mul * dd_mul * risk_mul * promo_mul
-        rows.append(
-            {
-                "strategy": sk,
-                "win_rate_pct": wr,
-                "max_drawdown_pct": dd,
-                "risk": risk,
-                "promo": promo,
-                "base_weight": float(base.get(sk, 0.0)),
-                "score_weight_raw": raw,
-            }
-        )
-
-    if not rows:
-        return {"ok": False, "error": "empty_allocation_rows"}
-
-    plan_df = pd.DataFrame(rows)
-    raw_sum = float(plan_df["score_weight_raw"].sum())
-    if raw_sum <= 1e-9:
-        plan_df["target_weight"] = 1.0 / max(1, len(plan_df))
-    else:
-        plan_df["target_weight"] = plan_df["score_weight_raw"] / raw_sum
-    plan_df["target_weight"] = plan_df["target_weight"].clip(lower=0.05, upper=0.65)
-    clipped_sum = float(plan_df["target_weight"].sum())
-    if clipped_sum > 1e-9:
-        plan_df["target_weight"] = plan_df["target_weight"] / clipped_sum
-
-    plan_df["capital_alloc"] = plan_df["target_weight"] * float(max(0.0, capital_total))
-    plan_df["slot_count"] = (plan_df["target_weight"] * int(max_positions)).round().astype(int).clip(lower=1)
-    plan_df["single_ticket_cap"] = plan_df["capital_alloc"] / plan_df["slot_count"].replace(0, 1)
-
-    return {
-        "ok": True,
-        "regime": regime,
-        "capital_total": float(capital_total),
-        "risk_budget": {
-            "max_positions": int(max_positions),
-            "max_industry_ratio": float(max_ind_ratio),
-        },
-        "plan_df": plan_df.sort_values("target_weight", ascending=False).reset_index(drop=True),
-    }
+    return service_compute_production_allocation_plan(
+        capital_total=float(capital_total),
+        regime_choice=regime_choice,
+        load_latest_production_backtest_audit=_load_latest_production_backtest_audit,
+        market_environment_provider=lambda: str(CompleteVolumePriceAnalyzer().get_market_environment()),
+        load_portfolio_risk_budget=_load_portfolio_risk_budget,
+    )
 
 
 def _write_production_allocation_report(plan: Dict[str, Any]) -> Tuple[bool, str, str]:
-    try:
-        out_dir = os.path.join(os.path.dirname(__file__), "logs", "openclaw")
-        os.makedirs(out_dir, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        md_path = os.path.join(out_dir, f"production_allocation_report_{ts}.md")
-        csv_path = os.path.join(out_dir, f"production_allocation_report_{ts}.csv")
-        df = pd.DataFrame(plan.get("plan_df", pd.DataFrame()))
-        if df.empty:
-            return False, "", ""
-        df.to_csv(csv_path, index=False, encoding="utf-8-sig")
-
-        lines: List[str] = []
-        lines.append("# 生产策略仓位分配简报")
-        lines.append("")
-        lines.append(f"- 生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append(f"- 市场状态: {plan.get('regime', 'oscillation')}")
-        lines.append(f"- 总资金: {float(plan.get('capital_total', 0.0)):.2f}")
-        rb = plan.get("risk_budget", {}) or {}
-        lines.append(f"- 风险预算: max_positions={rb.get('max_positions', 20)}, max_industry_ratio={rb.get('max_industry_ratio', 0.35)}")
-        lines.append("")
-        lines.append("## 分配建议")
-        for _, r in df.iterrows():
-            lines.append(
-                f"- {str(r.get('strategy', 'N/A'))}: 权重{float(r.get('target_weight', 0))*100:.1f}% | "
-                f"资金{float(r.get('capital_alloc', 0)):.0f} | 预估仓位{int(r.get('slot_count', 1))} | "
-                f"单票上限{float(r.get('single_ticket_cap', 0)):.0f}"
-            )
-        lines.append("")
-        lines.append(f"- 明细CSV: `{csv_path}`")
-        with open(md_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines) + "\n")
-        return True, md_path, csv_path
-    except Exception:
-        return False, "", ""
+    return service_write_production_allocation_report(
+        app_root=os.path.dirname(__file__),
+        plan=plan,
+    )
 
 
 def _parse_price_to_float(v: Any) -> float:
@@ -3373,621 +1751,109 @@ def _parse_price_to_float(v: Any) -> float:
 
 
 def _load_latest_strategy_pool_candidates(strategy: str, top_n: int = 30) -> pd.DataFrame:
-    sk = str(strategy or "").strip().lower()
-    if sk not in {"v5", "v8", "v9", "combo"}:
-        return pd.DataFrame()
-    root_dir = os.path.dirname(__file__)
-    pool_dirs = [
-        os.path.join(root_dir, "logs", "openclaw", "stock_pool"),
-        os.path.join(os.getcwd(), "logs", "openclaw", "stock_pool"),
-    ]
-    pool_dir = ""
-    for d in pool_dirs:
-        if os.path.isdir(d):
-            pool_dir = d
-            break
-    if not pool_dir:
-        return pd.DataFrame()
-
-    meta_files = sorted(glob.glob(os.path.join(pool_dir, "*.meta.json")), reverse=True)
-    for mf in meta_files:
-        try:
-            with open(mf, "r", encoding="utf-8") as f:
-                meta = json.load(f) or {}
-            m_sk = str(meta.get("strategy", "")).strip().lower()
-            if m_sk != sk:
-                continue
-            csv_path = str(meta.get("csv_path", "")).strip() or mf.replace(".meta.json", ".csv")
-            if not os.path.isabs(csv_path):
-                csv_path = os.path.join(root_dir, csv_path)
-            if not os.path.exists(csv_path):
-                csv_path = mf.replace(".meta.json", ".csv")
-            if not os.path.exists(csv_path):
-                continue
-            df = pd.read_csv(csv_path)
-            if df is None or df.empty:
-                continue
-            code_col = "股票代码" if "股票代码" in df.columns else ("ts_code" if "ts_code" in df.columns else "")
-            name_col = "股票名称" if "股票名称" in df.columns else ("name" if "name" in df.columns else "")
-            ind_col = "行业" if "行业" in df.columns else ("industry" if "industry" in df.columns else "")
-            score_col = ""
-            for c in ["共识评分", "综合评分", "评分", "score"]:
-                if c in df.columns:
-                    score_col = c
-                    break
-            price_col = ""
-            for c in ["最新价格", "close_price", "close", "价格"]:
-                if c in df.columns:
-                    price_col = c
-                    break
-            if not code_col:
-                continue
-            out = pd.DataFrame(
-                {
-                    "strategy": sk,
-                    "ts_code": df[code_col].astype(str).str.strip(),
-                    "name": (df[name_col].astype(str) if name_col else ""),
-                    "industry": (df[ind_col].astype(str) if ind_col else "未知"),
-                    "score": pd.to_numeric(df[score_col], errors="coerce") if score_col else np.nan,
-                    "price": df[price_col].apply(_parse_price_to_float) if price_col else 0.0,
-                }
-            )
-            out = out.dropna(subset=["ts_code"]).drop_duplicates(subset=["ts_code"], keep="first")
-            if "score" in out.columns:
-                out = out.sort_values("score", ascending=False)
-            return out.head(max(1, int(top_n))).reset_index(drop=True)
-        except Exception:
-            continue
-    return pd.DataFrame()
+    return service_load_latest_strategy_pool_candidates(
+        app_root=os.path.dirname(__file__),
+        strategy=strategy,
+        top_n=top_n,
+        parse_price_to_float=_parse_price_to_float,
+    )
 
 
 def _build_production_rebalance_orders(plan: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(plan, dict) or not plan.get("ok"):
-        return {"ok": False, "error": "invalid_plan"}
-    plan_df = pd.DataFrame(plan.get("plan_df", []))
-    if plan_df.empty:
-        return {"ok": False, "error": "empty_plan_df"}
-
-    positions = _get_sim_positions()
-    order_rows: List[Dict[str, Any]] = []
-    target_codes: set = set()
-    buy_count = 0
-    hold_count = 0
-
-    for _, r in plan_df.iterrows():
-        sk = str(r.get("strategy", "")).strip().lower()
-        slot_cnt = max(1, int(r.get("slot_count", 1) or 1))
-        cap_per_ticket = float(r.get("single_ticket_cap", 0.0) or 0.0)
-        candidates = _load_latest_strategy_pool_candidates(sk, top_n=max(slot_cnt * 2, 10))
-        if candidates.empty:
-            order_rows.append(
-                {
-                    "action": "NO_DATA",
-                    "strategy": sk,
-                    "ts_code": "",
-                    "name": "",
-                    "industry": "",
-                    "score": np.nan,
-                    "price": 0.0,
-                    "target_amount": 0.0,
-                    "reason": "未找到该策略最新股票池候选",
-                }
-            )
-            continue
-        picked = candidates.head(slot_cnt).copy()
-        for _, c in picked.iterrows():
-            ts_code = str(c.get("ts_code", "")).strip()
-            if not ts_code:
-                continue
-            target_codes.add(ts_code)
-            in_pos = ts_code in positions
-            action = "HOLD" if in_pos else "BUY"
-            if action == "BUY":
-                buy_count += 1
-            else:
-                hold_count += 1
-            order_rows.append(
-                {
-                    "action": action,
-                    "strategy": sk,
-                    "ts_code": ts_code,
-                    "name": str(c.get("name", "")),
-                    "industry": str(c.get("industry", "未知")),
-                    "score": float(c.get("score", np.nan)) if pd.notna(c.get("score", np.nan)) else np.nan,
-                    "price": float(c.get("price", 0.0) or 0.0),
-                    "target_amount": float(cap_per_ticket),
-                    "reason": "策略建议仓位内且评分靠前",
-                }
-            )
-
-    reduce_count = 0
-    for ts_code, pos in positions.items():
-        if ts_code in target_codes:
-            continue
-        reduce_count += 1
-        order_rows.append(
-            {
-                "action": "REDUCE",
-                "strategy": "portfolio",
-                "ts_code": str(ts_code),
-                "name": str(pos.get("name", "")),
-                "industry": "",
-                "score": np.nan,
-                "price": 0.0,
-                "target_amount": 0.0,
-                "reason": "不在当前目标池，建议减仓/退出",
-            }
-        )
-
-    orders_df = pd.DataFrame(order_rows)
-    if orders_df.empty:
-        return {"ok": False, "error": "empty_orders"}
-    return {
-        "ok": True,
-        "orders_df": orders_df,
-        "summary": {
-            "buy_count": int(buy_count),
-            "hold_count": int(hold_count),
-            "reduce_count": int(reduce_count),
-            "total_orders": int(len(orders_df)),
-        },
-    }
+    return service_build_production_rebalance_orders(
+        plan,
+        load_strategy_pool_candidates=lambda strategy, top_n: _load_latest_strategy_pool_candidates(strategy, top_n=top_n),
+        get_sim_positions=_get_sim_positions,
+    )
 
 
 def _write_production_rebalance_report(plan: Dict[str, Any], rebalance: Dict[str, Any]) -> Tuple[bool, str, str]:
-    try:
-        if not isinstance(plan, dict) or not isinstance(rebalance, dict) or not rebalance.get("ok"):
-            return False, "", ""
-        out_dir = os.path.join(os.path.dirname(__file__), "logs", "openclaw")
-        os.makedirs(out_dir, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        md_path = os.path.join(out_dir, f"production_rebalance_report_{ts}.md")
-        csv_path = os.path.join(out_dir, f"production_rebalance_report_{ts}.csv")
-        odf = pd.DataFrame(rebalance.get("orders_df", []))
-        if odf.empty:
-            return False, "", ""
-        odf.to_csv(csv_path, index=False, encoding="utf-8-sig")
-        s = rebalance.get("summary", {}) or {}
-        lines = [
-            "# 生产调仓指令简报",
-            "",
-            f"- 生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            f"- 市场状态: {plan.get('regime', 'oscillation')}",
-            f"- 指令总数: {int(s.get('total_orders', 0))}",
-            f"- BUY/HOLD/REDUCE: {int(s.get('buy_count', 0))}/{int(s.get('hold_count', 0))}/{int(s.get('reduce_count', 0))}",
-            "",
-            "## 执行要点",
-            "- BUY: 按目标金额分批建仓（优先流动性好的标的）",
-            "- HOLD: 维持仓位，等待下一次调仓窗口",
-            "- REDUCE: 先减弱势与偏离目标池标的",
-            "",
-            f"- 指令CSV: `{csv_path}`",
-        ]
-        with open(md_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines) + "\n")
-        return True, md_path, csv_path
-    except Exception:
-        return False, "", ""
+    return service_write_production_rebalance_report(
+        app_root=os.path.dirname(__file__),
+        plan=plan,
+        rebalance=rebalance,
+    )
 
 
 def _execute_production_rebalance_orders(
     rebalance: Dict[str, Any],
     execute_reduce: bool = False,
 ) -> Dict[str, Any]:
-    if not isinstance(rebalance, dict) or not rebalance.get("ok"):
-        return {"ok": False, "error": "invalid_rebalance_orders"}
-    orders_df = pd.DataFrame(rebalance.get("orders_df", []))
-    if orders_df.empty:
-        return {"ok": False, "error": "empty_orders_df"}
-
-    account = _get_sim_account()
-    cash = float(account.get("cash", 0.0) or 0.0)
-    positions = _get_sim_positions()
-    now_date = datetime.now().strftime("%Y%m%d")
-    batch_id = f"prod_rebalance_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-    all_codes = [str(x).strip() for x in orders_df.get("ts_code", pd.Series([], dtype=str)).dropna().astype(str).tolist()]
-    latest_map = _get_latest_prices(all_codes) if all_codes else {}
-
-    executed_rows: List[Dict[str, Any]] = []
-    buy_done = 0
-    reduce_done = 0
-    skipped = 0
-    buy_amount_total = 0.0
-    sell_amount_total = 0.0
-
-    for _, row in orders_df.iterrows():
-        action = str(row.get("action", "")).strip().upper()
-        ts_code = str(row.get("ts_code", "")).strip()
-        if not ts_code:
-            skipped += 1
-            continue
-        name = str(row.get("name", "") or ts_code)
-        target_amount = float(row.get("target_amount", 0.0) or 0.0)
-        if target_amount <= 0:
-            target_amount = float(account.get("per_buy_amount", 0.0) or 0.0)
-
-        price = _parse_price_to_float(row.get("price", 0.0))
-        if price <= 0:
-            hit = None
-            for k in _expand_ts_code_keys(ts_code):
-                hit = latest_map.get(k)
-                if hit:
-                    break
-            if hit:
-                price = float(hit.get("price", 0.0) or 0.0)
-
-        if action == "BUY":
-            if ts_code in positions:
-                skipped += 1
-                executed_rows.append({"action": action, "ts_code": ts_code, "status": "SKIP_EXISTS", "shares": 0, "amount": 0.0})
-                continue
-            if price <= 0:
-                skipped += 1
-                executed_rows.append({"action": action, "ts_code": ts_code, "status": "SKIP_NO_PRICE", "shares": 0, "amount": 0.0})
-                continue
-            shares = int((target_amount / price) // 100 * 100)
-            amount = float(shares * price)
-            if shares <= 0 or amount <= 0:
-                skipped += 1
-                executed_rows.append({"action": action, "ts_code": ts_code, "status": "SKIP_TOO_SMALL", "shares": 0, "amount": 0.0})
-                continue
-            if cash < amount:
-                skipped += 1
-                executed_rows.append({"action": action, "ts_code": ts_code, "status": "SKIP_NO_CASH", "shares": shares, "amount": amount})
-                continue
-            _upsert_sim_position(ts_code=ts_code, name=name, shares=shares, avg_cost=price, buy_date=now_date)
-            _add_sim_trade(
-                trade_date=now_date,
-                ts_code=ts_code,
-                name=name,
-                side="BUY",
-                price=price,
-                shares=shares,
-                amount=amount,
-                pnl=0.0,
-                batch_id=batch_id,
-                source="prod_rebalance",
-            )
-            cash -= amount
-            buy_done += 1
-            buy_amount_total += amount
-            executed_rows.append({"action": action, "ts_code": ts_code, "status": "DONE", "shares": shares, "amount": amount})
-            continue
-
-        if action == "REDUCE":
-            if not execute_reduce:
-                skipped += 1
-                executed_rows.append({"action": action, "ts_code": ts_code, "status": "SKIP_REDUCE_DISABLED", "shares": 0, "amount": 0.0})
-                continue
-            pos = positions.get(ts_code)
-            if not pos:
-                skipped += 1
-                executed_rows.append({"action": action, "ts_code": ts_code, "status": "SKIP_NO_POSITION", "shares": 0, "amount": 0.0})
-                continue
-            if price <= 0:
-                skipped += 1
-                executed_rows.append({"action": action, "ts_code": ts_code, "status": "SKIP_NO_PRICE", "shares": 0, "amount": 0.0})
-                continue
-            shares = int(pos.get("shares", 0) or 0)
-            if shares <= 0:
-                skipped += 1
-                executed_rows.append({"action": action, "ts_code": ts_code, "status": "SKIP_ZERO_SHARES", "shares": 0, "amount": 0.0})
-                continue
-            amount = float(shares * price)
-            avg_cost = float(pos.get("avg_cost", 0.0) or 0.0)
-            pnl = float((price - avg_cost) * shares)
-            _add_sim_trade(
-                trade_date=now_date,
-                ts_code=ts_code,
-                name=name,
-                side="SELL",
-                price=price,
-                shares=shares,
-                amount=amount,
-                pnl=pnl,
-                batch_id=batch_id,
-                source="prod_rebalance",
-            )
-            _delete_sim_position(ts_code)
-            cash += amount
-            reduce_done += 1
-            sell_amount_total += amount
-            executed_rows.append({"action": action, "ts_code": ts_code, "status": "DONE", "shares": shares, "amount": amount})
-            continue
-
-        skipped += 1
-        executed_rows.append({"action": action, "ts_code": ts_code, "status": "SKIP_UNSUPPORTED", "shares": 0, "amount": 0.0})
-
-    _update_sim_account(cash=float(cash))
-    exec_df = pd.DataFrame(executed_rows)
-    status_dist: Dict[str, int] = {}
-    if not exec_df.empty and "status" in exec_df.columns:
-        vc = exec_df["status"].astype(str).value_counts()
-        status_dist = {str(k): int(v) for k, v in vc.to_dict().items()}
-    out = {
-        "ok": True,
-        "batch_id": batch_id,
-        "execute_reduce": bool(execute_reduce),
-        "summary": {
-            "buy_done": int(buy_done),
-            "reduce_done": int(reduce_done),
-            "skipped": int(skipped),
-            "total": int(len(executed_rows)),
-            "cash_after": float(cash),
-            "buy_amount_total": float(buy_amount_total),
-            "sell_amount_total": float(sell_amount_total),
-            "status_dist": status_dist,
-        },
-        "executed_df": exec_df.to_dict("records"),
-    }
-    quality = _score_production_rebalance_execution(out)
-    out["quality"] = quality
-    _append_production_rebalance_audit_log(out)
-    return out
+    return service_execute_production_rebalance_orders(
+        rebalance,
+        execute_reduce=bool(execute_reduce),
+        get_sim_account=_get_sim_account,
+        get_sim_positions=_get_sim_positions,
+        get_latest_prices=_get_latest_prices,
+        expand_ts_code_keys=_expand_ts_code_keys,
+        parse_price_to_float=_parse_price_to_float,
+        upsert_sim_position=_upsert_sim_position,
+        add_sim_trade=_add_sim_trade,
+        delete_sim_position=_delete_sim_position,
+        update_sim_account=_update_sim_account,
+        score_execution=_score_production_rebalance_execution,
+        append_rebalance_audit_log=_append_production_rebalance_audit_log,
+    )
 
 
 def _precheck_production_rebalance_orders(
     rebalance: Dict[str, Any],
     execute_reduce: bool = False,
 ) -> Dict[str, Any]:
-    if not isinstance(rebalance, dict) or not rebalance.get("ok"):
-        return {"ok": False, "error": "invalid_rebalance_orders"}
-    orders_df = pd.DataFrame(rebalance.get("orders_df", []))
-    if orders_df.empty:
-        return {"ok": False, "error": "empty_orders_df"}
-
-    account = _get_sim_account()
-    cash = float(account.get("cash", 0.0) or 0.0)
-    positions = _get_sim_positions()
-
-    buy_df = orders_df[orders_df.get("action", "").astype(str).str.upper() == "BUY"].copy()
-    reduce_df = orders_df[orders_df.get("action", "").astype(str).str.upper() == "REDUCE"].copy()
-
-    all_codes = [str(x).strip() for x in orders_df.get("ts_code", pd.Series([], dtype=str)).dropna().astype(str).tolist()]
-    latest_map = _get_latest_prices(all_codes) if all_codes else {}
-
-    need_cash = 0.0
-    buy_ready = 0
-    buy_no_price = 0
-    buy_exists = 0
-    buy_too_small = 0
-    for _, r in buy_df.iterrows():
-        ts_code = str(r.get("ts_code", "")).strip()
-        if not ts_code:
-            continue
-        if ts_code in positions:
-            buy_exists += 1
-            continue
-        price = _parse_price_to_float(r.get("price", 0.0))
-        if price <= 0:
-            for k in _expand_ts_code_keys(ts_code):
-                info = latest_map.get(k)
-                if info:
-                    price = float(info.get("price", 0.0) or 0.0)
-                    break
-        if price <= 0:
-            buy_no_price += 1
-            continue
-        target_amount = float(r.get("target_amount", 0.0) or 0.0)
-        if target_amount <= 0:
-            target_amount = float(account.get("per_buy_amount", 0.0) or 0.0)
-        shares = int((target_amount / price) // 100 * 100)
-        amount = float(shares * price)
-        if shares <= 0 or amount <= 0:
-            buy_too_small += 1
-            continue
-        need_cash += amount
-        buy_ready += 1
-
-    reduce_ready = 0
-    reduce_no_pos = 0
-    if bool(execute_reduce):
-        for _, r in reduce_df.iterrows():
-            ts_code = str(r.get("ts_code", "")).strip()
-            if not ts_code:
-                continue
-            if ts_code not in positions:
-                reduce_no_pos += 1
-            else:
-                reduce_ready += 1
-
-    cash_gap = max(0.0, need_cash - cash)
-    status = "GREEN"
-    issues: List[str] = []
-    if buy_ready <= 0 and reduce_ready <= 0:
-        status = "RED"
-        issues.append("无可执行指令")
-    if cash_gap > 0:
-        status = "RED"
-        issues.append(f"资金缺口 {cash_gap:.2f}")
-    if buy_no_price > 0:
-        if status != "RED":
-            status = "YELLOW"
-        issues.append(f"{buy_no_price} 条BUY缺少价格")
-    if buy_exists > 0:
-        if status == "GREEN":
-            status = "YELLOW"
-        issues.append(f"{buy_exists} 条BUY与现持仓重复")
-
-    return {
-        "ok": True,
-        "status": status,
-        "cash": cash,
-        "need_cash": need_cash,
-        "cash_gap": cash_gap,
-        "buy_ready": buy_ready,
-        "buy_no_price": buy_no_price,
-        "buy_exists": buy_exists,
-        "buy_too_small": buy_too_small,
-        "reduce_ready": reduce_ready,
-        "reduce_no_pos": reduce_no_pos,
-        "issues": issues,
-        "execute_reduce": bool(execute_reduce),
-    }
+    return service_precheck_production_rebalance_orders(
+        rebalance,
+        execute_reduce=bool(execute_reduce),
+        get_sim_account=_get_sim_account,
+        get_sim_positions=_get_sim_positions,
+        get_latest_prices=_get_latest_prices,
+        expand_ts_code_keys=_expand_ts_code_keys,
+        parse_price_to_float=_parse_price_to_float,
+    )
 
 
 def _score_production_rebalance_execution(exec_result: Dict[str, Any]) -> Dict[str, Any]:
-    s = (exec_result or {}).get("summary", {}) or {}
-    total = max(1, int(s.get("total", 0)))
-    done = int(s.get("buy_done", 0)) + int(s.get("reduce_done", 0))
-    success_rate = float(done / total)
-    buy_amount = float(s.get("buy_amount_total", 0.0) or 0.0)
-    sell_amount = float(s.get("sell_amount_total", 0.0) or 0.0)
-    turnover = float(buy_amount + sell_amount)
-    # 质量分：执行成功率主导 + 执行强度加分（封顶）
-    intensity = min(1.0, turnover / 1_000_000.0)
-    score = (success_rate * 85.0) + (intensity * 15.0)
-    level = "A" if score >= 85 else ("B" if score >= 70 else ("C" if score >= 55 else "D"))
-    return {
-        "score": round(float(score), 2),
-        "level": str(level),
-        "success_rate_pct": round(success_rate * 100.0, 2),
-        "turnover": round(turnover, 2),
-    }
+    return service_score_production_rebalance_execution(exec_result)
 
 
 def _production_rebalance_audit_log_path() -> str:
-    out_dir = os.path.join(os.path.dirname(__file__), "logs", "openclaw")
-    os.makedirs(out_dir, exist_ok=True)
-    return os.path.join(out_dir, "production_rebalance_audit.jsonl")
+    return service_production_rebalance_audit_log_path(os.path.dirname(__file__))
 
 
 def _append_production_rebalance_audit_log(exec_result: Dict[str, Any]) -> None:
-    try:
-        p = _production_rebalance_audit_log_path()
-        payload = {
-            "run_at": _now_text(),
-            "batch_id": str((exec_result or {}).get("batch_id", "")),
-            "execute_reduce": bool((exec_result or {}).get("execute_reduce", False)),
-            "summary": (exec_result or {}).get("summary", {}) or {},
-            "quality": (exec_result or {}).get("quality", {}) or {},
-        }
-        with open(p, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
+    service_append_production_rebalance_audit_log(os.path.dirname(__file__), exec_result, _now_text)
 
 
 def _load_latest_production_rebalance_audit() -> Dict[str, Any]:
-    p = _production_rebalance_audit_log_path()
-    if not os.path.exists(p):
-        return {}
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            lines = [x.strip() for x in f.readlines() if str(x).strip()]
-        if not lines:
-            return {}
-        return dict(json.loads(lines[-1]) or {})
-    except Exception:
-        return {}
+    return service_load_latest_production_rebalance_audit(os.path.dirname(__file__))
 
 
 def _load_recent_production_rebalance_audits(days: int = 7, max_rows: int = 300) -> pd.DataFrame:
-    p = _production_rebalance_audit_log_path()
-    if not os.path.exists(p):
-        return pd.DataFrame()
-    rows: List[Dict[str, Any]] = []
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            lines = [x.strip() for x in f.readlines() if str(x).strip()]
-        for ln in lines[-max(1, int(max_rows)):]:
-            try:
-                item = json.loads(ln) or {}
-                run_at = str(item.get("run_at", "") or "")
-                dt = _safe_parse_dt(run_at)
-                if not dt:
-                    continue
-                if (datetime.now() - dt).days > int(days):
-                    continue
-                q = item.get("quality", {}) or {}
-                s = item.get("summary", {}) or {}
-                rows.append(
-                    {
-                        "run_at": run_at,
-                        "trade_date": dt.strftime("%Y%m%d"),
-                        "score": float(q.get("score", 0.0) or 0.0),
-                        "success_rate_pct": float(q.get("success_rate_pct", 0.0) or 0.0),
-                        "turnover": float(q.get("turnover", 0.0) or 0.0),
-                        "total": int(s.get("total", 0) or 0),
-                        "buy_done": int(s.get("buy_done", 0) or 0),
-                        "reduce_done": int(s.get("reduce_done", 0) or 0),
-                        "skipped": int(s.get("skipped", 0) or 0),
-                        "status_dist": s.get("status_dist", {}) or {},
-                    }
-                )
-            except Exception:
-                continue
-    except Exception:
-        return pd.DataFrame()
-    if not rows:
-        return pd.DataFrame()
-    return pd.DataFrame(rows).sort_values("run_at")
+    return service_load_recent_production_rebalance_audits(
+        os.path.dirname(__file__),
+        days=days,
+        max_rows=max_rows,
+        safe_parse_dt=_safe_parse_dt,
+    )
 
 
 def _build_weekly_rebalance_quality_dashboard(days: int = 7) -> Dict[str, Any]:
-    df = _load_recent_production_rebalance_audits(days=days, max_rows=400)
-    if df is None or df.empty:
-        return {"ok": False, "error": "no_recent_audit"}
-    daily = (
-        df.groupby("trade_date", as_index=False)
-        .agg(
-            score=("score", "mean"),
-            success_rate_pct=("success_rate_pct", "mean"),
-            turnover=("turnover", "sum"),
-            total=("total", "sum"),
-            skipped=("skipped", "sum"),
-            buy_done=("buy_done", "sum"),
-            reduce_done=("reduce_done", "sum"),
-        )
-        .sort_values("trade_date")
+    return service_build_weekly_rebalance_quality_dashboard(
+        app_root=os.path.dirname(__file__),
+        days=days,
+        safe_parse_dt=_safe_parse_dt,
     )
-    skip_reason_counter: Dict[str, int] = {}
-    for _, r in df.iterrows():
-        sd = r.get("status_dist", {}) or {}
-        if isinstance(sd, dict):
-            for k, v in sd.items():
-                if str(k).startswith("SKIP_"):
-                    skip_reason_counter[str(k)] = skip_reason_counter.get(str(k), 0) + int(v or 0)
-    skip_top = sorted(skip_reason_counter.items(), key=lambda x: x[1], reverse=True)[:8]
-    return {
-        "ok": True,
-        "daily_df": daily,
-        "runs": int(len(df)),
-        "avg_score": float(df["score"].mean()),
-        "avg_success_rate": float(df["success_rate_pct"].mean()),
-        "turnover_total": float(df["turnover"].sum()),
-        "skip_top": skip_top,
-    }
 
 
 def _auto_rebalance_log_path() -> str:
-    out_dir = os.path.join(os.path.dirname(__file__), "logs", "openclaw")
-    os.makedirs(out_dir, exist_ok=True)
-    return os.path.join(out_dir, "production_auto_rebalance.jsonl")
+    return service_auto_rebalance_log_path(os.path.dirname(__file__))
 
 
 def _append_auto_rebalance_log(payload: Dict[str, Any]) -> None:
-    try:
-        p = _auto_rebalance_log_path()
-        with open(p, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload or {}, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
+    service_append_auto_rebalance_log(os.path.dirname(__file__), payload)
 
 
 def _load_latest_auto_rebalance_log() -> Dict[str, Any]:
-    p = _auto_rebalance_log_path()
-    if not os.path.exists(p):
-        return {}
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            lines = [x.strip() for x in f.readlines() if str(x).strip()]
-        if not lines:
-            return {}
-        return dict(json.loads(lines[-1]) or {})
-    except Exception:
-        return {}
+    return service_load_latest_auto_rebalance_log(os.path.dirname(__file__))
 
 
 def _run_auto_rebalance_pipeline(
@@ -3995,256 +1861,65 @@ def _run_auto_rebalance_pipeline(
     regime_choice: str = "auto",
     execute_reduce: bool = False,
 ) -> Dict[str, Any]:
-    out: Dict[str, Any] = {
-        "run_at": _now_text(),
-        "capital_total": float(capital_total),
-        "regime_choice": str(regime_choice),
-        "execute_reduce": bool(execute_reduce),
-        "ok": False,
-        "stage": "init",
-    }
-    plan = _compute_production_allocation_plan(capital_total=float(capital_total), regime_choice=str(regime_choice))
-    if not plan.get("ok"):
-        out.update({"stage": "allocation", "error": str(plan.get("error", "allocation_failed"))})
-        _append_auto_rebalance_log(out)
-        return out
-
-    reb = _build_production_rebalance_orders(plan)
-    if not reb.get("ok"):
-        out.update({"stage": "build_orders", "error": str(reb.get("error", "build_orders_failed"))})
-        _append_auto_rebalance_log(out)
-        return out
-
-    pre = _precheck_production_rebalance_orders(reb, execute_reduce=bool(execute_reduce))
-    if not pre.get("ok"):
-        out.update({"stage": "precheck", "error": str(pre.get("error", "precheck_failed"))})
-        _append_auto_rebalance_log(out)
-        return out
-    if str(pre.get("status", "RED")).upper() == "RED":
-        out.update(
-            {
-                "stage": "precheck",
-                "error": "precheck_red_blocked",
-                "precheck": pre,
-            }
-        )
-        _append_auto_rebalance_log(out)
-        return out
-
-    exec_ret = _execute_production_rebalance_orders(reb, execute_reduce=bool(execute_reduce))
-    if not exec_ret.get("ok"):
-        out.update({"stage": "execute", "error": str(exec_ret.get("error", "execute_failed")), "precheck": pre})
-        _append_auto_rebalance_log(out)
-        return out
-
-    out.update(
-        {
-            "ok": True,
-            "stage": "done",
-            "plan": {
-                "regime": plan.get("regime"),
-                "risk_budget": plan.get("risk_budget"),
-            },
-            "precheck": pre,
-            "execute": {
-                "batch_id": exec_ret.get("batch_id"),
-                "summary": exec_ret.get("summary", {}),
-                "quality": exec_ret.get("quality", {}),
-            },
-        }
+    return service_run_auto_rebalance_pipeline(
+        capital_total=float(capital_total),
+        regime_choice=str(regime_choice),
+        execute_reduce=bool(execute_reduce),
+        now_text=_now_text,
+        compute_production_allocation_plan=_compute_production_allocation_plan,
+        build_production_rebalance_orders=_build_production_rebalance_orders,
+        precheck_production_rebalance_orders=lambda rebalance, execute_reduce_flag: _precheck_production_rebalance_orders(
+            rebalance,
+            execute_reduce=bool(execute_reduce_flag),
+        ),
+        execute_production_rebalance_orders=lambda rebalance, execute_reduce_flag: _execute_production_rebalance_orders(
+            rebalance,
+            execute_reduce=bool(execute_reduce_flag),
+        ),
+        append_auto_rebalance_log=_append_auto_rebalance_log,
     )
-    _append_auto_rebalance_log(out)
-    return out
 
 
 def _auto_rebalance_scheduler_tick() -> Dict[str, Any]:
-    enabled = bool(st.session_state.get("prod_auto_rebalance_enabled", False))
-    hhmm = str(st.session_state.get("prod_auto_rebalance_time", "14:50") or "14:50").strip()
-    capital = float(st.session_state.get("prod_alloc_total_capital", 1_000_000.0) or 1_000_000.0)
-    regime_choice = str(st.session_state.get("prod_alloc_regime_choice", "auto") or "auto")
-    execute_reduce = bool(st.session_state.get("prod_auto_rebalance_execute_reduce", False))
-
-    now = datetime.now()
-    today = now.strftime("%Y%m%d")
-    if not enabled:
-        return {"ok": False, "status": "disabled"}
-
-    m = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", hhmm)
-    if not m:
-        return {"ok": False, "status": "invalid_time", "time": hhmm}
-    run_h, run_m = int(m.group(1)), int(m.group(2))
-    due = (now.hour, now.minute) >= (run_h, run_m)
-    if not due:
-        return {"ok": False, "status": "not_due", "time": hhmm}
-
-    last_run_date = _get_sim_meta("prod_auto_rebalance_last_run_date")
-    if str(last_run_date or "") == today:
-        return {"ok": False, "status": "already_ran_today", "date": today}
-
-    ret = _run_auto_rebalance_pipeline(
-        capital_total=float(capital),
-        regime_choice=regime_choice,
-        execute_reduce=bool(execute_reduce),
+    return service_auto_rebalance_scheduler_tick(
+        enabled=bool(st.session_state.get("prod_auto_rebalance_enabled", False)),
+        hhmm=str(st.session_state.get("prod_auto_rebalance_time", "14:50") or "14:50").strip(),
+        capital=float(st.session_state.get("prod_alloc_total_capital", 1_000_000.0) or 1_000_000.0),
+        regime_choice=str(st.session_state.get("prod_alloc_regime_choice", "auto") or "auto"),
+        execute_reduce=bool(st.session_state.get("prod_auto_rebalance_execute_reduce", False)),
+        now=datetime.now(),
+        get_sim_meta=_get_sim_meta,
+        set_sim_meta=_set_sim_meta,
+        now_text=_now_text,
+        run_auto_rebalance_pipeline=lambda capital_total, regime_choice, execute_reduce: _run_auto_rebalance_pipeline(
+            capital_total=float(capital_total),
+            regime_choice=str(regime_choice),
+            execute_reduce=bool(execute_reduce),
+        ),
     )
-    _set_sim_meta("prod_auto_rebalance_last_run_date", today)
-    _set_sim_meta("prod_auto_rebalance_last_run_at", _now_text())
-    _set_sim_meta("prod_auto_rebalance_last_ok", "1" if ret.get("ok") else "0")
-    return {"ok": bool(ret.get("ok")), "status": "ran", "result": ret}
 
 
 def _production_strategy_health_multipliers() -> Dict[str, float]:
-    df, _ = _load_latest_production_backtest_audit()
-    if df is None or df.empty:
-        return {"v5": 1.0, "v8": 1.0, "v9": 1.0, "combo": 1.0}
-    out = {"v5": 1.0, "v8": 1.0, "v9": 1.0, "combo": 1.0}
-    for _, row in df.iterrows():
-        try:
-            sk = str(row.get("策略", "")).strip().lower()
-            if sk not in out:
-                continue
-            risk = str(row.get("评估风险", "GREEN")).strip().upper()
-            promo = str(row.get("建议晋升", "NO")).strip().upper() == "YES"
-            if risk == "RED":
-                mul = 0.20
-            elif risk == "YELLOW":
-                mul = 0.60
-            else:
-                mul = 1.00
-            if not promo:
-                mul = min(mul, 0.80)
-            out[sk] = float(mul)
-        except Exception:
-            continue
-    return out
+    return service_production_strategy_health_multipliers(_load_latest_production_backtest_audit)
 
 
 def _production_baseline_params(profile: str = "稳健标准", strict_full_market: bool = False) -> Dict[str, Dict[str, Any]]:
-    base = {
-        "v5": {"score_threshold": 60, "holding_days": 8, "top_percent": 2, "cap_min": 100.0, "cap_max": 15000.0, "candidate_count": 3000},
-        "v8": {"score_threshold": 65, "holding_days": 10, "top_percent": 2, "cap_min": 100.0, "cap_max": 15000.0, "candidate_count": 3000, "scan_all": False},
-        "v9": {
-            "score_threshold": 65,
-            "holding_days": 20,
-            "top_percent": 2,
-            "cap_min": 100.0,
-            "cap_max": 15000.0,
-            "candidate_count": 3000,
-            "scan_all": False,
-            "lookback_days": 160,
-            "min_turnover": 5.0,
-        },
-        "combo": {
-            "score_threshold": 68,
-            "holding_days": 10,
-            "top_percent": 2,
-            "cap_min": 100.0,
-            "cap_max": 15000.0,
-            "candidate_count": 3000,
-            "lookback_days": 120,
-            "min_turnover": 5.0,
-        },
-    }
-    if str(profile) == "进攻增强":
-        base["v5"]["score_threshold"] = 58
-        base["v8"]["score_threshold"] = 62
-        base["v9"]["score_threshold"] = 62
-        base["combo"]["score_threshold"] = 66
-        base["v5"]["top_percent"] = 3
-        base["v8"]["top_percent"] = 3
-        base["v9"]["top_percent"] = 3
-        base["combo"]["top_percent"] = 3
-    if strict_full_market:
-        for k in ("v8", "v9"):
-            base[k]["scan_all"] = True
-        for k in ("v5", "v8", "v9", "combo"):
-            base[k]["cap_min"] = 0.0
-            base[k]["cap_max"] = 0.0
-    return base
+    return runtime_production_baseline_params(profile, strict_full_market)
 
 
 def _apply_production_baseline_to_session(params: Dict[str, Dict[str, Any]]) -> None:
-    v5 = params.get("v5", {})
-    st.session_state["holding_days_v5"] = int(v5.get("holding_days", 8))
-    st.session_state["score_threshold_v5"] = int(v5.get("score_threshold", 60))
-    st.session_state["v5_top_percent"] = int(v5.get("top_percent", 2))
-    st.session_state["cap_min_v5"] = float(v5.get("cap_min", 100.0))
-    st.session_state["cap_max_v5"] = float(v5.get("cap_max", 15000.0))
-
-    v8 = params.get("v8", {})
-    st.session_state["holding_days_v8"] = int(v8.get("holding_days", 10))
-    st.session_state["score_threshold_v8_tab1"] = int(v8.get("score_threshold", 65))
-    st.session_state["v8_top_percent_tab1"] = int(v8.get("top_percent", 2))
-    st.session_state["scan_all_v8_tab1"] = bool(v8.get("scan_all", False))
-    st.session_state["cap_min_v8_tab1"] = float(v8.get("cap_min", 100.0))
-    st.session_state["cap_max_v8_tab1"] = float(v8.get("cap_max", 15000.0))
-
-    v9 = params.get("v9", {})
-    st.session_state["score_threshold_v9"] = int(v9.get("score_threshold", 65))
-    st.session_state["holding_days_v9"] = int(v9.get("holding_days", 20))
-    st.session_state["lookback_days_v9"] = int(v9.get("lookback_days", 160))
-    st.session_state["min_turnover_v9"] = float(v9.get("min_turnover", 5.0))
-    st.session_state["top_percent_v9"] = int(v9.get("top_percent", 2))
-    st.session_state["scan_all_v9"] = bool(v9.get("scan_all", False))
-    st.session_state["cap_min_v9"] = float(v9.get("cap_min", 100.0))
-    st.session_state["cap_max_v9"] = float(v9.get("cap_max", 15000.0))
-    st.session_state["candidate_count_v9"] = int(v9.get("candidate_count", 3000))
-
-    combo = params.get("combo", {})
-    st.session_state["combo_threshold"] = int(combo.get("score_threshold", 68))
-    st.session_state["holding_days_combo"] = int(combo.get("holding_days", 10))
-    st.session_state["combo_lookback_days"] = int(combo.get("lookback_days", 120))
-    st.session_state["combo_min_turnover"] = float(combo.get("min_turnover", 5.0))
-    st.session_state["combo_top_percent"] = int(combo.get("top_percent", 2))
-    st.session_state["combo_cap_min"] = float(combo.get("cap_min", 100.0))
-    st.session_state["combo_cap_max"] = float(combo.get("cap_max", 15000.0))
-    st.session_state["combo_candidate_count"] = int(combo.get("candidate_count", 3000))
-
-    # Mark unified baseline as authoritative for production strategies.
-    st.session_state["prod_unified_active"] = True
-    st.session_state["prod_unified_applied_at"] = _now_text()
-    # Prevent v9 panel from auto-overwriting with strategy-center defaults.
-    st.session_state["v9_center_defaults_initialized"] = True
-    st.session_state["v9_params_locked_by_unified"] = True
+    runtime_apply_production_baseline_to_session(
+        params,
+        session_state=st.session_state,
+        now_text=_now_text,
+    )
 
 
 def _get_production_compare_params() -> Dict[str, Dict[str, Any]]:
-    def _num(v: Any, default: float) -> float:
-        try:
-            if v is None:
-                return float(default)
-            return float(v)
-        except Exception:
-            return float(default)
-
-    evo_v5 = _load_evolve_params("v5_best.json").get("params", {})
-    evo_v8 = _load_evolve_params("v8_best.json").get("params", {})
-    evo_v9 = _load_evolve_params("v9_best.json").get("params", {})
-    evo_combo = _load_evolve_params("combo_best.json").get("params", {})
-
-    thr_v8_raw = st.session_state.get("score_threshold_v8_tab1", evo_v8.get("score_threshold", [55, 70]))
-    if isinstance(thr_v8_raw, (list, tuple)) and len(thr_v8_raw) >= 2:
-        thr_v8 = int(round((float(thr_v8_raw[0]) + float(thr_v8_raw[1])) / 2.0))
-    else:
-        thr_v8 = int(round(_num(thr_v8_raw, 65)))
-
-    return {
-        "v5": {
-            "holding_days": int(round(_num(st.session_state.get("holding_days_v5"), _num(evo_v5.get("holding_days"), 8)))),
-            "score_threshold": int(round(_num(st.session_state.get("score_threshold_v5"), _num(evo_v5.get("score_threshold"), 60)))),
-        },
-        "v8": {
-            "holding_days": int(round(_num(st.session_state.get("holding_days_v8"), _num(evo_v8.get("holding_days"), 10)))),
-            "score_threshold": int(round(thr_v8)),
-        },
-        "v9": {
-            "holding_days": int(round(_num(st.session_state.get("holding_days_v9"), _num(evo_v9.get("holding_days"), 20)))),
-            "score_threshold": int(round(_num(st.session_state.get("score_threshold_v9"), _num(evo_v9.get("score_threshold"), 65)))),
-        },
-        "combo": {
-            "holding_days": int(round(_num(st.session_state.get("holding_days_combo"), _num(evo_combo.get("holding_days"), 10)))),
-            "score_threshold": int(round(_num(st.session_state.get("combo_threshold"), _num(evo_combo.get("combo_threshold"), 68)))),
-        },
-    }
+    return runtime_get_production_compare_params(
+        session_state=st.session_state,
+        load_evolve_params=_load_evolve_params,
+    )
 
 
 def _save_production_unified_profile(
@@ -4252,23 +1927,12 @@ def _save_production_unified_profile(
     strict_full_market: bool,
     params: Dict[str, Dict[str, Any]],
 ) -> Tuple[bool, str]:
-    evo_dir = os.path.join(os.path.dirname(__file__), "evolution")
-    path = os.path.join(evo_dir, "production_unified_profile.json")
-    payload = {
-        "run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "profile": str(profile_name),
-        "strict_full_market_mode": bool(strict_full_market),
-        "strategies": params,
-    }
-    try:
-        os.makedirs(evo_dir, exist_ok=True)
-        tmp = f"{path}.tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-        return True, path
-    except Exception as e:
-        return False, str(e)
+    return runtime_save_production_unified_profile(
+        app_root=os.path.dirname(__file__),
+        profile_name=profile_name,
+        strict_full_market=strict_full_market,
+        params=params,
+    )
 
 
 def _build_unified_from_latest_evolve(
@@ -4277,146 +1941,29 @@ def _build_unified_from_latest_evolve(
     unified_cap_min: float,
     unified_cap_max: float,
 ) -> Tuple[Dict[str, Dict[str, Any]], List[str]]:
-    baseline = _production_baseline_params(profile, strict_full_market=bool(strict_full_market))
-    notes: List[str] = []
-
-    def _to_int(v: Any, default: int) -> int:
-        try:
-            if isinstance(v, (list, tuple)) and v:
-                vals = [float(x) for x in v[:2] if x is not None]
-                if vals:
-                    return int(round(sum(vals) / len(vals)))
-            return int(round(float(v)))
-        except Exception:
-            return int(default)
-
-    def _to_float(v: Any, default: float) -> float:
-        try:
-            return float(v)
-        except Exception:
-            return float(default)
-
-    evo_map = {
-        "v5": _load_evolve_params("v5_best.json").get("params", {}),
-        "v8": _load_evolve_params("v8_best.json").get("params", {}),
-        "v9": _load_evolve_params("v9_best.json").get("params", {}),
-        "combo": _load_evolve_params("combo_best.json").get("params", {}),
-    }
-
-    for sk in ("v5", "v8", "v9", "combo"):
-        p = evo_map.get(sk, {})
-        if not isinstance(p, dict) or not p:
-            notes.append(f"{sk} 未找到自动进化参数，保留模板默认值")
-            continue
-        if sk == "combo":
-            baseline[sk]["score_threshold"] = _to_int(p.get("combo_threshold"), baseline[sk]["score_threshold"])
-            baseline[sk]["holding_days"] = _to_int(p.get("holding_days"), baseline[sk]["holding_days"])
-            baseline[sk]["top_percent"] = _to_int(p.get("top_percent"), baseline[sk]["top_percent"])
-            baseline[sk]["lookback_days"] = _to_int(p.get("lookback_days"), baseline[sk]["lookback_days"])
-            baseline[sk]["min_turnover"] = _to_float(p.get("min_turnover"), baseline[sk]["min_turnover"])
-        else:
-            baseline[sk]["score_threshold"] = _to_int(p.get("score_threshold"), baseline[sk]["score_threshold"])
-            baseline[sk]["holding_days"] = _to_int(p.get("holding_days"), baseline[sk]["holding_days"])
-            baseline[sk]["top_percent"] = _to_int(p.get("top_percent"), baseline[sk]["top_percent"])
-            if sk == "v9":
-                baseline[sk]["lookback_days"] = _to_int(p.get("lookback_days"), baseline[sk]["lookback_days"])
-                baseline[sk]["min_turnover"] = _to_float(p.get("min_turnover"), baseline[sk]["min_turnover"])
-
-    for sk in ("v5", "v8", "v9", "combo"):
-        baseline[sk]["cap_min"] = float(unified_cap_min)
-        baseline[sk]["cap_max"] = float(unified_cap_max)
-    if strict_full_market:
-        for sk in ("v5", "v8", "v9", "combo"):
-            baseline[sk]["cap_min"] = 0.0
-            baseline[sk]["cap_max"] = 0.0
-    return baseline, notes
+    return runtime_build_unified_from_latest_evolve(
+        profile=profile,
+        strict_full_market=strict_full_market,
+        unified_cap_min=unified_cap_min,
+        unified_cap_max=unified_cap_max,
+        load_evolve_params=_load_evolve_params,
+    )
 
 
 def _trigger_auto_evolve_optimize(force_now: bool = True) -> Tuple[bool, str]:
-    busy, reason = _detect_heavy_background_job()
-    if busy:
-        return False, reason
-
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    script_path = os.path.join(root_dir, "auto_evolve.py")
-    if not os.path.exists(script_path):
-        return False, "未找到 auto_evolve.py"
-
-    py_candidates = [
-        os.path.join(root_dir, ".venv", "bin", "python"),
-        "/opt/openclaw/venv311/bin/python",
-        sys.executable,
-        "python3",
-    ]
-    py_bin = ""
-    for p in py_candidates:
-        if p and os.path.isabs(p) and os.path.exists(p) and os.access(p, os.X_OK):
-            py_bin = p
-            break
-        if p in {"python3"}:
-            py_bin = p
-    if not py_bin:
-        py_bin = "python3"
-
-    log_path = os.path.join(root_dir, "auto_evolve.log")
-    env = os.environ.copy()
-    env["AUTO_EVOLVE_PHASE"] = "optimize_only"
-    if force_now:
-        env["AUTO_EVOLVE_ENFORCE_WINDOW"] = "0"
-
-    try:
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        log_fp = open(log_path, "a", encoding="utf-8")
-        log_fp.write(f"\n[{_now_text()}] [UI] manual optimize trigger start\n")
-        log_fp.flush()
-        proc = subprocess.Popen(
-            [py_bin, script_path],
-            cwd=root_dir,
-            env=env,
-            stdout=log_fp,
-            stderr=log_fp,
-            start_new_session=True,
-        )
-        log_fp.close()
-        return True, f"已启动后台更新任务（PID={proc.pid}）"
-    except Exception as e:
-        return False, f"启动失败: {e}"
+    return runtime_trigger_auto_evolve_optimize(
+        app_root=os.path.dirname(os.path.abspath(__file__)),
+        detect_heavy_background_job=_detect_heavy_background_job,
+        now_text=_now_text,
+        force_now=force_now,
+    )
 
 
 def _rollback_latest_promoted_params(strategy: str) -> Tuple[bool, str]:
-    strategy = str(strategy or "").strip().upper()
-    mapping = {
-        "V4": "best_params.json",
-        "V5": "v5_best.json",
-        "V6": "v6_best.json",
-        "V7": "v7_best.json",
-        "V8": "v8_best.json",
-        "V9": "v9_best.json",
-        "COMBO": "combo_best.json",
-        "STABLE_UPTREND": "stable_uptrend_best.json",
-        "AI_V5": "ai_v5_best.json",
-        "AI_V2": "ai_v2_best.json",
-    }
-    rel = mapping.get(strategy)
-    if not rel:
-        return False, f"不支持的策略: {strategy}"
-    evo_dir = os.path.join(os.path.dirname(__file__), "evolution")
-    active_path = os.path.join(evo_dir, rel)
-    backups = sorted(glob.glob(f"{active_path}.bak_*"), reverse=True)
-    if not backups:
-        return False, "未找到可回滚备份"
-    src = backups[0]
-    try:
-        with open(src, "r", encoding="utf-8") as f:
-            payload = f.read()
-        with open(active_path, "w", encoding="utf-8") as f:
-            f.write(payload)
-        if strategy == "V4":
-            with open(os.path.join(evo_dir, "last_run.json"), "w", encoding="utf-8") as f:
-                f.write(payload)
-        return True, f"已回滚 {strategy} 到备份 {os.path.basename(src)}"
-    except Exception as e:
-        return False, f"回滚失败: {e}"
+    return runtime_rollback_latest_promoted_params(
+        app_root=os.path.dirname(__file__),
+        strategy=strategy,
+    )
 
 
 def _get_last_trade_date_from_tushare() -> Optional[str]:
@@ -4435,86 +1982,10 @@ def _get_last_trade_date_from_tushare() -> Optional[str]:
 
 
 def _load_external_bonus_maps(conn: sqlite3.Connection) -> Tuple[float, Dict[str, float], set, set, Dict[str, float]]:
-    """Load external money/flow bonus maps from DB (northbound, margin, moneyflow, top list, industry flow)."""
-    if not _fund_bonus_enabled():
-        return 0.0, {}, set(), set(), {}
-    bonus_global = 0.0
-    bonus_stock: Dict[str, float] = {}
-    bonus_industry: Dict[str, float] = {}
-    top_list_set = set()
-    top_inst_set = set()
-    last_trade = None
-
-    try:
-        from data.dao import latest_trade_date as _latest_trade_date_v2  # type: ignore
-        last_trade = _latest_trade_date_v2(conn)
-    except Exception:
-        last_trade = None
-
-    # 北向资金（近5日均值）
-    try:
-        nb = pd.read_sql_query("SELECT north_money FROM northbound_flow ORDER BY trade_date DESC LIMIT 5", conn)
-        if not nb.empty:
-            nb_mean = float(nb["north_money"].mean())
-            if nb_mean > 0:
-                bonus_global += 2.0
-            elif nb_mean < 0:
-                bonus_global -= 2.0
-    except Exception:
-        pass
-
-    # 融资融券（近5日趋势）
-    try:
-        mg = pd.read_sql_query("SELECT rzye FROM margin_summary ORDER BY trade_date DESC LIMIT 5", conn)
-        if len(mg) >= 2:
-            if mg["rzye"].iloc[0] > mg["rzye"].iloc[-1]:
-                bonus_global += 1.0
-            elif mg["rzye"].iloc[0] < mg["rzye"].iloc[-1]:
-                bonus_global -= 1.0
-    except Exception:
-        pass
-
-    # 个股资金流（日）
-    try:
-        if last_trade:
-            mf = pd.read_sql_query(
-                "SELECT ts_code, net_mf_amount FROM moneyflow_daily WHERE trade_date = ?",
-                conn,
-                params=(last_trade,),
-            )
-            for _, r in mf.iterrows():
-                bonus_stock[r["ts_code"]] = float(r.get("net_mf_amount", 0) or 0)
-    except Exception:
-        pass
-
-    # 龙虎榜
-    try:
-        if last_trade:
-            tl = pd.read_sql_query("SELECT DISTINCT ts_code FROM top_list WHERE trade_date = ?", conn, params=(last_trade,))
-            top_list_set = set(tl["ts_code"].tolist())
-    except Exception:
-        pass
-
-    try:
-        if last_trade:
-            ti = pd.read_sql_query("SELECT DISTINCT ts_code FROM top_inst WHERE trade_date = ?", conn, params=(last_trade,))
-            top_inst_set = set(ti["ts_code"].tolist())
-    except Exception:
-        pass
-
-    # 行业资金流（同花顺行业）
-    try:
-        if last_trade:
-            ind = pd.read_sql_query("SELECT * FROM moneyflow_ind_ths WHERE trade_date = ?", conn, params=(last_trade,))
-            for _, r in ind.iterrows():
-                ind_name = r.get("industry") or r.get("industry_name") or r.get("name")
-                net = r.get("net_flow") if "net_flow" in r else r.get("net_flow_amt")
-                if ind_name and net is not None:
-                    bonus_industry[str(ind_name)] = float(net)
-    except Exception:
-        pass
-
-    return bonus_global, bonus_stock, top_list_set, top_inst_set, bonus_industry
+    return service_load_external_bonus_maps(
+        conn=conn,
+        fund_bonus_enabled=_fund_bonus_enabled,
+    )
 
 
 def _calc_external_bonus(
@@ -4526,89 +1997,69 @@ def _calc_external_bonus(
     top_inst_set: set,
     bonus_industry_map: Dict[str, float],
 ) -> float:
-    extra = bonus_global
-    mf_net = bonus_stock_map.get(ts_code, 0.0)
-    if mf_net > 1e8:
-        extra += 2.0
-    elif mf_net > 0:
-        extra += 1.0
-    elif mf_net < 0:
-        extra -= 1.0
-    if ts_code in top_list_set:
-        extra += 1.5
-    if ts_code in top_inst_set:
-        extra += 1.0
-    ind_flow = bonus_industry_map.get(industry, 0.0)
-    if ind_flow > 0:
-        extra += 1.0
-    elif ind_flow < 0:
-        extra -= 1.0
-    return extra
+    return service_calc_external_bonus(
+        ts_code=ts_code,
+        industry=industry,
+        bonus_global=bonus_global,
+        bonus_stock_map=bonus_stock_map,
+        top_list_set=top_list_set,
+        top_inst_set=top_inst_set,
+        bonus_industry_map=bonus_industry_map,
+    )
 
-#  导入v4.0综合优选评分器（潜伏策略·长期稳健版）
-try:
-    from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
-    V4_EVALUATOR_AVAILABLE = True
-    logger.info("v4.0综合优选评分器（潜伏策略版）加载成功！")
-except ImportError as e:
-    V4_EVALUATOR_AVAILABLE = False
-    logger.warning(f"v4.0评分器未找到，将使用v3.0版本: {e}")
-    # 尝试导入v3.0作为备用
-    try:
-        from comprehensive_stock_evaluator_v3 import ComprehensiveStockEvaluatorV3
-        V3_EVALUATOR_AVAILABLE = True
-        logger.info("v3.0综合优选评分器加载成功（备用）！")
-    except ImportError:
-        V3_EVALUATOR_AVAILABLE = False
+from openclaw.runtime.root_dependency_bridge import load_stable_uptrend_module
+from openclaw.runtime.strategy_v6_page import render_v6_strategy_page
+from openclaw.runtime.strategy_v7_page import render_v7_strategy_page
+from openclaw.runtime.strategy_v8_page import render_v8_strategy_page
+from openclaw.runtime.strategy_v9_page import render_v9_strategy_page
+from openclaw.runtime.strategy_combo_page import render_combo_strategy_page
+from openclaw.runtime.strategy_comparison_page import render_strategy_comparison_page
+from openclaw.runtime.strategy_single_backtest_page import render_single_backtest_page
+from openclaw.runtime.strategy_parameter_optimization_page import render_parameter_optimization_page
+from openclaw.runtime.ai_signal_page import render_ai_signal_page
+from openclaw.runtime.airivo_production_dashboard_page import render_airivo_production_dashboard_page
+from openclaw.runtime.airivo_strategy_evolution_page import render_airivo_strategy_evolution_page
+from openclaw.runtime.today_advanced_ops_panel import render_today_advanced_ops_panel
+from openclaw.runtime.today_console_panel import render_today_console_panel
+from openclaw.runtime.today_strategy_dispatcher import render_today_strategy_dispatcher
+from openclaw.runtime.today_strategy_selector_panel import render_today_strategy_selector_panel
+from openclaw.runtime.today_stable_uptrend_page import render_today_stable_uptrend_page
+from openclaw.runtime.today_v4_strategy_page import render_today_v4_strategy_page
+from openclaw.runtime.today_v5_strategy_page import render_today_v5_strategy_page
+from openclaw.runtime.sector_flow_page import render_sector_flow_page
+from openclaw.runtime.stock_pool_workspace_page import render_stock_pool_workspace_page
+from openclaw.runtime.data_ops_core_page import render_data_ops_core_page
+from openclaw.runtime.data_ops_status_page import render_data_ops_status_page
+from openclaw.runtime.data_ops_update_page import render_data_ops_update_page
+from openclaw.runtime.assistant_config_page import render_assistant_config_page
+from openclaw.runtime.assistant_workbench_page import render_assistant_workbench_page
+from openclaw.runtime.assistant_holdings_page import render_assistant_holdings_page
+from openclaw.runtime.assistant_trade_history_page import render_assistant_trade_history_page
+from openclaw.runtime.assistant_daily_report_page import render_assistant_daily_report_page
+from openclaw.runtime.assistant_ops_tabs import render_assistant_ops_tabs
+from openclaw.runtime.qa_self_learning_panel import render_qa_self_learning_panel
+from openclaw.runtime.qa_chat_shell import render_qa_chat_shell
+from openclaw.runtime.qa_submission_controller import render_qa_submission_controller
+from openclaw.runtime.ui_dependency_loader import load_ui_dependencies
 
-#  导入v5.0启动确认型评分器（基于v4.0，权重优化版）
-try:
-    from comprehensive_stock_evaluator_v4 import ComprehensiveStockEvaluatorV4
-    # v5.0是v4.0的别名，使用相同的八维评分体系，但在UI上更关注启动确认维度
-    ComprehensiveStockEvaluatorV5 = ComprehensiveStockEvaluatorV4
-    V5_EVALUATOR_AVAILABLE = True
-    logger.info("v5.0启动确认型评分器加载成功（基于v4.0八维体系）！")
-except ImportError as e:
-    V5_EVALUATOR_AVAILABLE = False
-    logger.warning(f"v5.0评分器未找到: {e}")
-
-#  导入v6.0超短线狙击评分器·专业版（胜率80-90%，单次8-15%，只选市场高质量1-3%）
-try:
-    from comprehensive_stock_evaluator_v6_ultimate import ComprehensiveStockEvaluatorV6Ultimate as ComprehensiveStockEvaluatorV6
-    V6_EVALUATOR_AVAILABLE = True
-    logger.info("v6.0超短线狙击评分器·专业版加载成功！")
-except ImportError as e:
-    V6_EVALUATOR_AVAILABLE = False
-    logger.warning(f"v6.0评分器未找到: {e}")
-
-#  导入v7.0智能选股系统（专业标准）
-try:
-    from comprehensive_stock_evaluator_v7_ultimate import ComprehensiveStockEvaluatorV7Ultimate
-    V7_EVALUATOR_AVAILABLE = True
-    logger.info("v7.0智能选股系统加载成功！")
-except ImportError as e:
-    V7_EVALUATOR_AVAILABLE = False
-    logger.warning(f"v7.0评分器未找到: {e}")
-
-#  导入v8.0进阶版（量化策略）
-try:
-    from comprehensive_stock_evaluator_v8_ultimate import ComprehensiveStockEvaluatorV8Ultimate
-    from kelly_position_manager import KellyPositionManager
-    from dynamic_rebalance_manager import DynamicRebalanceManager
-    V8_EVALUATOR_AVAILABLE = True
-    logger.info("v8.0进阶版加载成功！ATR风控+市场过滤+凯利仓位+动态再平衡")
-except ImportError as e:
-    V8_EVALUATOR_AVAILABLE = False
-    logger.warning(f"v8.0评分器未找到: {e}")
-
-#  导入稳定上涨策略
-try:
-    from stable_uptrend_strategy import render_stable_uptrend_strategy
-    STABLE_UPTREND_AVAILABLE = True
-    logger.info("稳定上涨策略模块加载成功！")
-except ImportError as e:
-    STABLE_UPTREND_AVAILABLE = False
-    logger.warning(f"稳定上涨策略模块未找到: {e}")
+_ui_deps = load_ui_dependencies(logger)
+ComprehensiveStockEvaluatorV3 = _ui_deps["ComprehensiveStockEvaluatorV3"]
+ComprehensiveStockEvaluatorV4 = _ui_deps["ComprehensiveStockEvaluatorV4"]
+ComprehensiveStockEvaluatorV5 = _ui_deps["ComprehensiveStockEvaluatorV5"]
+ComprehensiveStockEvaluatorV6 = _ui_deps["ComprehensiveStockEvaluatorV6"]
+ComprehensiveStockEvaluatorV7Ultimate = _ui_deps["ComprehensiveStockEvaluatorV7Ultimate"]
+ComprehensiveStockEvaluatorV8Ultimate = _ui_deps["ComprehensiveStockEvaluatorV8Ultimate"]
+KellyPositionManager = _ui_deps["KellyPositionManager"]
+DynamicRebalanceManager = _ui_deps["DynamicRebalanceManager"]
+NotificationService = _ui_deps["NotificationService"]
+render_stable_uptrend_strategy = _ui_deps["render_stable_uptrend_strategy"]
+V3_EVALUATOR_AVAILABLE = _ui_deps["V3_EVALUATOR_AVAILABLE"]
+V4_EVALUATOR_AVAILABLE = _ui_deps["V4_EVALUATOR_AVAILABLE"]
+V5_EVALUATOR_AVAILABLE = _ui_deps["V5_EVALUATOR_AVAILABLE"]
+V6_EVALUATOR_AVAILABLE = _ui_deps["V6_EVALUATOR_AVAILABLE"]
+V7_EVALUATOR_AVAILABLE = _ui_deps["V7_EVALUATOR_AVAILABLE"]
+V8_EVALUATOR_AVAILABLE = _ui_deps["V8_EVALUATOR_AVAILABLE"]
+STABLE_UPTREND_AVAILABLE = _ui_deps["STABLE_UPTREND_AVAILABLE"]
 
 # 配置
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -4651,165 +2102,45 @@ def _fund_bonus_enabled() -> bool:
     return DEFAULT_ENABLE_FUND_BONUS
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        if isinstance(value, str):
-            value = value.replace(",", "").strip()
-        return float(value)
-    except Exception:
-        return default
+    return service_safe_float(value, default)
 
 
 def _safe_daily_table_name(name: str, fallback: str = "daily_trading_data") -> str:
-    return name if name in {"daily_trading_data", "daily_data"} else fallback
+    return service_safe_daily_table_name(name, fallback)
 
 
 def _iter_sqlite_in_chunks(items: List[str], max_vars: int = 900) -> List[List[str]]:
-    if not items:
-        return []
-    size = max(1, int(max_vars))
-    return [items[i:i + size] for i in range(0, len(items), size)]
+    return service_iter_sqlite_in_chunks(items, max_vars=max_vars)
 
 
 def _canonical_ts_code(code: Any) -> str:
-    raw = str(code or "").strip().upper()
-    if not raw:
-        return ""
-    if re.fullmatch(r"\d{6}\.(SH|SZ)", raw):
-        return raw
-    if re.fullmatch(r"\d{6}", raw):
-        return f"{raw}.SH" if raw.startswith(("5", "6", "9")) else f"{raw}.SZ"
-    m = re.fullmatch(r"(SH|SZ)\.?(\d{6})", raw)
-    if m:
-        exch, digits = m.groups()
-        return f"{digits}.{exch}"
-    if re.fullmatch(r"\d{6}\.(XSHG|XSHE)", raw):
-        digits, exch = raw.split(".")
-        return f"{digits}.SH" if exch == "XSHG" else f"{digits}.SZ"
-    return raw
+    return service_canonical_ts_code(code)
 
 
 def _expand_ts_code_keys(code: Any) -> List[str]:
-    raw = str(code or "").strip().upper()
-    canonical = _canonical_ts_code(raw)
-    keys: List[str] = []
-    for k in (raw, canonical):
-        if k and k not in keys:
-            keys.append(k)
-    if canonical:
-        digits = canonical.split(".")[0]
-        if digits and digits not in keys:
-            keys.append(digits)
-    return keys
+    return service_expand_ts_code_keys(code)
 
 
 def _get_latest_prices(ts_codes: List[str], db_path: str = PERMANENT_DB_PATH) -> Dict[str, Dict[str, Any]]:
-    if not ts_codes:
-        return {}
-    query_codes: List[str] = []
-    for code in ts_codes:
-        canonical = _canonical_ts_code(code)
-        if canonical and canonical not in query_codes:
-            query_codes.append(canonical)
-    if not query_codes:
-        return {}
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    try:
-        from data.dao import DataAccessError, detect_daily_table  # type: ignore
-        try:
-            table = detect_daily_table(conn)
-        except DataAccessError:
-            table = "daily_trading_data"
-        table = _safe_daily_table_name(table)
-        cursor = conn.cursor()
-        rows: List[Tuple[str, float, str]] = []
-        for chunk in _iter_sqlite_in_chunks(query_codes, max_vars=900):
-            placeholders = ",".join(["?"] * len(chunk))
-            query = f"""
-                WITH ranked AS (
-                    SELECT ts_code, close_price, trade_date,
-                           ROW_NUMBER() OVER (PARTITION BY ts_code ORDER BY trade_date DESC) AS rn
-                    FROM {table}
-                    WHERE ts_code IN ({placeholders})
-                )
-                SELECT ts_code, close_price, trade_date
-                FROM ranked
-                WHERE rn = 1
-            """
-            cursor.execute(query, chunk)
-            rows.extend(cursor.fetchall())
-    finally:
-        conn.close()
-    latest_by_code: Dict[str, Dict[str, Any]] = {}
-    for ts_code, close_price, trade_date in rows:
-        latest_by_code[str(ts_code)] = {"price": _safe_float(close_price), "trade_date": trade_date}
-    latest: Dict[str, Dict[str, Any]] = {}
-    for code in ts_codes:
-        keys = _expand_ts_code_keys(code)
-        hit: Optional[Dict[str, Any]] = None
-        for k in keys:
-            info = latest_by_code.get(k)
-            if info:
-                hit = info
-                break
-        if hit:
-            for k in keys:
-                latest[k] = hit
-    return latest
+    return service_get_latest_prices(
+        ts_codes=ts_codes,
+        db_path=db_path,
+        canonical_ts_code=_canonical_ts_code,
+        expand_ts_code_keys=_expand_ts_code_keys,
+        iter_sqlite_in_chunks=_iter_sqlite_in_chunks,
+        safe_daily_table_name=_safe_daily_table_name,
+        safe_float=_safe_float,
+    )
 
 
 def _connect_permanent_db() -> sqlite3.Connection:
-    try:
-        from data.dao import resolve_db_path as _resolve_db_path_v2  # type: ignore
-        conn = sqlite3.connect(str(_resolve_db_path_v2(PERMANENT_DB_PATH)))
-    except Exception:
-        conn = sqlite3.connect(PERMANENT_DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
+    return service_connect_permanent_db(PERMANENT_DB_PATH)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _cached_real_stock_data(db_path: str) -> pd.DataFrame:
     """Cached wrapper: loads latest-day stock data. TTL=5min to stay fresh."""
-    from data.dao import detect_daily_table, recent_trade_profile  # type: ignore
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    try:
-        daily_table = detect_daily_table(conn)
-        profile = recent_trade_profile(conn, date_limit=1, recent_window=1)
-        latest_date = str(profile.get("last_trade_date", "") or "")
-        if not latest_date:
-            return pd.DataFrame()
-        query = f"""
-            SELECT dtd.ts_code AS "股票代码",
-                   sb.name AS "股票名称",
-                   dtd.amount AS "成交额",
-                   dtd.close_price AS "价格",
-                   sb.circ_mv AS "流通市值"
-            FROM {daily_table} dtd
-            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-            WHERE dtd.trade_date = ?
-        """
-        df = pd.read_sql_query(query, conn, params=(latest_date,))
-    except Exception:
-        return pd.DataFrame()
-    finally:
-        conn.close()
-    if df is None or df.empty:
-        return pd.DataFrame()
-    df["成交额"] = pd.to_numeric(df["成交额"], errors="coerce").fillna(0.0)
-    df["价格"] = pd.to_numeric(df["价格"], errors="coerce").fillna(0.0)
-    df["流通市值"] = pd.to_numeric(df["流通市值"], errors="coerce").fillna(0.0)
-    try:
-        median_amount = float(df["成交额"].median())
-        if 0 < median_amount < 1e7:
-            df["成交额"] = df["成交额"] * 1000.0
-    except Exception:
-        pass
-    return df
+    return service_load_real_stock_data(db_path)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -4832,35 +2163,15 @@ def _batch_load_stock_histories(
     columns: str = "ts_code, trade_date, close_price, vol, pct_chg",
 ) -> Dict[str, pd.DataFrame]:
     """Batch-load history for many stocks in chunked queries to avoid SQLite variable limits."""
-    if not ts_codes:
-        return {}
-    try:
-        from data.dao import detect_daily_table  # type: ignore
-        table = detect_daily_table(conn)
-        table = _safe_daily_table_name(table)
-    except Exception:
-        table = "daily_trading_data"
-    result = {}
-    for chunk in _iter_sqlite_in_chunks(ts_codes, max_vars=900):
-        placeholders = ",".join(["?"] * len(chunk))
-        query = f"""
-            SELECT {columns}
-            FROM (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY ts_code ORDER BY trade_date DESC) AS rn
-                FROM {table}
-                WHERE ts_code IN ({placeholders})
-            ) sub
-            WHERE rn <= {int(limit)}
-            ORDER BY ts_code, trade_date
-        """
-        big_df = pd.read_sql_query(query, conn, params=chunk)
-        if big_df is None or big_df.empty:
-            continue
-        for code, grp in big_df.groupby("ts_code"):
-            result[str(code)] = _normalize_stock_df(
-                grp.drop(columns=["ts_code"], errors="ignore").reset_index(drop=True)
-            )
-    return result
+    return runtime_batch_load_stock_histories(
+        conn=conn,
+        ts_codes=ts_codes,
+        limit=limit,
+        columns=columns,
+        iter_sqlite_in_chunks=_iter_sqlite_in_chunks,
+        safe_daily_table_name=_safe_daily_table_name,
+        normalize_stock_df=_normalize_stock_df,
+    )
 
 
 def _init_sim_db() -> None:
@@ -4936,23 +2247,7 @@ def _init_sim_db() -> None:
 
 
 def _get_sim_account() -> Dict[str, Any]:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT initial_cash, cash, per_buy_amount, auto_buy_top_n
-        FROM sim_account WHERE id = 1
-    """)
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
-        return {'initial_cash': 1000000.0, 'cash': 1000000.0, 'per_buy_amount': 100000.0, 'auto_buy_top_n': 10}
-    return {
-        'initial_cash': _safe_float(row[0], 1000000.0),
-        'cash': _safe_float(row[1], 1000000.0),
-        'per_buy_amount': _safe_float(row[2], 100000.0),
-        'auto_buy_top_n': int(row[3]) if row[3] is not None else 10
-    }
+    return service_get_sim_account(db_path=SIM_TRADING_DB_PATH, safe_float=_safe_float)
 
 
 def _update_sim_account(
@@ -4961,100 +2256,41 @@ def _update_sim_account(
     per_buy_amount: Optional[float] = None,
     auto_buy_top_n: Optional[int] = None
 ) -> None:
-    fields = []
-    params: List[Any] = []
-    if initial_cash is not None:
-        fields.append("initial_cash = ?")
-        params.append(float(initial_cash))
-    if cash is not None:
-        fields.append("cash = ?")
-        params.append(float(cash))
-    if per_buy_amount is not None:
-        fields.append("per_buy_amount = ?")
-        params.append(float(per_buy_amount))
-    if auto_buy_top_n is not None:
-        fields.append("auto_buy_top_n = ?")
-        params.append(int(auto_buy_top_n))
-    if not fields:
-        return
-    params.append(1)
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        f"UPDATE sim_account SET {', '.join(fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        params
+    service_update_sim_account(
+        db_path=SIM_TRADING_DB_PATH,
+        initial_cash=initial_cash,
+        cash=cash,
+        per_buy_amount=per_buy_amount,
+        auto_buy_top_n=auto_buy_top_n,
     )
-    conn.commit()
-    conn.close()
 
 
 def _reset_sim_account(initial_cash: float, per_buy_amount: float, auto_buy_top_n: int) -> None:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM sim_positions")
-    cursor.execute("DELETE FROM sim_trades")
-    cursor.execute("DELETE FROM sim_auto_buy_log")
-    cursor.execute(
-        """
-        UPDATE sim_account
-        SET initial_cash = ?, cash = ?, per_buy_amount = ?, auto_buy_top_n = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = 1
-        """,
-        (float(initial_cash), float(initial_cash), float(per_buy_amount), int(auto_buy_top_n))
+    service_reset_sim_account(
+        db_path=SIM_TRADING_DB_PATH,
+        initial_cash=initial_cash,
+        per_buy_amount=per_buy_amount,
+        auto_buy_top_n=auto_buy_top_n,
     )
-    cursor.execute("DELETE FROM sim_meta WHERE key IN ('last_ai_signature', 'last_ai_buy_time')")
-    conn.commit()
-    conn.close()
 
 
 def _get_sim_positions() -> Dict[str, Dict[str, Any]]:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    df = pd.read_sql_query("SELECT * FROM sim_positions ORDER BY buy_date DESC", conn)
-    conn.close()
-    positions: Dict[str, Dict[str, Any]] = {}
-    for _, row in df.iterrows():
-        positions[row['ts_code']] = {
-            'name': row.get('name'),
-            'shares': int(row.get('shares') or 0),
-            'avg_cost': _safe_float(row.get('avg_cost'), 0.0),
-            'buy_date': row.get('buy_date') or ""
-        }
-    return positions
+    return service_get_sim_positions(db_path=SIM_TRADING_DB_PATH, safe_float=_safe_float)
 
 
 def _upsert_sim_position(ts_code: str, name: str, shares: int, avg_cost: float, buy_date: str) -> None:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO sim_positions (ts_code, name, shares, avg_cost, buy_date)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(ts_code) DO UPDATE SET
-            name = excluded.name,
-            shares = excluded.shares,
-            avg_cost = excluded.avg_cost,
-            buy_date = CASE
-                WHEN sim_positions.buy_date IS NULL OR sim_positions.buy_date = '' THEN excluded.buy_date
-                ELSE sim_positions.buy_date
-            END,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (ts_code, name, int(shares), float(avg_cost), buy_date)
+    service_upsert_sim_position(
+        db_path=SIM_TRADING_DB_PATH,
+        ts_code=ts_code,
+        name=name,
+        shares=shares,
+        avg_cost=avg_cost,
+        buy_date=buy_date,
     )
-    conn.commit()
-    conn.close()
 
 
 def _delete_sim_position(ts_code: str) -> None:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM sim_positions WHERE ts_code = ?", (ts_code,))
-    conn.commit()
-    conn.close()
+    service_delete_sim_position(db_path=SIM_TRADING_DB_PATH, ts_code=ts_code)
 
 
 def _add_sim_trade(
@@ -5069,69 +2305,43 @@ def _add_sim_trade(
     batch_id: str = "",
     source: str = ""
 ) -> None:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO sim_trades (trade_date, ts_code, name, side, price, shares, amount, pnl, batch_id, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (trade_date, ts_code, name, side, float(price), int(shares), float(amount), float(pnl), batch_id, source)
+    service_add_sim_trade(
+        db_path=SIM_TRADING_DB_PATH,
+        trade_date=trade_date,
+        ts_code=ts_code,
+        name=name,
+        side=side,
+        price=price,
+        shares=shares,
+        amount=amount,
+        pnl=pnl,
+        batch_id=batch_id,
+        source=source,
     )
-    conn.commit()
-    conn.close()
 
 
 def _get_sim_trades(limit: int = 500) -> pd.DataFrame:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    trades = pd.read_sql_query(
-        f"SELECT * FROM sim_trades ORDER BY trade_date DESC, created_at DESC LIMIT {int(limit)}",
-        conn
-    )
-    conn.close()
-    return trades
+    return service_get_sim_trades(db_path=SIM_TRADING_DB_PATH, limit=limit)
 
 
 def _get_sim_meta(key: str) -> str:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT value FROM sim_meta WHERE key = ?", (key,))
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else ""
+    return service_get_sim_meta(db_path=SIM_TRADING_DB_PATH, key=key)
 
 
 def _set_sim_meta(key: str, value: str) -> None:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO sim_meta (key, value, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-        """,
-        (key, value)
-    )
-    conn.commit()
-    conn.close()
+    service_set_sim_meta(db_path=SIM_TRADING_DB_PATH, key=key, value=value)
 
 def _get_sim_auto_buy_max_total_amount() -> float:
     """Optional max total amount for a single auto-buy batch. 0 means no extra cap."""
-    value = _get_sim_meta("auto_buy_max_total_amount")
-    return _safe_float(value, 0.0)
+    return service_get_sim_auto_buy_max_total_amount(db_path=SIM_TRADING_DB_PATH, safe_float=_safe_float)
 
 
 def _get_sim_auto_buy_enabled() -> bool:
-    value = _get_sim_meta("auto_buy_enabled")
-    return value != "0"
+    return service_get_sim_auto_buy_enabled(db_path=SIM_TRADING_DB_PATH)
 
 
 def _set_sim_auto_buy_enabled(enabled: bool) -> None:
-    _set_sim_meta("auto_buy_enabled", "1" if enabled else "0")
+    service_set_sim_auto_buy_enabled(db_path=SIM_TRADING_DB_PATH, enabled=enabled)
 
 
 def _add_sim_auto_buy_log(
@@ -5143,29 +2353,20 @@ def _add_sim_auto_buy_log(
     top_n: int,
     per_buy_amount: float
 ) -> None:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO sim_auto_buy_log (run_time, signature, status, buy_count, message, top_n, per_buy_amount)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (run_time, signature, status, int(buy_count), message, int(top_n), float(per_buy_amount))
+    service_add_sim_auto_buy_log(
+        db_path=SIM_TRADING_DB_PATH,
+        run_time=run_time,
+        signature=signature,
+        status=status,
+        buy_count=buy_count,
+        message=message,
+        top_n=top_n,
+        per_buy_amount=per_buy_amount,
     )
-    conn.commit()
-    conn.close()
 
 
 def _get_sim_auto_buy_logs(limit: int = 50) -> pd.DataFrame:
-    _init_sim_db()
-    conn = sqlite3.connect(SIM_TRADING_DB_PATH)
-    logs = pd.read_sql_query(
-        f"SELECT * FROM sim_auto_buy_log ORDER BY run_time DESC, created_at DESC LIMIT {int(limit)}",
-        conn
-    )
-    conn.close()
-    return logs
+    return service_get_sim_auto_buy_logs(db_path=SIM_TRADING_DB_PATH, limit=limit)
 
 
 def _ai_list_signature(stocks: pd.DataFrame) -> str:
@@ -5374,8 +2575,8 @@ def _run_async_backtest_worker_main() -> int:
         return 1
 
 st.set_page_config(
-    page_title="量价策略系统 v49.0 - 长期稳健版",
-    page_icon="",
+    page_title="Airivo Quant Decision System",
+    page_icon="A",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -5511,80 +2712,19 @@ def _render_page_header(title: str, subtitle: str = "", tag: str = ""):
     )
 
 def _render_result_overview(df: pd.DataFrame, score_col: str = "综合评分", title: str = "结果概览"):
-    if df is None or df.empty:
-        return
-    st.markdown(f"### {title}")
-    scores = None
-    if score_col in df.columns:
-        scores = pd.to_numeric(df[score_col], errors="coerce").dropna()
-
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("标的数量", f"{len(df)}")
-    if scores is not None and not scores.empty:
-        with col2:
-            st.metric("平均评分", f"{scores.mean():.1f}")
-        with col3:
-            st.metric("最高评分", f"{scores.max():.1f}")
-        with col4:
-            st.metric("最低评分", f"{scores.min():.1f}")
-    else:
-        with col2:
-            st.metric("平均评分", "—")
-        with col3:
-            st.metric("最高评分", "—")
-        with col4:
-            st.metric("最低评分", "—")
-
-    chart_cols = st.columns(2)
-    with chart_cols[0]:
-        if scores is not None and not scores.empty:
-            bins = pd.cut(scores, bins=8)
-            hist = bins.value_counts().sort_index()
-            hist.index = hist.index.astype(str)
-            st.bar_chart(hist, height=220)
-            st.caption("评分分布")
-        else:
-            st.caption("评分分布（暂无数据）")
-
-    with chart_cols[1]:
-        if "行业" in df.columns:
-            ind_counts = df["行业"].fillna("未知").value_counts().head(8)
-            st.bar_chart(ind_counts, height=220)
-            st.caption("行业分布 Top 8")
-        else:
-            st.caption("行业分布（暂无数据）")
+    runtime_render_result_overview(df, score_col=score_col, title=title)
 
 
 def _standardize_result_df(df: pd.DataFrame, score_col: str = "综合评分") -> pd.DataFrame:
-    if df is None or df.empty:
-        return df
-    out = df.copy()
-    if "score_val" in out.columns:
-        out = out.drop(columns=["score_val"])
-    if score_col in out.columns:
-        try:
-            out[score_col] = pd.to_numeric(out[score_col], errors="ignore")
-        except Exception:
-            pass
-    preferred = ["股票代码", "股票名称", "行业", score_col]
-    cols = [c for c in preferred if c in out.columns] + [c for c in out.columns if c not in preferred]
-    return out[cols]
+    return runtime_standardize_result_df(df, score_col=score_col)
 
 
 def _append_reason_col(display_cols: List[str], df: pd.DataFrame) -> List[str]:
-    if df is None or df.empty:
-        return display_cols
-    if "核心理由" in df.columns and "核心理由" not in display_cols:
-        return display_cols + ["核心理由"]
-    return display_cols
+    return runtime_append_reason_col(display_cols, df)
 
 
 def _get_ts_code_col(df: pd.DataFrame) -> Optional[str]:
-    for col in ("股票代码", "ts_code", "TS_CODE"):
-        if col in df.columns:
-            return col
-    return None
+    return runtime_get_ts_code_col(df)
 
 
 def _apply_multi_period_filter(
@@ -5592,82 +2732,15 @@ def _apply_multi_period_filter(
     db_path: str,
     min_align: int = 2
 ) -> pd.DataFrame:
-    if df is None or df.empty:
-        return df
-    ts_col = _get_ts_code_col(df)
-    if not ts_col:
-        return df
-    rows = []
-    for _, row in df.iterrows():
-        ts_code = row[ts_col]
-        try:
-            from data.history import load_stock_recent as _load_stock_recent_v2  # type: ignore
-            hist = _load_stock_recent_v2(
-                db_path=db_path,
-                ts_code=ts_code,
-                limit=61,
-                columns="trade_date, close_price",
-            )
-        except Exception:
-            hist = pd.DataFrame()
-        if len(hist) < 21:
-            continue
-        hist = hist.sort_values("trade_date").reset_index(drop=True)
-        closes = pd.to_numeric(hist["close_price"], errors="coerce").dropna()
-        if len(closes) < 21:
-            continue
-
-        def _ret(n: int) -> float:
-            if len(closes) <= n:
-                return 0.0
-            base = closes.iloc[-(n + 1)]
-            return (closes.iloc[-1] / base - 1.0) if base else 0.0
-
-        r5, r20, r60 = _ret(5), _ret(20), _ret(60)
-        pos = sum(1 for v in (r5, r20, r60) if v >= 0)
-        neg = 3 - pos
-        align = max(pos, neg)
-        if align >= min_align:
-            row = row.copy()
-            row["5日趋势"] = "上行" if r5 >= 0 else "下行"
-            row["20日趋势"] = "上行" if r20 >= 0 else "下行"
-            row["60日趋势"] = "上行" if r60 >= 0 else "下行"
-            row["趋势一致数"] = align
-            rows.append(row)
-    if not rows:
-        return pd.DataFrame()
-    return pd.DataFrame(rows)
+    return runtime_apply_multi_period_filter(df, db_path, min_align=min_align)
 
 
 def _add_reason_summary(df: pd.DataFrame, score_col: str = "综合评分") -> pd.DataFrame:
-    if df is None or df.empty:
-        return df
-    if "理由摘要" in df.columns:
-        return df
-    out = df.copy()
-    if "筛选理由" in out.columns:
-        out["理由摘要"] = out["筛选理由"]
-    elif "协同组合" in out.columns:
-        out["理由摘要"] = out["协同组合"]
-    else:
-        out["理由摘要"] = ""
-    return out
+    return runtime_add_reason_summary(df, score_col=score_col)
 
 
 def _load_portfolio_risk_budget() -> Dict[str, Any]:
-    enable_env = os.getenv("OPENCLAW_PROD_ENABLE_RISK_BUDGET", "1") == "1"
-    max_positions_env = int(float(os.getenv("OPENCLAW_PROD_MAX_POSITIONS", "20") or 20))
-    max_industry_ratio_env = float(os.getenv("OPENCLAW_PROD_MAX_INDUSTRY_RATIO", "0.35") or 0.35)
-    enable = bool(st.session_state.get("prod_rb_enable", enable_env))
-    max_positions = int(float(st.session_state.get("prod_rb_max_positions", max_positions_env) or max_positions_env))
-    max_industry_ratio = float(st.session_state.get("prod_rb_max_ind_ratio", max_industry_ratio_env) or max_industry_ratio_env)
-    max_positions = max(1, min(200, max_positions))
-    max_industry_ratio = max(0.05, min(1.0, max_industry_ratio))
-    return {
-        "enabled": bool(enable),
-        "max_positions": int(max_positions),
-        "max_industry_ratio": float(max_industry_ratio),
-    }
+    return runtime_load_portfolio_risk_budget()
 
 
 def _parse_strength_range_label(label: str) -> Tuple[float, float]:
@@ -5683,116 +2756,28 @@ def _parse_strength_range_label(label: str) -> Tuple[float, float]:
 
 
 def _build_calibrated_strength_df(strength_perf: Dict[str, Dict[str, Any]]) -> pd.DataFrame:
-    if not isinstance(strength_perf, dict) or not strength_perf:
-        return pd.DataFrame()
-    rows: List[Dict[str, Any]] = []
-    for label, perf in strength_perf.items():
-        lo, hi = _parse_strength_range_label(str(label))
-        rows.append(
-            {
-                "区间": str(label),
-                "下界": float(lo),
-                "上界": float(hi),
-                "样本数": int(_safe_float((perf or {}).get("count"), 0)),
-                "原始胜率%": float(_safe_float((perf or {}).get("win_rate"), 0.0)),
-                "原始收益%": float(_safe_float((perf or {}).get("avg_return"), 0.0)),
-            }
-        )
-    df = pd.DataFrame(rows)
-    if df.empty:
-        return df
-    df = df.sort_values(["下界", "上界"]).reset_index(drop=True)
-    # 单调校准：用递增包络避免“高分段反而更差”的不一致信号。
-    df["校准胜率%"] = np.maximum.accumulate(df["原始胜率%"].to_numpy(dtype=float))
-    df["校准收益%"] = np.maximum.accumulate(df["原始收益%"].to_numpy(dtype=float))
-    df["校准综合分"] = df["校准胜率%"] * df["校准收益%"] / 100.0
-    return df
+    return runtime_build_calibrated_strength_df(strength_perf, safe_float=_safe_float)
 
 
 def _pick_tradable_segment_from_strength(strength_perf: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-    cal_df = _build_calibrated_strength_df(strength_perf)
-    if cal_df is None or cal_df.empty:
-        return {}
-    tradable = cal_df[(cal_df["样本数"] >= 20) & (cal_df["校准收益%"] > 0)].copy()
-    src = tradable if not tradable.empty else cal_df
-    best = src.sort_values(["校准综合分", "样本数"], ascending=[False, False]).iloc[0]
-    lo = int(round(float(best.get("下界", 0.0))))
-    hi = int(round(float(best.get("上界", lo))))
-    lo = max(45, min(90, lo))
-    hi = max(lo, min(90, hi))
-    return {
-        "segment": str(best.get("区间", "")),
-        "low": lo,
-        "high": hi,
-        "samples": int(best.get("样本数", 0)),
-        "cal_ret": float(best.get("校准收益%", 0.0)),
-        "cal_win": float(best.get("校准胜率%", 0.0)),
-    }
+    return runtime_pick_tradable_segment_from_strength(strength_perf, safe_float=_safe_float)
 
 
-def _apply_tradable_segment_to_strategy_session(strategy_name: str, seg: Dict[str, Any], top_percent: int = 3) -> str:
-    if not isinstance(seg, dict) or not seg:
-        return "无可用分段建议"
-    lo = int(seg.get("low", 60))
-    hi = int(seg.get("high", lo))
-    tp = max(1, min(10, int(top_percent)))
-    s = str(strategy_name or "")
-    if "v9.0" in s:
-        st.session_state["score_threshold_v9"] = int(lo)
-        st.session_state["select_mode_v9"] = "分位数筛选(Top%)"
-        st.session_state["top_percent_v9"] = int(tp)
-        return f"已应用到v9：阈值>={lo}，模式=分位数Top{tp}%"
-    if "v8.0" in s:
-        st.session_state["score_threshold_v8_tab1"] = (int(lo), int(hi))
-        st.session_state["v8_select_mode_tab1"] = "分位数筛选(Top%)"
-        st.session_state["v8_top_percent_tab1"] = int(tp)
-        return f"已应用到v8：阈值区间={lo}-{hi}，模式=分位数Top{tp}%"
-    if "v5.0" in s:
-        st.session_state["score_threshold_v5"] = int(lo)
-        st.session_state["v5_select_mode"] = "分位数筛选(Top%)"
-        st.session_state["v5_top_percent"] = int(tp)
-        return f"已应用到v5：阈值>={lo}，模式=分位数Top{tp}%"
-    if "组合策略" in s:
-        st.session_state["combo_threshold"] = int(lo)
-        st.session_state["combo_select_mode"] = "分位数筛选(Top%)"
-        st.session_state["combo_top_percent"] = int(tp)
-        return f"已应用到combo：阈值>={lo}，模式=分位数Top{tp}%"
-    return "当前策略不支持自动应用"
+def _apply_tradable_segment_to_strategy_session(strategy_name: str, seg: Dict[str, Any], top_percent: int = 1) -> str:
+    return runtime_apply_tradable_segment_to_strategy_session(
+        strategy_name,
+        seg,
+        top_percent=top_percent,
+    )
 
 
 def _auto_backtest_scheduler_tick() -> Dict[str, Any]:
-    enabled = bool(st.session_state.get("auto_backtest_enabled", False))
-    hhmm = str(st.session_state.get("auto_backtest_time", "15:35") or "15:35").strip()
-    if not enabled:
-        return {"ok": False, "status": "disabled"}
-    m = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", hhmm)
-    if not m:
-        return {"ok": False, "status": "invalid_time", "time": hhmm}
-    now = datetime.now()
-    due = (now.hour, now.minute) >= (int(m.group(1)), int(m.group(2)))
-    if not due:
-        return {"ok": False, "status": "not_due", "time": hhmm}
-    today = now.strftime("%Y%m%d")
-    last_run_date = _get_sim_meta("auto_backtest_last_run_date")
-    if str(last_run_date or "") == today:
-        return {"ok": False, "status": "already_ran_today", "date": today}
-
-    payload = {
-        "strategy": str(st.session_state.get("auto_backtest_strategy", "v9.0 中线均衡版（生产）")),
-        "sample_size": int(st.session_state.get("auto_backtest_sample_size", 800)),
-        "full_market_mode": bool(st.session_state.get("auto_backtest_full_market_mode", False)),
-        "history_days": int(st.session_state.get("auto_backtest_history_days", 240)),
-        "holding_days": int(st.session_state.get("auto_backtest_holding_days", 10)),
-        "score_threshold": float(st.session_state.get("auto_backtest_score_threshold", 65.0)),
-    }
-    ok, msg, run_id = _start_async_backtest_job("single", payload)
-    if not ok:
-        return {"ok": False, "status": "submit_failed", "error": msg}
-    _set_sim_meta("auto_backtest_last_run_date", today)
-    _set_sim_meta("auto_backtest_last_run_at", _now_text())
-    _set_sim_meta("auto_backtest_last_job_id", run_id)
-    st.session_state["single_backtest_async_job_id"] = run_id
-    return {"ok": True, "status": "ran", "run_id": run_id}
+    return runtime_auto_backtest_scheduler_tick(
+        get_sim_meta=_get_sim_meta,
+        set_sim_meta=_set_sim_meta,
+        start_async_backtest_job=_start_async_backtest_job,
+        now_text=_now_text,
+    )
 
 
 def _apply_portfolio_risk_budget(
@@ -5802,33 +2787,13 @@ def _apply_portfolio_risk_budget(
     max_positions: int = 20,
     max_industry_ratio: float = 0.35,
 ) -> pd.DataFrame:
-    if df is None or df.empty or score_col not in df.columns:
-        return df
-    out = df.copy()
-    out["_score_num"] = pd.to_numeric(out[score_col], errors="coerce")
-    out = out.dropna(subset=["_score_num"]).sort_values("_score_num", ascending=False).reset_index(drop=True)
-    if out.empty:
-        return out
-
-    keep_limit = max(1, int(max_positions))
-    if industry_col not in out.columns:
-        return out.head(keep_limit).drop(columns=["_score_num"], errors="ignore")
-
-    ind_cap = max(1, int(np.ceil(float(max_industry_ratio) * keep_limit)))
-    chosen_idx: List[int] = []
-    ind_cnt: Dict[str, int] = {}
-    for idx, row in out.iterrows():
-        if len(chosen_idx) >= keep_limit:
-            break
-        ind = str(row.get(industry_col, "未知") or "未知")
-        if ind_cnt.get(ind, 0) >= ind_cap:
-            continue
-        chosen_idx.append(idx)
-        ind_cnt[ind] = ind_cnt.get(ind, 0) + 1
-
-    if not chosen_idx:
-        return out.head(keep_limit).drop(columns=["_score_num"], errors="ignore")
-    return out.iloc[chosen_idx].drop(columns=["_score_num"], errors="ignore").reset_index(drop=True)
+    return runtime_apply_portfolio_risk_budget(
+        df,
+        score_col,
+        industry_col=industry_col,
+        max_positions=max_positions,
+        max_industry_ratio=max_industry_ratio,
+    )
 
 
 def _render_v7_results(
@@ -5879,16 +2844,7 @@ def _render_v7_results(
 
 
 def _signal_density_hint(results_count: int, candidate_count: int) -> Tuple[str, str]:
-    if candidate_count <= 0:
-        return ("候选池为空，请检查数据与筛选条件。", "warning")
-    ratio = results_count / candidate_count
-    if results_count == 0:
-        return ("信号为空，建议放宽阈值或降低过滤强度。", "warning")
-    if results_count < 5:
-        return ("信号偏稀疏，当前市场或阈值偏严。", "info")
-    if results_count > 200 or ratio > 0.3:
-        return ("信号偏密集，建议提高阈值或收紧过滤。", "warning")
-    return ("信号密度正常。", "info")
+    return runtime_signal_density_hint(results_count, candidate_count)
 
 
 def _apply_filter_mode(
@@ -5898,26 +2854,7 @@ def _apply_filter_mode(
     threshold: float,
     top_percent: int,
 ) -> pd.DataFrame:
-    if df is None or df.empty or score_col not in df.columns:
-        return df
-    out = df.copy()
-    out["score_val"] = pd.to_numeric(out[score_col], errors="coerce")
-    out = out.dropna(subset=["score_val"])
-    if out.empty:
-        return out
-    if mode == "阈值筛选":
-        out = out[out["score_val"] >= threshold]
-    elif mode == "双重筛选(阈值+Top%)":
-        out = out[out["score_val"] >= threshold]
-        if not out.empty:
-            out = out.sort_values("score_val", ascending=False)
-            keep_n = max(1, int(len(out) * top_percent / 100))
-            out = out.head(keep_n)
-    else:
-        out = out.sort_values("score_val", ascending=False)
-        keep_n = max(1, int(len(out) * top_percent / 100))
-        out = out.head(keep_n)
-    return out.drop(columns=["score_val"])
+    return runtime_apply_filter_mode(df, score_col, mode, threshold, top_percent)
 
 
 def _apply_filter_mode_with_rescue(
@@ -5929,34 +2866,15 @@ def _apply_filter_mode_with_rescue(
     threshold_floor: float = 45.0,
     rescue_top_percent: int = 6,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-    primary = _apply_filter_mode(df, score_col, mode, threshold, top_percent)
-    if primary is not None and not primary.empty:
-        return primary, {"used": False}
-    if df is None or df.empty or score_col not in df.columns:
-        return primary, {"used": False}
-
-    relaxed_threshold = max(float(threshold_floor), float(threshold) - 8.0)
-    relaxed_top = max(int(top_percent), int(rescue_top_percent))
-    rescue = _apply_filter_mode(df, score_col, mode, relaxed_threshold, relaxed_top)
-    if rescue is None or rescue.empty:
-        rescue = _apply_filter_mode(df, score_col, "分位数筛选(Top%)", relaxed_threshold, relaxed_top)
-    if rescue is None or rescue.empty:
-        tmp = df.copy()
-        tmp["score_val"] = pd.to_numeric(tmp[score_col], errors="coerce")
-        tmp = tmp.dropna(subset=["score_val"]).sort_values("score_val", ascending=False)
-        if not tmp.empty:
-            keep_n = max(1, min(20, int(len(tmp) * max(relaxed_top, 10) / 100)))
-            rescue = tmp.head(keep_n).drop(columns=["score_val"])
-
-    if rescue is None or rescue.empty:
-        return primary, {"used": False}
-    return rescue, {
-        "used": True,
-        "threshold_from": float(threshold),
-        "threshold_to": float(relaxed_threshold),
-        "top_percent_from": int(top_percent),
-        "top_percent_to": int(relaxed_top),
-    }
+    return runtime_apply_filter_mode_with_rescue(
+        df,
+        score_col,
+        mode,
+        threshold,
+        top_percent,
+        threshold_floor=threshold_floor,
+        rescue_top_percent=rescue_top_percent,
+    )
 
 
 def _apply_consistency_with_fallback(
@@ -5975,21 +2893,318 @@ def _apply_consistency_with_fallback(
 
 
 def _get_db_last_trade_date(db_path: str) -> str:
+    return runtime_get_db_last_trade_date(db_path=db_path)
+
+
+def _airivo_parse_yyyymmdd(value: Any) -> Optional[datetime]:
+    return service_parse_yyyymmdd(value)
+
+
+def _airivo_table_latest(conn: sqlite3.Connection, table: str, date_col: str = "trade_date") -> Dict[str, Any]:
+    return service_table_latest(conn, table, date_col)
+
+
+def _airivo_data_freshness_snapshot(db_path: str) -> Dict[str, Any]:
+    return service_data_freshness_snapshot(db_path)
+
+
+def _airivo_latest_candidate_snapshot(db_path: str, limit: int = 5) -> Tuple[pd.DataFrame, str]:
+    return service_latest_candidate_snapshot(db_path, limit=limit)
+
+
+def _airivo_feedback_snapshot(db_path: str) -> Dict[str, Any]:
+    return service_feedback_snapshot(db_path)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _airivo_data_freshness_snapshot_cached(db_path: str, db_mtime: float) -> Dict[str, Any]:
+    return _airivo_data_freshness_snapshot(db_path)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _airivo_latest_candidate_snapshot_cached(db_path: str, db_mtime: float, limit: int = 5) -> Tuple[pd.DataFrame, str]:
+    return _airivo_latest_candidate_snapshot(db_path, limit=limit)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _airivo_feedback_snapshot_cached(db_path: str, db_mtime: float) -> Dict[str, Any]:
+    return _airivo_feedback_snapshot(db_path)
+
+
+def _airivo_latest_execution_queue(db_path: str, limit: int = 80) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    return service_latest_execution_queue(db_path, limit=limit)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _airivo_latest_execution_queue_cached(db_path: str, db_mtime: float, limit: int = 80) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    return _airivo_latest_execution_queue(db_path, limit=limit)
+
+
+def _airivo_recent_execution_batches(db_path: str, limit: int = 3) -> pd.DataFrame:
+    return service_recent_execution_batches(db_path, limit=limit)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _airivo_recent_execution_batches_cached(db_path: str, db_mtime: float, limit: int = 3) -> pd.DataFrame:
+    return _airivo_recent_execution_batches(db_path, limit=limit)
+
+
+def _airivo_load_queue_batch_rows(db_path: str, decision_date: str) -> pd.DataFrame:
+    return service_load_queue_batch_rows(db_path, decision_date)
+
+
+def _airivo_compare_queue_batches(current_df: pd.DataFrame, previous_df: pd.DataFrame) -> pd.DataFrame:
+    return service_compare_queue_batches(current_df, previous_df)
+
+
+def _airivo_set_active_batch(
+    db_path: str,
+    decision_date: str,
+    *,
+    approved_by: str = "",
+    release_note: str = "",
+    rollback_reason: str = "",
+    current_primary: str = "",
+    override_gate: bool = False,
+    override_reason: str = "",
+) -> Tuple[bool, str]:
+    return service_set_active_batch(
+        decision_date=decision_date,
+        approved_by=approved_by,
+        release_note=release_note,
+        rollback_reason=rollback_reason,
+        current_primary=current_primary,
+        override_gate=override_gate,
+        override_reason=override_reason,
+        connect_db=_connect_permanent_db,
+        logs_dir=Path(os.path.dirname(__file__)) / "logs" / "openclaw",
+        clear_execution_queue_cache=_airivo_latest_execution_queue_cached.clear,
+        clear_execution_batches_cache=_airivo_recent_execution_batches_cached.clear,
+    )
+
+
+def _airivo_set_canary_batch(
+    db_path: str,
+    decision_date: str,
+    *,
+    approved_by: str = "",
+    release_note: str = "",
+    current_primary: str = "",
+    allowed_buckets: Optional[List[str]] = None,
+    sample_limit: int = 2,
+    window_start: str = "",
+    window_end: str = "",
+) -> Tuple[bool, str]:
+    return service_set_canary_batch(
+        decision_date=decision_date,
+        approved_by=approved_by,
+        release_note=release_note,
+        current_primary=current_primary,
+        allowed_buckets=allowed_buckets,
+        sample_limit=sample_limit,
+        window_start=window_start,
+        window_end=window_end,
+        connect_db=_connect_permanent_db,
+        logs_dir=Path(os.path.dirname(__file__)) / "logs" / "openclaw",
+        clear_execution_queue_cache=_airivo_latest_execution_queue_cached.clear,
+        clear_execution_batches_cache=_airivo_recent_execution_batches_cached.clear,
+    )
+
+
+def _airivo_archive_batch(db_path: str, decision_date: str, *, operator_name: str = "", archive_note: str = "") -> Tuple[bool, str]:
+    return service_archive_batch(
+        decision_date=decision_date,
+        operator_name=operator_name,
+        archive_note=archive_note,
+        connect_db=_connect_permanent_db,
+        clear_execution_queue_cache=_airivo_latest_execution_queue_cached.clear,
+        clear_execution_batches_cache=_airivo_recent_execution_batches_cached.clear,
+    )
+
+
+def _airivo_evaluate_batch_release_gate(db_path: str, decision_date: str, *, current_primary: str = "") -> Dict[str, Any]:
+    return service_evaluate_batch_release_gate(
+        decision_date=decision_date,
+        current_primary=current_primary,
+        connect_db=_connect_permanent_db,
+        logs_dir=Path(os.path.dirname(__file__)) / "logs" / "openclaw",
+    )
+
+
+def _airivo_get_canary_scope(db_path: str, decision_date: str) -> Dict[str, Any]:
+    return service_get_canary_scope(db_path=db_path, decision_date=decision_date)
+
+
+def _airivo_get_override_audits(db_path: str, decision_date: str, limit: int = 5) -> List[Dict[str, Any]]:
+    return service_get_override_audits(db_path=db_path, decision_date=decision_date, limit=limit)
+
+
+def _airivo_get_release_outcome_review(db_path: str, decision_date: str) -> Dict[str, Any]:
+    return service_get_release_outcome_review(
+        db_path=db_path,
+        decision_date=decision_date,
+        connect_db=_connect_permanent_db,
+    )
+
+
+def _airivo_load_feedback_rows(db_path: str, status_filter: str = "pending", limit: int = 50) -> pd.DataFrame:
+    return service_load_feedback_rows(db_path, status_filter=status_filter, limit=limit)
+
+
+def _airivo_parse_confidence(value: Any) -> float:
     try:
-        from data.history import get_db_last_trade_date as _get_db_last_trade_date_v2  # type: ignore
-        return _get_db_last_trade_date_v2(db_path)
+        text = str(value or "").strip().replace("%", "")
+        if not text:
+            return 0.0
+        num = float(text)
+        if num > 1.0:
+            num = num / 100.0
+        return max(0.0, min(1.0, num))
     except Exception:
-        pass
-    try:
-        from data.dao import latest_trade_date as _latest_trade_date_v2  # type: ignore
-        conn = sqlite3.connect(db_path)
-        max_date = _latest_trade_date_v2(conn)
-        conn.close()
-        if max_date:
-            return str(max_date)
-    except Exception:
-        pass
-    return ""
+        return 0.0
+
+
+def _airivo_bucket_feedback_rows(rows: pd.DataFrame) -> pd.DataFrame:
+    return service_bucket_feedback_rows(rows)
+
+
+def _airivo_feedback_bucket_summary(rows: pd.DataFrame) -> Dict[str, int]:
+    return service_feedback_bucket_summary(rows)
+
+
+def _render_airivo_today_execution_queues(db_path: str, runtime_snapshot: Dict[str, Any]) -> None:
+    runtime_render_airivo_today_execution_queues(
+        db_path=db_path,
+        runtime_snapshot=runtime_snapshot,
+        safe_file_mtime=_safe_file_mtime,
+        latest_execution_queue_cached=_airivo_latest_execution_queue_cached,
+        bucket_feedback_rows=_airivo_bucket_feedback_rows,
+        feedback_bucket_summary=_airivo_feedback_bucket_summary,
+    )
+
+
+def _render_airivo_batch_manager(db_path: str) -> None:
+    runtime_render_airivo_batch_manager(
+        db_path=db_path,
+        safe_file_mtime=_safe_file_mtime,
+        recent_execution_batches_cached=_airivo_recent_execution_batches_cached,
+        evaluate_batch_release_gate=_airivo_evaluate_batch_release_gate,
+        has_role=_airivo_has_role,
+        guard_action=_airivo_guard_action,
+        append_action_audit=_airivo_append_action_audit,
+        set_active_batch=_airivo_set_active_batch,
+        set_canary_batch=_airivo_set_canary_batch,
+        archive_batch=_airivo_archive_batch,
+        load_queue_batch_rows=_airivo_load_queue_batch_rows,
+        compare_queue_batches=_airivo_compare_queue_batches,
+        get_canary_scope=_airivo_get_canary_scope,
+        get_override_audits=_airivo_get_override_audits,
+        get_release_outcome_review=_airivo_get_release_outcome_review,
+    )
+
+
+def _airivo_update_feedback_row(
+    db_path: str,
+    row_id: int,
+    final_action: str,
+    execution_status: str,
+    execution_note: str,
+    operator_name: str,
+    system_suggested_action: str = "",
+    human_override_reason: str = "",
+) -> Tuple[bool, str]:
+    return service_update_feedback_row(
+        db_path=db_path,
+        row_id=row_id,
+        final_action=final_action,
+        execution_status=execution_status,
+        execution_note=execution_note,
+        operator_name=operator_name,
+        system_suggested_action=system_suggested_action,
+        human_override_reason=human_override_reason,
+        clear_feedback_snapshot_cache=_airivo_feedback_snapshot_cached.clear,
+    )
+
+
+def _airivo_apply_batch_feedback_action(
+    db_path: str,
+    *,
+    bucket: str,
+    operator_name: str,
+    execution_note: str,
+) -> Tuple[bool, str]:
+    return service_apply_batch_feedback_action(
+        db_path=db_path,
+        bucket=bucket,
+        operator_name=operator_name,
+        execution_note=execution_note,
+        clear_feedback_snapshot_cache=_airivo_feedback_snapshot_cached.clear,
+    )
+
+
+def _airivo_refresh_realized_outcomes(db_path: str, lookback_days: int = 120) -> Tuple[bool, str]:
+    return service_refresh_realized_outcomes(
+        db_path=db_path,
+        lookback_days=lookback_days,
+        clear_feedback_snapshot_cache=_airivo_feedback_snapshot_cached.clear,
+    )
+
+
+def _render_airivo_feedback_workbench(db_path: str, default_bucket: str = "manual_review") -> None:
+    runtime_render_airivo_feedback_workbench(
+        db_path=db_path,
+        default_bucket=default_bucket,
+        safe_file_mtime=_safe_file_mtime,
+        feedback_snapshot_cached=_airivo_feedback_snapshot_cached,
+        bucket_feedback_rows=_airivo_bucket_feedback_rows,
+        load_feedback_rows=_airivo_load_feedback_rows,
+        feedback_bucket_summary=_airivo_feedback_bucket_summary,
+        has_role=_airivo_has_role,
+        guard_action=_airivo_guard_action,
+        append_action_audit=_airivo_append_action_audit,
+        update_feedback_row=_airivo_update_feedback_row,
+        apply_batch_feedback_action=_airivo_apply_batch_feedback_action,
+        refresh_realized_outcomes=_airivo_refresh_realized_outcomes,
+    )
+
+
+def _render_airivo_execution_center(db_path: str) -> None:
+    runtime_render_airivo_execution_center(
+        db_path=db_path,
+        safe_file_mtime=_safe_file_mtime,
+        feedback_snapshot_cached=_airivo_feedback_snapshot_cached,
+        bucket_feedback_rows=_airivo_bucket_feedback_rows,
+        load_feedback_rows=_airivo_load_feedback_rows,
+        feedback_bucket_summary=_airivo_feedback_bucket_summary,
+        has_role=_airivo_has_role,
+        guard_action=_airivo_guard_action,
+        append_action_audit=_airivo_append_action_audit,
+        apply_batch_feedback_action=_airivo_apply_batch_feedback_action,
+        render_feedback_workbench=_render_airivo_feedback_workbench,
+    )
+
+
+def _render_airivo_strategy_evolution(db_path: str, runtime_snapshot: Dict[str, Any]) -> None:
+    render_airivo_strategy_evolution_page(
+        db_path=db_path,
+        runtime_snapshot=runtime_snapshot,
+        safe_file_mtime=_safe_file_mtime,
+        feedback_snapshot_cached=_airivo_feedback_snapshot_cached,
+        bucket_feedback_rows=_airivo_bucket_feedback_rows,
+        load_feedback_rows=_airivo_load_feedback_rows,
+        feedback_bucket_summary=_airivo_feedback_bucket_summary,
+        latest_candidate_snapshot_cached=_airivo_latest_candidate_snapshot_cached,
+    )
+
+
+def _render_airivo_production_dashboard(db_path: str) -> Dict[str, Any]:
+    return render_airivo_production_dashboard_page(
+        db_path=db_path,
+        safe_file_mtime=_safe_file_mtime,
+        data_freshness_snapshot_cached=_airivo_data_freshness_snapshot_cached,
+        latest_candidate_snapshot_cached=_airivo_latest_candidate_snapshot_cached,
+        feedback_snapshot_cached=_airivo_feedback_snapshot_cached,
+    )
 
 
 def _get_index_daily_from_db(start_date: str, end_date: str) -> pd.DataFrame:
@@ -6006,7 +3221,7 @@ def _get_index_daily_from_db(start_date: str, end_date: str) -> pd.DataFrame:
 
 
 def _v7_cache_dir() -> str:
-    return os.getenv("AIRIVO_CACHE_DIR", os.path.join(os.path.dirname(__file__), "cache_v9"))
+    return runtime_cache_dir()
 
 
 def _offline_apply_limit(stocks_df: pd.DataFrame) -> pd.DataFrame:
@@ -6026,27 +3241,15 @@ def _load_candidate_stocks(
     distinct: bool = True,
     random_order: bool = False,
 ) -> pd.DataFrame:
-    select_kw = "SELECT DISTINCT" if distinct else "SELECT"
-    where_parts: List[str] = []
-    params: List[Any] = []
-    use_cap = not (scan_all and cap_min_yi == 0 and cap_max_yi == 0)
-    if require_industry:
-        where_parts.append("sb.industry IS NOT NULL")
-    if use_cap:
-        cap_min_wan = cap_min_yi * 10000 if cap_min_yi > 0 else 0
-        cap_max_wan = cap_max_yi * 10000 if cap_max_yi > 0 else 999999999
-        where_parts.append("sb.circ_mv >= ?")
-        where_parts.append("sb.circ_mv <= ?")
-        params.extend([cap_min_wan, cap_max_wan])
-    where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
-    order_sql = "ORDER BY RANDOM()" if random_order else "ORDER BY sb.circ_mv DESC"
-    query = f"""
-        {select_kw} sb.ts_code, sb.name, sb.industry, sb.circ_mv
-        FROM stock_basic sb
-        {where_sql}
-        {order_sql}
-    """
-    return pd.read_sql_query(query, conn, params=params)
+    return service_load_candidate_stocks(
+        conn,
+        scan_all=scan_all,
+        cap_min_yi=cap_min_yi,
+        cap_max_yi=cap_max_yi,
+        require_industry=require_industry,
+        distinct=distinct,
+        random_order=random_order,
+    )
 
 
 def _offline_log_progress(tag: str, idx: int, total: int) -> None:
@@ -6082,90 +3285,43 @@ def _offline_targets() -> set:
 
 
 def _v7_cache_key(params: Dict[str, Any], db_last: str) -> str:
-    raw = json.dumps({"params": params, "db_last": db_last}, ensure_ascii=False, sort_keys=True)
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+    return runtime_v7_cache_key(params, db_last)
 
 
 def _v7_cache_paths(params: Dict[str, Any], db_last: str) -> Tuple[str, str]:
-    cache_dir = _v7_cache_dir()
-    os.makedirs(cache_dir, exist_ok=True)
-    key = _v7_cache_key(params, db_last)
-    csv_path = os.path.join(cache_dir, f"v7_scan_{key}.csv")
-    meta_path = os.path.join(cache_dir, f"v7_scan_{key}.meta.json")
-    return csv_path, meta_path
+    return runtime_v7_cache_paths(params, db_last)
 
 
 def _load_v7_cache(params: Dict[str, Any], db_last: str) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
-    try:
-        csv_path, meta_path = _v7_cache_paths(params, db_last)
-        if not (os.path.exists(csv_path) and os.path.exists(meta_path)):
-            return None, {}
-        with open(meta_path, "r", encoding="utf-8") as f:
-            meta = json.load(f) or {}
-        df = pd.read_csv(csv_path)
-        return df, meta
-    except Exception:
-        return None, {}
+    return runtime_load_v7_cache(params, db_last)
 
 
 def _save_v7_cache(params: Dict[str, Any], db_last: str, df: pd.DataFrame, meta: Dict[str, Any]) -> None:
-    try:
-        csv_path, meta_path = _v7_cache_paths(params, db_last)
-        df.to_csv(csv_path, index=False)
-        meta_out = {
-            "params": params,
-            "db_last": db_last,
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        meta_out.update(meta or {})
-        with open(meta_path, "w", encoding="utf-8") as f:
-            json.dump(meta_out, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    runtime_save_v7_cache(params, db_last, df, meta)
 
 
 def _scan_cache_key(strategy: str, params: Dict[str, Any], db_last: str) -> str:
-    raw = json.dumps({"strategy": strategy, "params": params, "db_last": db_last}, ensure_ascii=False, sort_keys=True)
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+    return runtime_scan_cache_key(strategy, params, db_last)
 
 
 def _scan_cache_paths(strategy: str, params: Dict[str, Any], db_last: str) -> Tuple[str, str]:
-    cache_dir = _v7_cache_dir()
-    os.makedirs(cache_dir, exist_ok=True)
-    key = _scan_cache_key(strategy, params, db_last)
-    csv_path = os.path.join(cache_dir, f"{strategy}_{key}.csv")
-    meta_path = os.path.join(cache_dir, f"{strategy}_{key}.meta.json")
-    return csv_path, meta_path
+    return runtime_scan_cache_paths(strategy, params, db_last)
 
 
 def _load_scan_cache(strategy: str, params: Dict[str, Any], db_last: str) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
-    try:
-        csv_path, meta_path = _scan_cache_paths(strategy, params, db_last)
-        if not (os.path.exists(csv_path) and os.path.exists(meta_path)):
-            return None, {}
-        with open(meta_path, "r", encoding="utf-8") as f:
-            meta = json.load(f) or {}
-        df = pd.read_csv(csv_path)
-        return df, meta
-    except Exception:
-        return None, {}
+    return runtime_load_scan_cache(strategy, params, db_last)
+
+
+def _load_scan_cache_meta_from_paths(csv_path: str, meta_path: str) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    return runtime_load_scan_cache_meta_from_paths(csv_path, meta_path)
+
+
+def _find_recent_scan_cache(strategy: str, db_last: str, predicate: Optional[Callable[[Dict[str, Any]], bool]] = None) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    return runtime_find_recent_scan_cache(strategy, db_last, predicate)
 
 
 def _save_scan_cache(strategy: str, params: Dict[str, Any], db_last: str, df: pd.DataFrame, meta: Dict[str, Any]) -> None:
-    try:
-        csv_path, meta_path = _scan_cache_paths(strategy, params, db_last)
-        df.to_csv(csv_path, index=False)
-        meta_out = {
-            "strategy": strategy,
-            "params": params,
-            "db_last": db_last,
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        meta_out.update(meta or {})
-        with open(meta_path, "w", encoding="utf-8") as f:
-            json.dump(meta_out, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    runtime_save_scan_cache(strategy, params, db_last, df, meta)
 
 
 def _render_cached_scan_results(
@@ -6178,45 +3334,18 @@ def _render_cached_scan_results(
     threshold: float,
     top_percent: int,
 ) -> None:
-    st.markdown("---")
-    st.markdown(f"###  {title}")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("候选股票", f"{candidate_count}只")
-    with col2:
-        if candidate_count > 0:
-            st.metric("过滤淘汰", f"{filter_failed}只",
-                      delta=f"{filter_failed/candidate_count*100:.1f}%")
-        else:
-            st.metric("过滤淘汰", f"{filter_failed}只")
-    with col3:
-        if candidate_count > 0:
-            st.metric("最终推荐", f"{len(results_df)}只",
-                      delta=f"{len(results_df)/candidate_count*100:.2f}%")
-        else:
-            st.metric("最终推荐", f"{len(results_df)}只")
-
-    if results_df is None or results_df.empty:
-        st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
-        return
-
-    if select_mode == "阈值筛选":
-        st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{threshold}分）")
-    elif select_mode == "双重筛选(阈值+Top%)":
-        st.success(f"先阈值后Top筛选：≥{threshold}分，Top {top_percent}%（{len(results_df)} 只）")
-    else:
-        st.success(f"选出 Top {top_percent}%（{len(results_df)} 只）")
-
-    results_df = results_df.reset_index(drop=True)
-    _render_result_overview(results_df, score_col=score_col, title="扫描结果概览")
-    msg, level = _signal_density_hint(len(results_df), candidate_count)
-    getattr(st, level)(msg)
-
-    # 缓存命中时也要展示明细，否则用户只能看到概览卡片
-    st.markdown("---")
-    st.subheader("结果明细（缓存）")
-    display_df = results_df.drop(columns=["原始数据"], errors="ignore")
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    runtime_render_cached_scan_results(
+        title=title,
+        results_df=results_df,
+        score_col=score_col,
+        candidate_count=candidate_count,
+        filter_failed=filter_failed,
+        select_mode=select_mode,
+        threshold=threshold,
+        top_percent=top_percent,
+        render_result_overview=_render_result_overview,
+        signal_density_hint=_signal_density_hint,
+    )
 def run_offline_v7_scan() -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
     """
     Offline v7 scan for precompute/cache. Configure via env:
@@ -6430,7 +3559,7 @@ def _offline_scan_v4(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[
 
 def _offline_scan_v5(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
     score_threshold = float(os.getenv("V5_SCORE_THRESHOLD", "60"))
-    top_percent = int(os.getenv("V5_TOP_PERCENT", "2"))
+    top_percent = int(os.getenv("V5_TOP_PERCENT", "1"))
     select_mode = os.getenv("V5_SELECT_MODE", "分位数筛选(Top%)")
     cap_min = float(os.getenv("V5_CAP_MIN", "100"))
     cap_max = float(os.getenv("V5_CAP_MAX", "1500"))
@@ -6603,7 +3732,7 @@ def _offline_scan_v6(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[
 def _offline_scan_v8(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
     score_min = float(os.getenv("V8_SCORE_MIN", "55"))
     score_max = float(os.getenv("V8_SCORE_MAX", "70"))
-    top_percent = int(os.getenv("V8_TOP_PERCENT", "2"))
+    top_percent = int(os.getenv("V8_TOP_PERCENT", "1"))
     select_mode = os.getenv("V8_SELECT_MODE", "分位数筛选(Top%)")
     scan_all = os.getenv("V8_SCAN_ALL", "1") == "1"
     cap_min = float(os.getenv("V8_CAP_MIN", "0"))
@@ -6706,8 +3835,9 @@ def _offline_scan_v8(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[
 
 
 def _offline_scan_v9(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    scan_started_at = time.time()
     score_threshold = float(os.getenv("V9_SCORE_THRESHOLD", "60"))
-    top_percent = int(os.getenv("V9_TOP_PERCENT", "3"))
+    top_percent = int(os.getenv("V9_TOP_PERCENT", "1"))
     select_mode = os.getenv("V9_SELECT_MODE", "分位数筛选(Top%)")
     scan_all = os.getenv("V9_SCAN_ALL", "1") == "1"
     cap_min = float(os.getenv("V9_CAP_MIN", "0"))
@@ -6715,7 +3845,7 @@ def _offline_scan_v9(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[
     enable_consistency = os.getenv("V9_ENABLE_CONSISTENCY", "1") == "1"
     min_align = int(os.getenv("V9_MIN_ALIGN", "2"))
     holding_days = int(os.getenv("V9_HOLDING_DAYS", "20"))
-    lookback_days = int(os.getenv("V9_LOOKBACK_DAYS", "160"))
+    lookback_days = int(os.getenv("V9_LOOKBACK_DAYS", "120"))
     min_turnover = float(os.getenv("V9_MIN_TURNOVER", "5.0"))
     candidate_count = int(os.getenv("V9_CANDIDATE_COUNT", "800"))
 
@@ -6736,7 +3866,12 @@ def _offline_scan_v9(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[
     db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
     cached_df, cached_meta = _load_scan_cache("v9_scan", params, db_last)
     if cached_df is not None and not cached_df.empty:
-        return cached_df, cached_meta
+        meta_out = dict(cached_meta or {})
+        meta_out["cache_hit"] = True
+        meta_out["cache_mode"] = "exact"
+        meta_out["served_at"] = _now_text()
+        meta_out["strategy"] = "v9"
+        return cached_df, meta_out
 
     conn = _connect_permanent_db()
     stocks_df = _load_candidate_stocks(
@@ -6758,7 +3893,7 @@ def _offline_scan_v9(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[
         tag="v9",
         min_history=80,
         load_history=lambda c, ts: _load_stock_history(
-            c, ts, 160, "trade_date, close_price, high_price, low_price, vol, pct_chg"
+            c, ts, max(80, int(lookback_days)), "trade_date, close_price, high_price, low_price, vol, pct_chg"
         ),
         evaluate=lambda _row, stock_data: analyzer._calc_v9_score_from_hist(stock_data, industry_strength=0.0),
         build_result=lambda payload: {
@@ -6784,7 +3919,7 @@ def _offline_scan_v9(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[
     conn.close()
     logger.info(f"[offline:v9] results {len(results)}")
     if not results:
-        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0, "cache_hit": False, "cache_mode": "miss"}
 
     results_df = pd.DataFrame(results)
     results_df, rescue_meta = _apply_filter_mode_with_rescue(
@@ -6793,12 +3928,12 @@ def _offline_scan_v9(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[
     if rescue_meta.get("used"):
         logger.warning(f"[offline:v9] rescue filter applied: {rescue_meta}")
     if results_df is None or results_df.empty:
-        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0, "cache_hit": False, "cache_mode": "miss"}
     if enable_consistency and not results_df.empty:
         results_df, _ = _apply_consistency_with_fallback(results_df, "综合评分", min_align, "v9")
     results_df = _add_reason_summary(results_df, score_col="综合评分")
     if results_df is None or results_df.empty:
-        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0, "cache_hit": False, "cache_mode": "miss"}
     results_df = results_df.reset_index(drop=True)
 
     _save_scan_cache(
@@ -6806,12 +3941,27 @@ def _offline_scan_v9(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[
         params,
         db_last,
         results_df,
-        {"candidate_count": len(stocks_df), "filter_failed": 0},
+        {
+            "candidate_count": len(stocks_df),
+            "filter_failed": 0,
+            "cache_hit": False,
+            "cache_mode": "miss",
+            "elapsed_ms": int((time.time() - scan_started_at) * 1000),
+            "lookback_days": int(lookback_days),
+        },
     )
-    return results_df, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    return results_df, {
+        "candidate_count": len(stocks_df),
+        "filter_failed": 0,
+        "cache_hit": False,
+        "cache_mode": "miss",
+        "elapsed_ms": int((time.time() - scan_started_at) * 1000),
+        "lookback_days": int(lookback_days),
+    }
 
 
 def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    scan_started_at = time.time()
     candidate_count = int(os.getenv("COMBO_CANDIDATE_COUNT", "800"))
     min_turnover = float(os.getenv("COMBO_MIN_TURNOVER", "5.0"))
     production_only = os.getenv("COMBO_PRODUCTION_ONLY", "1") == "1"
@@ -6821,14 +3971,15 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
     cap_max = float(os.getenv("COMBO_CAP_MAX", "0"))
     select_mode = os.getenv("COMBO_SELECT_MODE", "分位数筛选(Top%)")
     combo_threshold = float(os.getenv("COMBO_THRESHOLD", "68"))
-    top_percent = int(os.getenv("COMBO_TOP_PERCENT", "2"))
-    lookback_days = int(os.getenv("COMBO_LOOKBACK_DAYS", "120"))
+    top_percent = int(os.getenv("COMBO_TOP_PERCENT", "1"))
+    lookback_days = int(os.getenv("COMBO_LOOKBACK_DAYS", "90"))
     disagree_std_weight = float(os.getenv("COMBO_DISAGREE_STD_WEIGHT", "0.35"))
     disagree_count_weight = float(os.getenv("COMBO_DISAGREE_COUNT_WEIGHT", "1.0"))
     market_adjust_strength = float(os.getenv("COMBO_MARKET_ADJUST_STRENGTH", "0.5"))
     enable_consistency = os.getenv("COMBO_ENABLE_CONSISTENCY", "1") == "1"
     min_align = int(os.getenv("COMBO_MIN_ALIGN", "2"))
     auto_weights = os.getenv("COMBO_AUTO_WEIGHTS", "1") == "1"
+    lightweight_mode = os.getenv("COMBO_LIGHTWEIGHT", "1") == "1"
 
     market_env_combo = "oscillation"
     try:
@@ -6898,6 +4049,7 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
         "enable_consistency": enable_consistency,
         "min_align": min_align,
         "auto_weights": auto_weights,
+        "lightweight_mode": lightweight_mode,
         "production_only": production_only,
         "w_v4": w_v4,
         "w_v5": w_v5,
@@ -6917,7 +4069,25 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
     db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
     cached_df, cached_meta = _load_scan_cache("combo_scan", params, db_last)
     if cached_df is not None and not cached_df.empty:
-        return cached_df, cached_meta
+        meta_out = dict(cached_meta or {})
+        meta_out["cache_hit"] = True
+        meta_out["cache_mode"] = "exact"
+        meta_out["served_at"] = _now_text()
+        meta_out["strategy"] = "combo"
+        return cached_df, meta_out
+    if production_only and lightweight_mode:
+        reused_df, reused_meta = _find_recent_scan_cache(
+            "combo_scan",
+            db_last,
+            predicate=lambda meta: bool(((meta.get("params") or {}).get("production_only", False))),
+        )
+        if reused_df is not None and not reused_df.empty:
+            meta_out = dict(reused_meta or {})
+            meta_out["cache_hit"] = True
+            meta_out["cache_mode"] = "lightweight_reuse"
+            meta_out["served_at"] = _now_text()
+            meta_out["strategy"] = "combo"
+            return reused_df, meta_out
 
     conn = _connect_permanent_db()
     stocks_df = _load_candidate_stocks(
@@ -7092,7 +4262,7 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
 
     logger.info(f"[offline:combo] results {len(results)}")
     if not results:
-        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0, "cache_hit": False, "cache_mode": "miss"}
 
     results_df = pd.DataFrame(results)
     results_df, rescue_meta = _apply_filter_mode_with_rescue(
@@ -7101,7 +4271,7 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
     if rescue_meta.get("used"):
         logger.warning(f"[offline:combo] rescue filter applied: {rescue_meta}")
     if results_df is None or results_df.empty:
-        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0, "cache_hit": False, "cache_mode": "miss"}
     if enable_consistency and not results_df.empty:
         results_df, _ = _apply_consistency_with_fallback(results_df, "共识评分", min_align, "combo")
     results_df = _add_reason_summary(results_df, score_col="共识评分")
@@ -7123,7 +4293,7 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
             float(rb.get("max_industry_ratio", 0.35)),
         )
     if results_df is None or results_df.empty:
-        return None, {"candidate_count": len(stocks_df), "filter_failed": 0}
+        return None, {"candidate_count": len(stocks_df), "filter_failed": 0, "cache_hit": False, "cache_mode": "miss"}
     results_df = results_df.reset_index(drop=True)
 
     _save_scan_cache(
@@ -7131,9 +4301,23 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
         params,
         db_last,
         results_df,
-        {"candidate_count": len(stocks_df), "filter_failed": 0},
+        {
+            "candidate_count": len(stocks_df),
+            "filter_failed": 0,
+            "cache_hit": False,
+            "cache_mode": "miss",
+            "elapsed_ms": int((time.time() - scan_started_at) * 1000),
+            "lookback_days": int(lookback_days),
+        },
     )
-    return results_df, {"candidate_count": len(stocks_df), "filter_failed": 0}
+    return results_df, {
+        "candidate_count": len(stocks_df),
+        "filter_failed": 0,
+        "cache_hit": False,
+        "cache_mode": "miss",
+        "elapsed_ms": int((time.time() - scan_started_at) * 1000),
+        "lookback_days": int(lookback_days),
+    }
 
 
 def _offline_scan_stable() -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
@@ -7167,7 +4351,7 @@ def _offline_scan_stable() -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
         return None, {"error": "database not found"}
 
     try:
-        import stable_uptrend_strategy as _stable_mod
+        _stable_mod = load_stable_uptrend_module()
     except Exception as e:
         return None, {"error": f"stable module missing: {e}"}
 
@@ -13068,6 +10252,9 @@ class DatabaseManager:
         except Exception:
             pass
         self.pro = None
+        self._status_cache: Dict[str, Any] = {}
+        self._status_cache_at = 0.0
+        self._status_cache_mtime = 0.0
         self._init_tushare()
 
     def _connect(self, timeout: int = 30) -> sqlite3.Connection:
@@ -13077,6 +10264,20 @@ class DatabaseManager:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("PRAGMA busy_timeout=5000")
+        except Exception:
+            pass
+        return conn
+
+    def _connect_readonly(self, timeout: int = 10) -> sqlite3.Connection:
+        """Create a read-only SQLite connection for dashboard status queries."""
+        try:
+            db_uri = Path(self.db_path).resolve().as_uri() + "?mode=ro&cache=shared"
+            conn = sqlite3.connect(db_uri, timeout=timeout, uri=True, check_same_thread=False)
+        except Exception:
+            conn = sqlite3.connect(self.db_path, timeout=timeout, check_same_thread=False)
+        try:
+            conn.execute("PRAGMA busy_timeout=5000")
+            conn.execute("PRAGMA query_only=ON")
         except Exception:
             pass
         return conn
@@ -13092,7 +10293,7 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Tushare初始化失败: {e}")
     
-    def get_database_status(self) -> Dict:
+    def get_database_status(self, force_refresh: bool = False) -> Dict:
         """获取数据库状态"""
         try:
             if not os.path.exists(self.db_path):
@@ -13103,9 +10304,19 @@ class DatabaseManager:
                 except Exception:
                     return {'error': f'数据库文件不存在: {self.db_path}'}
 
+            now = _now_ts()
+            db_mtime = _safe_file_mtime(self.db_path)
+            if (
+                not force_refresh
+                and self._status_cache
+                and (now - float(self._status_cache_at or 0.0)) < 60
+                and float(self._status_cache_mtime or 0.0) == db_mtime
+            ):
+                return dict(self._status_cache)
+
             from data.dao import DataAccessError, detect_daily_table, recent_trade_profile  # type: ignore
 
-            conn = self._connect()
+            conn = self._connect_readonly()
             cursor = conn.cursor()
             
             status = {}
@@ -13168,6 +10379,9 @@ class DatabaseManager:
                     status['is_fresh'] = False
             
             conn.close()
+            self._status_cache = dict(status)
+            self._status_cache_at = now
+            self._status_cache_mtime = db_mtime
             return status
             
         except Exception as e:
@@ -13647,7 +10861,7 @@ def _run_funding_repair(db_path: str) -> Dict[str, Dict]:
     """Repair missing funding-related tables by calling auto_evolve update helpers."""
     results: Dict[str, Dict] = {}
     try:
-        import auto_evolve as ae
+        import openclaw.auto_evolve as ae
     except Exception as e:
         return {"error": {"success": False, "error": f"import auto_evolve failed: {e}"}}
 
@@ -13669,10 +10883,21 @@ def _run_funding_repair(db_path: str) -> Dict[str, Dict]:
 def main():
     """主界面"""
     
-    st.title("量价策略系统 v49.0")
+    st.title("Airivo Quant Decision System")
     _fp = _get_build_fingerprint()
-    st.caption(f"build={_fp['build_id']} | pid={_fp['pid']} | app={_fp['app_file']}")
+    st.caption(f"A股量价决策与风险门禁后台 | build={_fp['build_id']} | pid={_fp['pid']} | app={_fp['app_file']}")
     if st.button("刷新", key="refresh_main_runtime_status"):
+        try:
+            _airivo_data_freshness_snapshot_cached.clear()
+            _airivo_latest_candidate_snapshot_cached.clear()
+            _airivo_feedback_snapshot_cached.clear()
+        except Exception:
+            pass
+        if "db_manager" in st.session_state:
+            try:
+                st.session_state.db_manager._status_cache = {}
+            except Exception:
+                pass
         st.rerun()
     
     # 初始化
@@ -13743,4501 +10968,158 @@ def main():
         
         st.divider()
         st.caption("生产策略：v9 / v8 / v5 / combo")
-        st.caption("主流程：扫描 -> 回测 -> 执行")
+        session_meta = _airivo_session_meta()
+        role_label_map = {"viewer": "Viewer", "operator": "Operator", "admin": "Admin"}
+        st.caption("主流程：今日决策 -> 执行中心 -> 策略演进")
+        st.caption(
+            f"当前会话：{session_meta.get('display_name') or session_meta.get('username') or 'unknown'}"
+            f" · {role_label_map.get(session_meta.get('role', 'viewer'), 'Viewer')}"
+        )
+    st.divider()
     
-    # 【核心架构】v49.0 专业简化版 - 4大功能区
+    # 主入口只保留三层：生产 / 研究 / 运维。
     _tabs = [
-        " 核心策略中心",
-        " 研究与回测",
-        " 智能交易助手",
-        " 数据与系统",
+        " 生产后台",
+        " 研究后台",
+        " 运维后台",
     ]
     _enable_tab_persistence()
-    tab_core, tab_research, tab_assistant, tab_data = st.tabs([t.strip() for t in _tabs])
-    # 兼容原有分区代码：将研究类页面聚合到“研究与回测”，将指南并入“数据与系统”。
-    tab_pool = tab_research
-    tab_sector = tab_research
-    tab_backtest = tab_research
-    tab_ai = tab_core
-    tab_guide = tab_data
+    tab_production_root, tab_research_root, tab_ops_root = st.tabs([t.strip() for t in _tabs])
     desired_main_tab = st.session_state.pop("desired_main_tab", "")
     if desired_main_tab:
-        _focus_tab_by_text(desired_main_tab)
+        _main_tab_map = {
+            "今日决策": "生产后台",
+            "执行中心": "生产后台",
+            "策略演进": "生产后台",
+            "研究与回测": "研究后台",
+            "智能交易助手": "研究后台",
+            "数据与系统": "运维后台",
+        }
+        _focus_tab_by_text(_main_tab_map.get(desired_main_tab, desired_main_tab))
     _restore_recent_async_task_refs()
     # AI 智能选股改为实验策略入口内按需显示（默认不展示）。
     show_ai_signal_panel = False
 
-    with tab_research:
+    with tab_production_root:
+        st.caption("只保留当天真正要做的事：今日决策、执行中心、策略演进。")
+        tab_today, tab_execution, tab_evolution = st.tabs(["今日决策", "执行中心", "策略演进"])
+        desired_production_tab = st.session_state.pop("desired_production_tab", "")
+        if desired_production_tab:
+            _focus_tab_by_text(desired_production_tab)
+
+    with tab_research_root:
+        st.caption("研究后台不参与当天生产决策，专门放回测、实验策略、辅助分析。")
+        tab_backtest, tab_pool, tab_sector, tab_assistant = st.tabs(["回测与参数", "股票池分析", "板块与热点", "智能助手"])
+        desired_research_tab = st.session_state.pop("desired_research_tab", "")
+        if desired_research_tab:
+            _focus_tab_by_text(desired_research_tab)
+        tab_ai = tab_assistant
+
+    with tab_ops_root:
+        st.caption("运维后台只放数据、健康门禁、任务与日志。")
+        tab_data, tab_guide = st.tabs(["数据与系统", "任务与日志"])
+        desired_ops_tab = st.session_state.pop("desired_ops_tab", "")
+        if desired_ops_tab:
+            _focus_tab_by_text(desired_ops_tab)
+
+    with tab_guide:
         _render_async_task_dashboard(limit=12)
 
-    # ==================== Tab 1:  核心策略中心 ====================
-    with tab_core:
-        # 首屏控制台栏：只保留关键状态与主操作入口。
-        market_env = "oscillation"
-        try:
-            market_env = vp_analyzer.get_market_environment()
-        except Exception:
-            market_env = "oscillation"
-        env_text = {"bull": "牛市", "bear": "弱市", "oscillation": "震荡"}.get(market_env, "震荡")
-        max_date = status.get("max_date", "N/A") if isinstance(status, dict) else "N/A"
-        days_old = int(status.get("days_old", 999)) if isinstance(status, dict) else 999
-        freshness = f"{days_old}天前" if days_old < 999 else "未知"
-        k1, k2, k3, k4 = st.columns(4)
-        with k1:
-            st.metric("市场环境", env_text)
-        with k2:
-            st.metric("数据日期", str(max_date))
-        with k3:
-            st.metric("生产策略", "4")
-        with k4:
-            st.metric("数据新鲜度", freshness)
+    with tab_execution:
+        _render_airivo_execution_center(PERMANENT_DB_PATH)
 
-        a1, a2, a3 = st.columns(3)
-        with a1:
-            if st.button("开始扫描", type="primary", use_container_width=True, key="core_console_scan"):
-                st.info("请在下方选择策略参数后，点击对应的“开始扫描”按钮。")
-        with a2:
-            if st.button("研究回测", use_container_width=True, key="core_console_research"):
-                _set_focus_once(main_tab="研究与回测")
-                st.rerun()
-        with a3:
-            if st.button("数据系统", use_container_width=True, key="core_console_data"):
-                _set_focus_once(main_tab="数据与系统")
-                st.rerun()
-
-        strict_full_market_mode = st.toggle(
-            "全市场严格口径（扫描+回测）",
-            value=bool(st.session_state.get("strict_full_market_mode", False)),
-            key="strict_full_market_mode",
-            help="开启后自动使用市值0~0、候选数上限，并将回测样本提升到全量档。",
-        )
-        if strict_full_market_mode:
-            st.caption("严格口径已开启：扫描=全市场，回测=全量档。")
-
-        with st.expander("生产策略统一口径（v9/v8/v5/combo）", expanded=False):
-            col_u1, col_u2, col_u3 = st.columns(3)
-            with col_u1:
-                baseline_profile = st.selectbox(
-                    "参数模板",
-                    ["稳健标准", "进攻增强"],
-                    index=0,
-                    key="prod_baseline_profile",
-                )
-            with col_u2:
-                unified_cap_min = st.number_input("统一最小市值（亿）", min_value=0, max_value=5000, value=100, step=10, key="prod_unified_cap_min")
-            with col_u3:
-                unified_cap_max = st.number_input("统一最大市值（亿）", min_value=0, max_value=50000, value=15000, step=50, key="prod_unified_cap_max")
-
-            btn_sync_col, btn_evo_col = st.columns(2)
-            with btn_sync_col:
-                sync_clicked = st.button("一键同步扫描与回测口径", use_container_width=True, key="apply_prod_baseline")
-            with btn_evo_col:
-                apply_evo_clicked = st.button("应用最新自动进化到统一口径", use_container_width=True, key="apply_prod_evolve")
-
-            if sync_clicked:
-                baseline = _production_baseline_params(baseline_profile, strict_full_market=bool(strict_full_market_mode))
-                for sk in ("v5", "v8", "v9", "combo"):
-                    baseline[sk]["cap_min"] = float(unified_cap_min)
-                    baseline[sk]["cap_max"] = float(unified_cap_max)
-                if strict_full_market_mode:
-                    for sk in ("v5", "v8", "v9", "combo"):
-                        baseline[sk]["cap_min"] = 0.0
-                        baseline[sk]["cap_max"] = 0.0
-                _apply_production_baseline_to_session(baseline)
-                ok_save, save_msg = _save_production_unified_profile(
-                    profile_name=baseline_profile,
-                    strict_full_market=bool(strict_full_market_mode),
-                    params=baseline,
-                )
-                if ok_save:
-                    st.success("已统一到生产参数口径：扫描与回测将使用同一套核心参数，并已写入自动进化口径文件。")
-                    st.caption(f"统一口径文件：{save_msg}")
-                else:
-                    st.warning(f"已同步到会话参数，但写入统一口径文件失败：{save_msg}")
-                st.rerun()
-            if apply_evo_clicked:
-                baseline, notes = _build_unified_from_latest_evolve(
-                    profile=baseline_profile,
-                    strict_full_market=bool(strict_full_market_mode),
-                    unified_cap_min=float(unified_cap_min),
-                    unified_cap_max=float(unified_cap_max),
-                )
-                _apply_production_baseline_to_session(baseline)
-                ok_save, save_msg = _save_production_unified_profile(
-                    profile_name=f"{baseline_profile}-自动进化",
-                    strict_full_market=bool(strict_full_market_mode),
-                    params=baseline,
-                )
-                if ok_save:
-                    st.success("已将最新自动进化参数写入统一口径，并同步到扫描与回测。")
-                    st.caption(f"统一口径文件：{save_msg}")
-                else:
-                    st.warning(f"已同步到会话参数，但写入统一口径文件失败：{save_msg}")
-                for n in notes[:2]:
-                    st.caption(f"提示：{n}")
-                st.rerun()
-
-            compare_params_preview = _get_production_compare_params()
-            preview_rows = [
-                {
-                    "策略": "v5",
-                    "阈值": compare_params_preview["v5"]["score_threshold"],
-                    "持有天数": compare_params_preview["v5"]["holding_days"],
-                    "候选数": int(st.session_state.get("candidate_count_v5", 3000)),
-                    "市值(亿)": f"{float(st.session_state.get('cap_min_v5', 100)):.0f}-{float(st.session_state.get('cap_max_v5', 15000)):.0f}",
-                },
-                {
-                    "策略": "v8",
-                    "阈值": compare_params_preview["v8"]["score_threshold"],
-                    "持有天数": compare_params_preview["v8"]["holding_days"],
-                    "候选数": int(st.session_state.get("candidate_count_v8", 3000)),
-                    "市值(亿)": f"{float(st.session_state.get('cap_min_v8_tab1', 100)):.0f}-{float(st.session_state.get('cap_max_v8_tab1', 15000)):.0f}",
-                },
-                {
-                    "策略": "v9",
-                    "阈值": compare_params_preview["v9"]["score_threshold"],
-                    "持有天数": compare_params_preview["v9"]["holding_days"],
-                    "候选数": int(st.session_state.get("candidate_count_v9", 3000)),
-                    "市值(亿)": f"{float(st.session_state.get('cap_min_v9', 100)):.0f}-{float(st.session_state.get('cap_max_v9', 15000)):.0f}",
-                },
-                {
-                    "策略": "combo",
-                    "阈值": compare_params_preview["combo"]["score_threshold"],
-                    "持有天数": compare_params_preview["combo"]["holding_days"],
-                    "候选数": int(st.session_state.get("combo_candidate_count", 3000)),
-                    "市值(亿)": f"{float(st.session_state.get('combo_cap_min', 100)):.0f}-{float(st.session_state.get('combo_cap_max', 15000)):.0f}",
-                },
-            ]
-            st.dataframe(pd.DataFrame(preview_rows), use_container_width=True, hide_index=True)
-            _caps = [r["市值(亿)"] for r in preview_rows]
-            _holds = [int(r["持有天数"]) for r in preview_rows]
-            if len(set(_caps)) > 1:
-                st.warning("口径校验：各策略市值范围不一致，建议使用统一市值并再次同步。")
-            if min(_holds) < 3 or max(_holds) > 30:
-                st.warning("口径校验：存在异常持有天数，建议限定在 3-30 天。")
-
-        st.markdown(
-            "<div class='airivo-card' style='margin-bottom:10px;'>"
-            "<b>生产策略</b>：v9 / v8 / v5 / combo&nbsp;&nbsp;|&nbsp;&nbsp;"
-            "<b>实验策略</b>：v4 / v6 / v7 / stable / ai"
-            "</div>",
-            unsafe_allow_html=True,
+    # ==================== Tab 1:  今日决策 ====================
+    with tab_today:
+        airivo_snapshot = _render_airivo_production_dashboard(PERMANENT_DB_PATH)
+        render_today_console_panel(
+            permanent_db_path=PERMANENT_DB_PATH,
+            airivo_snapshot=airivo_snapshot if isinstance(airivo_snapshot, dict) else {},
+            vp_analyzer=vp_analyzer,
+            status=status if isinstance(status, dict) else None,
+            set_focus_once=_set_focus_once,
+            render_today_execution_queues=_render_airivo_today_execution_queues,
         )
 
-        # 统一使用下方导出按钮，避免表格右上角导出文件名不含策略版本
-        st.caption("导出请使用下方 CSV 按钮（含策略版本）。")
-        st.markdown("""
-        <style>
-        button[title="Download data as CSV"],
-        button[title="Download data as csv"],
-        button[title="Download as CSV"],
-        button[title="Download as csv"],
-        button[title="Download data"] { display: none !important; }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        _prod_label_map = {
-            "v9": " v9.0 中线均衡版（生产 / 2-6周）",
-            "v8": " v8.0 进阶版（生产 / ATR风控 / 5-15日）",
-            "v5": " v5.0 趋势版（生产 / 启动确认 / 5-10日）",
-            "combo": " 组合策略（生产 / 共识评分）",
-        }
-        _exp_label_map = {
-            "v4": " v4.0 长期稳健版（实验 / 潜伏策略 / 3-7日）",
-            "v6": " v6.0 超短线版（实验 / 强势精选 / 2-5日）",
-            "v7": " v7.0 智能版（实验 / 动态自适应 / 5-15日）",
-            "stable": " stable 稳健实验策略（实验）",
-            "ai": " AI 辅助选股（实验）",
-        }
-        _prod_keys = [k for k in production_strategies() if k in _prod_label_map]
-        if not _prod_keys:
-            _prod_keys = ["v9", "v8", "v5", "combo"]
-        _modes = [_prod_label_map[k] for k in _prod_keys]
-        strategy_mode = st.radio(
-            "选择生产策略（默认运行）",
-            [m.strip() for m in _modes],
-            horizontal=True,
-            help="默认仅显示生产策略：v9/v8/v5/combo。实验策略请在下方手动启用。",
+        render_today_advanced_ops_panel(
+            permanent_db_path=PERMANENT_DB_PATH,
+            airivo_snapshot=airivo_snapshot if isinstance(airivo_snapshot, dict) else {},
+            airivo_has_role=_airivo_has_role,
+            airivo_guard_action=_airivo_guard_action,
+            airivo_append_action_audit=_airivo_append_action_audit,
+            render_airivo_batch_manager=_render_airivo_batch_manager,
+            publish_manual_scan_to_execution_queue=_publish_manual_scan_to_execution_queue,
+            production_baseline_params=_production_baseline_params,
+            apply_production_baseline_to_session=_apply_production_baseline_to_session,
+            save_production_unified_profile=_save_production_unified_profile,
+            build_unified_from_latest_evolve=_build_unified_from_latest_evolve,
+            get_production_compare_params=_get_production_compare_params,
         )
 
-        _exp_keys = [k for k in experimental_strategies() if k in _exp_label_map]
-        with st.expander("实验策略入口（手动启用）", expanded=False):
-            st.caption("实验策略不进入默认流水线，仅用于研究验证。")
-            _exp_options = ["不启用实验策略"] + [_exp_label_map[k].strip() for k in _exp_keys]
-            _exp_mode = st.selectbox(
-                "选择实验策略",
-                _exp_options,
-                index=0,
-                key="core_experimental_mode",
-            )
-            if _exp_mode != "不启用实验策略":
-                strategy_mode = _exp_mode
-                st.warning(f"当前正在查看实验策略：{_exp_mode}（不会影响默认生产流程）")
-                if "AI 辅助选股" in _exp_mode:
-                    show_ai_signal_panel = True
+        strategy_mode, show_ai_signal_panel = render_today_strategy_selector_panel(
+            production_strategies=production_strategies,
+            experimental_strategies=experimental_strategies,
+            show_ai_signal_panel=show_ai_signal_panel,
+        )
         
-        st.markdown("---")
-        
-        if "v4.0" in strategy_mode:
-            # ---  v4.0 潜伏策略 核心逻辑 ---
-            
-            #  v4.0版本说明
-            exp_v4 = st.expander("v4.0 策略说明", expanded=False)
-            exp_v4.markdown("""
-            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                        padding: 40px 30px; border-radius: 15px; color: white; 
-                        margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
-                <h1 style='margin:0; color: white; font-size: 2.2em; font-weight: 700; text-align: center;'>
-                     v4.0 长期稳健版 - 潜伏策略
-                </h1>
-                <p style='margin: 12px 0 0 0; font-size: 1.05em; text-align: center; opacity: 0.95;'>
-                    定位：在趋势确认前完成布局，强调安全边际与稳定性
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            #  v4.0版本特别提示
-            if V4_EVALUATOR_AVAILABLE:
-                exp_v4.success("""
-                **当前使用 v4.0 潜伏策略版**
-
-                **核心定位：**
-                - 以安全边际为优先
-                - 在趋势确认前完成布局
-
-                **评分结构（100分制）：**
-                - 潜伏价值：20
-                - 底部特征：20
-                - 量价配合：15
-                - MACD趋势：15
-                - 均线结构：10
-                - 主力行为：10
-                - 启动确认：5
-                - 历史强势：5
-
-                **适用场景：**
-                - 稳健型交易
-                - 愿意等待确认前布局
-                - 关注买入成本与风险控制
-
-                **回测说明：**
-                - 结果以最新数据库与参数为准
-                """)
-            else:
-                exp_v4.error("""
-                 **v4.0潜伏策略版评分器未找到**
-                - 请确保 `comprehensive_stock_evaluator_v4.py` 文件存在
-                - 建议重启应用后重试
-                """)
-                st.stop()
-            
-            #  选择扫描模式
-            st.markdown("###  扫描模式")
-            
-            scan_mode = st.radio(
-                "扫描模式（v4.0）",
-                ["市值优选（100-500亿）", "底部蓄势监控"],
-                horizontal=True,
-                key="v4_scan_mode",
-                help="市值优选：流动性更好 | 底部蓄势：监控低位启动阶段"
-            )
-            
-            #  参数设置
-            st.markdown("---")
-            st.markdown("###  参数设置")
-            
-            # 市场环境提示
-            st.info("""
-            v4.0 说明（回测样本约2000只）：
-            - 评分60：信号相对充足
-            - 评分65：筛选更严格，信号减少
-            - 评分70：偏保守，仅少量标的
-
-            建议：
-            - 初始阈值 60
-            - 市值区间 100-500 亿
-            - 持仓周期约 5 天
-            """)
-            
-            param_col1_v4, param_col2_v4 = st.columns(2)
-            
-            with param_col1_v4:
-                score_threshold_v4 = st.slider(
-                    "评分阈值",
-                    min_value=50,
-                    max_value=90,
-                    value=60,
-                    step=1,
-                    help="建议从60起，视信号密度调整",
-                    key="score_threshold_v4"
-                )
-            
-            with param_col2_v4:
-                scan_all_v4 = st.checkbox(
-                    "全市场扫描",
-                    value=True,
-                    help="扫描所有A股，不限制市值范围",
-                    key="scan_all_v4"
-                )
-
-            filter_col1_v4, filter_col2_v4 = st.columns(2)
-            with filter_col1_v4:
-                select_mode_v4 = st.selectbox(
-                    "筛选模式",
-                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
-                    index=0,
-                    key="v4_select_mode"
-                )
-            with filter_col2_v4:
-                top_percent_v4 = st.slider("Top百分比", 1, 10, 2, 1, key="v4_top_percent")
-
-            filter_col3_v4, filter_col4_v4 = st.columns(2)
-            with filter_col3_v4:
-                enable_consistency_v4 = st.checkbox("启用多周期一致性过滤", value=True, key="v4_consistency")
-            with filter_col4_v4:
-                min_align_v4 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v4_consistency_min")
-            use_cache_v4 = st.checkbox("优先使用离线缓存结果", value=True, key="v4_cache")
-            async_scan_v4 = st.checkbox("后台运行扫描（推荐）", value=True, key="v4_async_scan")
-            st.caption("开启后扫描会进入后台队列，页面刷新或短暂断线后仍可继续查看结果。")
-            
-            # 高级选项（折叠）
-            with st.expander("高级筛选选项（可选）"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    cap_min_v4 = st.number_input(
-                        "最小市值（亿元）",
-                        min_value=0,
-                        max_value=5000,
-                        value=0,
-                        step=10,
-                        help="0表示不限制。建议50亿以上",
-                        key="cap_min_v4"
-                    )
-                with col2:
-                    cap_max_v4 = st.number_input(
-                        "最大市值（亿元）",
-                        min_value=0,
-                        max_value=50000,
-                        value=0,
-                        step=50,
-                        help="0表示不限制。建议5000亿以内",
-                        key="cap_max_v4"
-                    )
-                
-                st.info("提示：勾选「全市场扫描」且市值都为0时，将扫描所有A股（约3000-5000只）")
-            
-            #  开始扫描按钮
-            st.markdown("---")
-            v4_live_params = {
-                "score_threshold": int(score_threshold_v4),
-                "top_percent": int(top_percent_v4),
-                "select_mode": select_mode_v4,
-                "scan_all": bool(scan_all_v4),
-                "cap_min": float(cap_min_v4),
-                "cap_max": float(cap_max_v4),
-                "enable_consistency": bool(enable_consistency_v4),
-                "min_align": int(min_align_v4),
-            }
-            _sync_scan_task_with_params("v4_async_task_id", v4_live_params, "v4.0策略")
-            _render_scan_param_hint("v4_async_task_id")
-            
-            if st.button("开始扫描（v4.0潜伏策略）", type="primary", use_container_width=True, key="scan_btn_v4"):
-                heavy_running, heavy_reason = _detect_heavy_background_job()
-                if heavy_running:
-                    st.warning(f"{heavy_reason}，系统将继续执行扫描（可能稍慢）。")
-                if async_scan_v4:
-                    cache_params = {
-                        "score_threshold": score_threshold_v4,
-                        "top_percent": top_percent_v4,
-                        "select_mode": select_mode_v4,
-                        "scan_all": bool(scan_all_v4),
-                        "cap_min": float(cap_min_v4),
-                        "cap_max": float(cap_max_v4),
-                        "enable_consistency": bool(enable_consistency_v4),
-                        "min_align": int(min_align_v4),
-                    }
-                    ok, msg, run_id = _start_async_scan_task("v4", cache_params, score_col="综合评分")
-                    if ok:
-                        st.session_state["v4_async_task_id"] = run_id
-                        _mark_scan_submitted("v4_async_task_id", cache_params)
-                        st.success(msg)
-                    else:
-                        st.warning(msg)
-                    st.rerun()
-                with st.spinner(f"正在扫描全市场股票..."):
-                    try:
-                        cache_params = {
-                            "score_threshold": score_threshold_v4,
-                            "top_percent": top_percent_v4,
-                            "select_mode": select_mode_v4,
-                            "scan_all": bool(scan_all_v4),
-                            "cap_min": float(cap_min_v4),
-                            "cap_max": float(cap_max_v4),
-                            "enable_consistency": bool(enable_consistency_v4),
-                            "min_align": int(min_align_v4),
-                        }
-                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
-                        if use_cache_v4:
-                            cached_df, cached_meta = _load_scan_cache("v4_scan", cache_params, db_last)
-                            if cached_df is not None and not cached_df.empty:
-                                created_at = cached_meta.get("created_at", "未知")
-                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
-                                _render_cached_scan_results(
-                                    "扫描结果（v4.0潜伏策略）",
-                                    cached_df,
-                                    score_col="综合评分",
-                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
-                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
-                                    select_mode=select_mode_v4,
-                                    threshold=score_threshold_v4,
-                                    top_percent=top_percent_v4,
-                                )
-                                st.session_state['v4_scan_results'] = cached_df
-                                _set_stock_pool_candidate("v4", cache_params, "综合评分", cached_df)
-                                st.stop()
-
-                        # 获取数据
-                        conn = _connect_permanent_db()
-                        bonus_global = 0.0
-                        bonus_stock_map = {}
-                        top_list_set = set()
-                        top_inst_set = set()
-                        bonus_industry_map = {}
-                        try:
-                            bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
-                        except Exception:
-                            pass
-                        
-                        #  构建查询条件（对齐v6.0逻辑）
-                        if scan_all_v4 and cap_min_v4 == 0 and cap_max_v4 == 0:
-                            # 真正的全市场扫描（无市值限制）
-                            stocks_df = _load_candidate_stocks(
-                                conn,
-                                scan_all=True,
-                                cap_min_yi=0,
-                                cap_max_yi=0,
-                            )
-                            st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
-                        else:
-                            # 按市值筛选
-                            cap_min_wan = cap_min_v4 * 10000 if cap_min_v4 > 0 else 0
-                            cap_max_wan = cap_max_v4 * 10000 if cap_max_v4 > 0 else 999999999
-                            
-                            #  先统计数据库中所有股票的市值情况
-                            total_query = """
-                                SELECT 
-                                    COUNT(*) as total,
-                                    COUNT(CASE WHEN circ_mv IS NOT NULL AND circ_mv > 0 THEN 1 END) as has_mv,
-                                    MIN(circ_mv)/10000 as min_mv,
-                                    MAX(circ_mv)/10000 as max_mv
-                                FROM stock_basic
-                            """
-                            total_stats = pd.read_sql_query(total_query, conn)
-                            
-                            stocks_df = _load_candidate_stocks(
-                                conn,
-                                scan_all=False,
-                                cap_min_yi=cap_min_v4,
-                                cap_max_yi=cap_max_v4,
-                            )
-                            
-                            # 显示详细的统计信息
-                            with st.expander("数据库统计信息", expanded=False):
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    st.metric("数据库总股票数", f"{total_stats['total'].iloc[0]}只")
-                                with col2:
-                                    st.metric("有市值数据", f"{total_stats['has_mv'].iloc[0]}只")
-                                with col3:
-                                    st.metric("市值范围", f"{total_stats['min_mv'].iloc[0]:.1f}-{total_stats['max_mv'].iloc[0]:.1f}亿")
-                                
-                                st.info(f"查询条件：{cap_min_wan}万元 ≤ 市值 ≤ {cap_max_wan}万元（即{cap_min_v4}亿-{cap_max_v4}亿）")
-                            
-                            st.info(f"市值筛选模式：找到{len(stocks_df)}只股票（{cap_min_v4 if cap_min_v4 > 0 else 0}-{cap_max_v4 if cap_max_v4 > 0 else '不限'}亿）")
-                        
-                        if stocks_df.empty:
-                            st.error(f"未找到符合条件的股票，请检查是否已更新市值数据")
-                            st.info("提示：请先到Tab1（数据中心）点击「更新市值数据」")
-                            conn.close()
-                        else:
-                            # 显示市值范围确认
-                            if len(stocks_df) > 0:
-                                actual_min_mv = stocks_df['circ_mv'].min() / 10000
-                                actual_max_mv = stocks_df['circ_mv'].max() / 10000
-                                st.success(f"实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元，开始八维评分...")
-                            
-                            # 评分结果列表
-                            results = []
-                            
-                            # 批量加载历史数据（一次查询替代数千次）
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            status_text.text("正在批量加载历史数据...")
-                            all_codes = stocks_df['ts_code'].tolist()
-                            histories = _batch_load_stock_histories(
-                                conn, all_codes, limit=120,
-                                columns="ts_code, trade_date, close_price, vol, pct_chg",
-                            )
-                            status_text.text(f"数据加载完成，开始评分 {len(stocks_df)} 只股票...")
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
-                                
-                                # 更新进度
-                                progress = (idx + 1) / len(stocks_df)
-                                progress_bar.progress(progress)
-                                if (idx + 1) % 50 == 0 or idx == 0:
-                                    status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
-                                
-                                try:
-                                    stock_data = histories.get(ts_code)
-                                    if stock_data is None or stock_data.empty:
-                                        stock_data = _load_stock_history(
-                                            conn, ts_code, 120,
-                                            "trade_date, close_price, vol, pct_chg",
-                                        )
-                                    
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
-                                        
-                                        # 使用v4.0评分器
-                                        score_result = vp_analyzer.evaluator_v4.evaluate_stock_v4(stock_data)
-                                        
-                                        if score_result:
-                                            extra = _calc_external_bonus(
-                                                ts_code,
-                                                row['industry'],
-                                                bonus_global,
-                                                bonus_stock_map,
-                                                top_list_set,
-                                                top_inst_set,
-                                                bonus_industry_map,
-                                            )
-                                            final_score = float(score_result.get('final_score', 0)) + extra
-                                        else:
-                                            extra = 0.0
-                                            final_score = 0.0
-
-                                        if score_result:
-                                            dim_scores = score_result.get('dimension_scores', {})
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': row['industry'],
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{final_score:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '资金加分': f"{extra:.1f}",
-                                                '潜伏价值': f"{dim_scores.get('潜伏价值', 0):.1f}",
-                                                '底部特征': f"{dim_scores.get('底部特征', 0):.1f}",
-                                                '量价配合': f"{dim_scores.get('量价配合', 0):.1f}",
-                                                'MACD趋势': f"{dim_scores.get('MACD趋势', 0):.1f}",
-                                                '均线多头': f"{dim_scores.get('均线多头', 0):.1f}",
-                                                '主力行为': f"{dim_scores.get('主力行为', 0):.1f}",
-                                                '启动确认': f"{dim_scores.get('启动确认', 0):.1f}",
-                                                '涨停基因': f"{dim_scores.get('涨停基因', 0):.1f}",
-                                                '最新价格': f"{stock_data['close_price'].iloc[-1]:.2f}元",
-                                                '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
-                                                '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '筛选理由': score_result.get('description', ''),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            if results:
-                                # 转换为DataFrame
-                                results_df = pd.DataFrame(results)
-                                results_df = _apply_filter_mode(
-                                    results_df,
-                                    score_col="综合评分",
-                                    mode=select_mode_v4,
-                                    threshold=score_threshold_v4,
-                                    top_percent=top_percent_v4
-                                )
-                                if enable_consistency_v4 and not results_df.empty:
-                                    results_df = _apply_multi_period_filter(
-                                        results_df,
-                                        PERMANENT_DB_PATH,
-                                        min_align=min_align_v4
-                                    )
-                                results_df = _add_reason_summary(results_df, score_col="综合评分")
-                                if results_df.empty:
-                                    st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
-                                    st.stop()
-
-                                if select_mode_v4 == "阈值筛选":
-                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v4}分）")
-                                elif select_mode_v4 == "双重筛选(阈值+Top%)":
-                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v4}分，Top {top_percent_v4}%（{len(results_df)} 只）")
-                                else:
-                                    st.success(f"选出 Top {top_percent_v4}%（{len(results_df)} 只）")
-
-                                _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
-                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
-                                getattr(st, level)(msg)
-                                
-                                _save_scan_cache(
-                                    "v4_scan",
-                                    cache_params,
-                                    db_last,
-                                    results_df,
-                                    {"candidate_count": len(stocks_df), "filter_failed": 0},
-                                )
-                                
-                                # 保存到session_state
-                                st.session_state['v4_scan_results'] = results_df
-                                _set_stock_pool_candidate("v4", cache_params, "综合评分", results_df)
-                                
-                                # 显示统计
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("标的数量", f"{len(results)}只")
-                                with col2:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col3:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col4:
-                                    grade_s = sum(1 for g in results_df['评级'] if g == 'S')
-                                    grade_a = sum(1 for g in results_df['评级'] if g == 'A')
-                                    st.metric("S+A级", f"{grade_s+grade_a}只")
-                                
-                                st.markdown("---")
-                                st.subheader("结果列表（v4.0潜伏策略·8维评分）")
-                                
-                                # 选择显示模式
-                                _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    [m.strip() for m in _view_modes],
-                                    horizontal=True,
-                                    key="v4_view_mode"
-                                )
-                                
-                                # 根据模式选择列
-                                if view_mode == "完整评分":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分', '评级',
-                                                   '潜伏价值', '底部特征', '量价配合', 'MACD趋势', 
-                                                   '均线多头', '主力行为', '启动确认', '涨停基因',
-                                                   '最新价格', '止损价', '止盈价', '筛选理由']
-                                elif view_mode == "核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分', '评级',
-                                                   '潜伏价值', '底部特征', '最新价格', '止损价', '止盈价', '筛选理由']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '资金加分',
-                                                   '评级', '最新价格', '筛选理由']
-                                
-                                display_cols = _append_reason_col(display_cols, results_df)
-                                
-                                display_df = results_df[display_cols]
-                                display_df = _standardize_result_df(display_df, score_col="综合评分")
-                                
-                                # 显示表格（添加颜色）
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v4.0潜伏策略评分（100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="S:优秀 A:良好 B:中性 C:谨慎",
-                                            width="small"
-                                        ),
-                                        "筛选理由": st.column_config.TextColumn(
-                                            "筛选理由",
-                                            help="智能分析推荐原因",
-                                            width="large"
-                                        )
-                                    }
-                                )
-                                
-                                # 操作建议
-                                st.markdown("---")
-                                st.info("""
-                                ###  v4.0策略操作建议（潜伏策略）
-                                
-                                ** 核心理念**: 在启动前潜伏，而不是启动后追高
-                                
-                                ** 评级说明**:
-                                - **S级(≥80分)**:  完美潜伏机会，重点关注，建议仓位18-20%
-                                - **A级(70-79分)**: ⭐ 优质潜伏标的，积极关注，建议仓位15-18%
-                                - **B级(60-69分)**:  良好机会，谨慎关注，建议仓位10-15%
-                                - **C级(50-59分)**:  合格标的，保持观察，建议仓位5-10%
-                                
-                                ** 持仓周期**: 5天（数据验证的平均持仓约5天）
-                                
-                                ** 止盈止损**:
-                                - 止损：严格执行-3%止损，或跌破止损价
-                                - 止盈：达到+4%或止盈价时分批止盈
-                                
-                                ** 仓位管理**:
-                                - 单只股票：不超过20%仓位
-                                - 总仓位：最多持有3-5只
-                                - 分批建仓：首次50%，确认后加仓50%
-                                
-                                ** 风险提示**:
-                                - 本策略经2000只股票、274个真实信号验证，胜率56.6%
-                                - 严格执行纪律，不追涨不抄底
-                                - 设置好止损，控制单笔亏损<3%
-                                """)
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label=" 导出结果（CSV）",
-                                    data=csv,
-                                    file_name=f"核心策略_V4_潜伏策略_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                st.warning("未找到符合条件的股票，请适当放宽筛选条件")
-                    
-                    except Exception as e:
-                        st.error(f"扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
-            # 显示之前的扫描结果
-            if 'v4_scan_results' in st.session_state:
-                st.markdown("---")
-                st.markdown("###  上次扫描结果")
-                results_df = st.session_state['v4_scan_results']
-                display_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
-                st.download_button(
-                    label="导出最近一次结果（CSV）",
-                    data=_df_to_csv_bytes(display_df),
-                    file_name=f"核心策略_V8_最近结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv; charset=utf-8",
-                    key="v8_recent_export_csv",
-                )
-
-
-        elif "稳定上涨" in strategy_mode:
-            exp_uptrend = st.expander("稳定上涨策略说明", expanded=False)
-            exp_uptrend.markdown("""
-            <div style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); 
-                        padding: 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
-                <h2 style='margin:0; color: white;'> 稳定上涨策略</h2>
-                <p style='margin:10px 0 0 0; font-size:1.05em; opacity:0.95;'>
-                    目标：筛选“底部启动 / 回撤企稳 / 二次启动”的稳定上涨候选股（非收益保证）
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            if "stable_uptrend_results" in st.session_state:
-                export_df = st.session_state["stable_uptrend_results"]
-                exp_uptrend.download_button(
-                    " 导出结果（CSV）",
-                    data=_df_to_csv_bytes(export_df),
-                    file_name=f"稳定上涨策略_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv; charset=utf-8"
-                )
-
-            if not STABLE_UPTREND_AVAILABLE:
-                st.error("稳定上涨策略模块未找到，请确认 stable_uptrend_strategy.py 已放在系统目录")
-            else:
-                ctx = _StableUptrendContext(PERMANENT_DB_PATH, db_manager=db_manager)
-                render_stable_uptrend_strategy(ctx, pro=getattr(db_manager, "pro", None))
-            _render_async_scan_status("v4_async_task_id", "v4.0潜伏策略", "综合评分")
-
-        elif "v5.0" in strategy_mode:
-            evolve_v5_core = _load_evolve_params("v5_best.json")
-            center_v5_params, center_v5_src = _load_strategy_center_scan_defaults("v5")
-            #  全新高级UI设计 - Hero Section
-            exp_v5 = st.expander("v5.0 策略说明", expanded=False)
-            exp_v5.markdown("""
-            <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-                        padding: 40px 30px; border-radius: 15px; color: white; 
-                        margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
-                <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     启动确认型选股 - 趋势趋势捕手 v5.0
-                </h1>
-                <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
-                    启动确认版 · 8维度100分评分体系 · 重视趋势确认 · 追求趋势延续能力
-                </p>
-                <div style='display: flex; justify-content: center; gap: 30px; margin-top: 25px; flex-wrap: wrap;'>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>20分</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>启动确认（翻倍）</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>18分</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>主力行为（提权）</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>8分</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>涨停基因（提权）</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>中短期</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>持仓周期</div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            #  v5.0版本特别提示
-            if V5_EVALUATOR_AVAILABLE:
-                exp_v5.success("""
-                 **当前使用 v5.0 趋势版**
-                
-                ** 核心差异（对比v4.0潜伏策略版）：**
-                -  **启动确认**：10分 → 20分（翻倍！）
-                -  **主力行为**：15分 → 18分（提权！）
-                -  **涨停基因**：5分 → 8分（提权！）
-                -  **潜伏价值**：20分 → 10分（降权）
-                -  **底部特征**：20分 → 10分（降权）
-                
-                ** 适用场景：**
-                -  想要确认趋势后买入
-                -  追求短期趋势延续能力
-                -  不想等待潜伏期
-                -  愿意承担适度追高风险
-                
-                ** 注意：**
-                - 启动确认型买入点相对较高
-                - 适合短期操作，需及时止盈
-                - 建议配合技术面分析
-                """)
-            else:
-                exp_v5.error("""
-                 **v5.0启动确认版评分器未找到**
-                - 请确保 `comprehensive_stock_evaluator_v5.py` 文件存在
-                - 建议重启应用后重试
-                """)
-                st.stop()
-            
-            #  选择模式
-            st.markdown("###  选择扫描模式")
-            
-            #  市场环境提示
-            exp_v5.info("""
-            ** 当前市场环境说明：**
-            
-            v5.0 关注趋势确认信号（均线、量能、走势一致性），评分相对严格。
-            评分分布偏低属正常现象，信号更集中。
-            
-            ** 建议：**
-            - 当前市场环境下，建议使用**50-60分**作为筛选标准
-            - 如果想要更保守的潜伏策略，建议使用**v4.0"潜伏策略"**
-            - v5.0适合追求"确认趋势后买入"的投资者
-            """)
-            
-            scan_mode_v5 = st.radio(
-                "选择模式（v5.0）",
-                [" 强势启动（≥60分）- 趋势明确", 
-                 " 即将趋势（55-59分）- 蓄势待发",
-                 " 潜在机会（50-54分）- 提前关注"],
-                help=" 强势启动：60分起，趋势已确认 | 即将趋势：准备启动 | 潜在机会：提前布局",
-                horizontal=True,
-                key="scan_mode_v5"
-            )
-            
-            #  参数设置
-            st.markdown("---")
-            st.markdown("###  参数设置")
-            
-            param_col1_v5, param_col2_v5, param_col3_v5 = st.columns(3)
-            
-            with param_col1_v5:
-                # 根据扫描模式自动设置阈值
-                if "强势启动" in scan_mode_v5:
-                    default_threshold_v5 = 60
-                    min_threshold_v5 = 55
-                elif "即将趋势" in scan_mode_v5:
-                    default_threshold_v5 = 55
-                    min_threshold_v5 = 50
-                else:  # 潜在机会
-                    default_threshold_v5 = 50
-                    min_threshold_v5 = 45
-
-                evo_thr = evolve_v5_core.get("params", {}).get("score_threshold")
-                if isinstance(evo_thr, (int, float)):
-                    default_threshold_v5 = int(round(evo_thr))
-                    if default_threshold_v5 < min_threshold_v5:
-                        default_threshold_v5 = min_threshold_v5
-                    if default_threshold_v5 > 90:
-                        default_threshold_v5 = 90
-                center_thr_v5 = center_v5_params.get("score_threshold")
-                if isinstance(center_thr_v5, (int, float)):
-                    default_threshold_v5 = max(min_threshold_v5, min(90, int(round(center_thr_v5))))
-                
-                score_threshold_v5 = st.slider(
-                    "评分阈值",
-                    min_value=min_threshold_v5,
-                    max_value=90,
-                    value=default_threshold_v5,
-                    step=1,
-                    help="建议：强势启动60+，即将趋势55+，潜在机会50+",
-                    key="score_threshold_v5"
-                )
-                if center_v5_src == "strategy_center":
-                    st.caption(f"当前参数来源：策略中心（v5阈值 {default_threshold_v5}）")
-            
-            with param_col2_v5:
-                cap_min_v5 = st.number_input(
-                    "最小市值（亿元）",
-                    min_value=0.0,
-                    max_value=5000.0,
-                    value=100.0,
-                    step=10.0,
-                    help="建议100亿以上，流动性好",
-                    key="cap_min_v5"
-                )
-            
-            with param_col3_v5:
-                cap_max_v5 = st.number_input(
-                    "最大市值（亿元）",
-                    min_value=float(cap_min_v5),
-                    max_value=50000.0,
-                    value=max(15000.0, float(cap_min_v5)),  # 确保value >= min_value
-                    step=50.0,
-                    help="建议100-15000亿，覆盖大中小盘并保留流动性",
-                    key="cap_max_v5"
-                )
-            if strict_full_market_mode:
-                cap_min_v5 = 0.0
-                cap_max_v5 = 0.0
-                st.caption("全市场严格口径：v5 市值已切换为 0~0。")
-
-            filter_col1_v5, filter_col2_v5 = st.columns(2)
-            with filter_col1_v5:
-                _modes_v5 = ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"]
-                if "v5_select_mode" not in st.session_state or st.session_state.get("v5_select_mode") not in _modes_v5:
-                    st.session_state["v5_select_mode"] = "分位数筛选(Top%)"
-                select_mode_v5 = st.selectbox(
-                    "筛选模式",
-                    _modes_v5,
-                    key="v5_select_mode"
-                )
-            with filter_col2_v5:
-                top_percent_v5 = st.slider("Top百分比", 1, 10, 2, 1, key="v5_top_percent")
-
-            filter_col3_v5, filter_col4_v5 = st.columns(2)
-            with filter_col3_v5:
-                enable_consistency_v5 = st.checkbox("启用多周期一致性过滤", value=True, key="v5_consistency")
-            with filter_col4_v5:
-                min_align_v5 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v5_consistency_min")
-            use_cache_v5 = st.checkbox("优先使用离线缓存结果", value=False, key="v5_cache")
-            async_scan_v5 = st.checkbox("切换为后台运行（断线续跑）", value=False, key="v5_async_scan")
-            if async_scan_v5:
-                st.caption("当前为后台模式：任务会进入后台队列，页面刷新或短暂断线后仍可继续查看结果。")
-            else:
-                st.caption("当前为前台实时模式：默认直接在当前页面执行，实时显示扫描进度和结果。")
-            
-            st.info("v5.0策略将扫描所有符合市值条件的股票（无数量限制）")
-            evo_hold = evolve_v5_core.get("params", {}).get("holding_days")
-            if isinstance(evo_hold, (int, float)):
-                st.caption(f"自动进化建议持仓周期：{int(evo_hold)} 天（来源：自动进化）")
-            
-            #  开始扫描按钮
-            st.markdown("---")
-            v5_live_params = {
-                "score_threshold": int(score_threshold_v5),
-                "top_percent": int(top_percent_v5),
-                "select_mode": select_mode_v5,
-                "cap_min": float(cap_min_v5),
-                "cap_max": float(cap_max_v5),
-                "enable_consistency": bool(enable_consistency_v5),
-                "min_align": int(min_align_v5),
-            }
-            _sync_scan_task_with_params("v5_async_task_id", v5_live_params, "v5.0策略")
-            _render_scan_param_hint("v5_async_task_id")
-            
-            if st.button("开始扫描（v5.0启动确认型）", type="primary", use_container_width=True, key="scan_btn_v5"):
-                heavy_running, heavy_reason = _detect_heavy_background_job()
-                if heavy_running:
-                    st.warning(f"{heavy_reason}，系统将继续执行扫描（可能稍慢）。")
-                if async_scan_v5:
-                    cache_params = {
-                        "score_threshold": score_threshold_v5,
-                        "top_percent": top_percent_v5,
-                        "select_mode": select_mode_v5,
-                        "cap_min": float(cap_min_v5),
-                        "cap_max": float(cap_max_v5),
-                        "enable_consistency": bool(enable_consistency_v5),
-                        "min_align": int(min_align_v5),
-                    }
-                    ok, msg, run_id = _start_async_scan_task("v5", cache_params, score_col="综合评分")
-                    if ok:
-                        st.session_state["v5_async_task_id"] = run_id
-                        _mark_scan_submitted("v5_async_task_id", cache_params)
-                        st.success(msg)
-                    else:
-                        st.warning(msg)
-                    st.rerun()
-                with st.spinner("正在扫描..."):
-                    try:
-                        cache_params = {
-                            "score_threshold": score_threshold_v5,
-                            "top_percent": top_percent_v5,
-                            "select_mode": select_mode_v5,
-                            "cap_min": float(cap_min_v5),
-                            "cap_max": float(cap_max_v5),
-                            "enable_consistency": bool(enable_consistency_v5),
-                            "min_align": int(min_align_v5),
-                        }
-                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
-                        if use_cache_v5:
-                            cached_df, cached_meta = _load_scan_cache("v5_scan", cache_params, db_last)
-                            if cached_df is not None and not cached_df.empty:
-                                created_at = cached_meta.get("created_at", "未知")
-                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
-                                _render_cached_scan_results(
-                                    "扫描结果（v5.0启动确认型）",
-                                    cached_df,
-                                    score_col="综合评分",
-                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
-                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
-                                    select_mode=select_mode_v5,
-                                    threshold=score_threshold_v5,
-                                    top_percent=top_percent_v5,
-                                )
-                                st.session_state['v5_scan_results'] = cached_df
-                                _set_stock_pool_candidate("v5", cache_params, "综合评分", cached_df)
-                                st.stop()
-
-                        conn = _connect_permanent_db()
-                        
-                        # 查询符合市值条件的股票（扫描全市场）
-                        stocks_df = _load_candidate_stocks(
-                            conn,
-                            scan_all=False,
-                            cap_min_yi=cap_min_v5,
-                            cap_max_yi=cap_max_v5,
-                            random_order=True,
-                        )
-                        
-                        if stocks_df.empty:
-                            st.error(f"未找到符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，请检查是否已更新市值数据")
-                            st.info("提示：请先到Tab5（数据中心）点击「更新市值数据」")
-                            conn.close()
-                        else:
-                            st.success(f"找到 {len(stocks_df)} 只符合市值条件（{cap_min_v5}-{cap_max_v5}亿）的股票，开始评分...")
-                            bonus_global = 0.0
-                            bonus_stock_map = {}
-                            top_list_set = set()
-                            top_inst_set = set()
-                            bonus_industry_map = {}
-                            try:
-                                bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
-                            except Exception:
-                                pass
-                            
-                            # 显示市值范围确认
-                            if len(stocks_df) > 0:
-                                actual_min_mv = stocks_df['circ_mv'].min() / 10000
-                                actual_max_mv = stocks_df['circ_mv'].max() / 10000
-                                st.info(f"实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元")
-                            
-                            history_cache = {}
-                            if len(stocks_df) <= BULK_HISTORY_LIMIT:
-                                end_date = datetime.now().strftime("%Y%m%d")
-                                start_date = (datetime.now() - timedelta(days=180)).strftime("%Y%m%d")
-                                history_cache = _load_history_range_bulk(
-                                    conn,
-                                    stocks_df["ts_code"].tolist(),
-                                    start_date,
-                                    end_date,
-                                    "ts_code, trade_date, close_price, vol, pct_chg",
-                                )
-                            
-                            # 评分结果列表
-                            results = []
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
-                                
-                                # 更新进度
-                                _update_scan_progress_ui(
-                                    progress_bar,
-                                    status_text,
-                                    idx,
-                                    len(stocks_df),
-                                    f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})",
-                                )
-                                
-                                try:
-                                    # 获取该股票的历史数据
-                                    stock_data = history_cache.get(ts_code)
-                                    if stock_data is None:
-                                        stock_data = _load_stock_history(
-                                            conn,
-                                            ts_code,
-                                            120,
-                                            "trade_date, close_price, vol, pct_chg",
-                                        )
-                                    
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
-                                        
-                                        # 使用v5.0评分器（v5.0的方法名仍然是evaluate_stock_v4）
-                                        score_result = vp_analyzer.evaluator_v5.evaluate_stock_v4(stock_data)
-                                        
-                                        if score_result:
-                                            extra = _calc_external_bonus(
-                                                ts_code,
-                                                row['industry'],
-                                                bonus_global,
-                                                bonus_stock_map,
-                                                top_list_set,
-                                                top_inst_set,
-                                                bonus_industry_map,
-                                            )
-                                            final_score = float(score_result.get('final_score', 0)) + extra
-                                        else:
-                                            extra = 0.0
-                                            final_score = 0.0
-
-                                        if score_result:
-                                            dim_scores = score_result.get('dimension_scores', {})
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': row['industry'],
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{final_score:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '资金加分': f"{extra:.1f}",
-                                                '启动确认': f"{dim_scores.get('启动确认', 0):.1f}",
-                                                '主力行为': f"{dim_scores.get('主力行为', 0):.1f}",
-                                                '涨停基因': f"{dim_scores.get('涨停基因', 0):.1f}",
-                                                'MACD趋势': f"{dim_scores.get('MACD趋势', 0):.1f}",
-                                                '量价配合': f"{dim_scores.get('量价配合', 0):.1f}",
-                                                '均线多头': f"{dim_scores.get('均线多头', 0):.1f}",
-                                                '潜伏价值': f"{dim_scores.get('潜伏价值', 0):.1f}",
-                                                '底部特征': f"{dim_scores.get('底部特征', 0):.1f}",
-                                                '最新价格': f"{stock_data['close_price'].iloc[-1]:.2f}元",
-                                                '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
-                                                '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '筛选理由': score_result.get('description', ''),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            if results:
-                                results_df = pd.DataFrame(results)
-                                results_df = _apply_filter_mode(
-                                    results_df,
-                                    score_col="综合评分",
-                                    mode=select_mode_v5,
-                                    threshold=score_threshold_v5,
-                                    top_percent=top_percent_v5
-                                )
-                                if enable_consistency_v5 and not results_df.empty:
-                                    results_df = _apply_multi_period_filter(
-                                        results_df,
-                                        PERMANENT_DB_PATH,
-                                        min_align=min_align_v5
-                                    )
-                                results_df = _add_reason_summary(results_df, score_col="综合评分")
-                                if results_df.empty:
-                                    st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
-                                    st.stop()
-
-                                if select_mode_v5 == "阈值筛选":
-                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v5}分）")
-                                elif select_mode_v5 == "双重筛选(阈值+Top%)":
-                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v5}分，Top {top_percent_v5}%（{len(results_df)} 只）")
-                                else:
-                                    st.success(f"选出 Top {top_percent_v5}%（{len(results_df)} 只）")
-                                
-                                results_df = results_df.reset_index(drop=True)
-                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
-                                getattr(st, level)(msg)
-                                
-                                _save_scan_cache(
-                                    "v5_scan",
-                                    cache_params,
-                                    db_last,
-                                    results_df,
-                                    {"candidate_count": len(stocks_df), "filter_failed": 0},
-                                )
-                                
-                                # 保存到session_state
-                                st.session_state['v5_scan_results'] = results_df
-                                _set_stock_pool_candidate("v5", cache_params, "综合评分", results_df)
-                                
-                                # 显示统计
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("标的数量", f"{len(results)}只")
-                                with col2:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col3:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col4:
-                                    grade_s = sum(1 for g in results_df['评级'] if g == 'S')
-                                    grade_a = sum(1 for g in results_df['评级'] if g == 'A')
-                                    st.metric("S+A级", f"{grade_s+grade_a}只")
-                                
-                                st.markdown("---")
-                                st.subheader("结果列表（v5.0启动确认·8维评分）")
-                                
-                                # 选择显示模式
-                                _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    [m.strip() for m in _view_modes],
-                                    horizontal=True,
-                                    key="v5_view_mode"
-                                )
-                                
-                                # 根据模式选择列
-                                if view_mode == "完整评分":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '启动确认', '主力行为', '涨停基因', 'MACD趋势', 
-                                                   '量价配合', '均线多头', '潜伏价值', '底部特征',
-                                                   '最新价格', '止损价', '止盈价', '筛选理由']
-                                elif view_mode == "核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '启动确认', '主力行为', '最新价格', '止损价', '止盈价', '筛选理由']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '资金加分', '评级', '最新价格', '筛选理由']
-                                
-                                display_cols = _append_reason_col(display_cols, results_df)
-                                
-                                display_df = results_df[display_cols]
-                                display_df = _standardize_result_df(display_df, score_col="综合评分")
-                                
-                                # 显示表格
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v5.0启动确认评分（100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="S:优秀 A:良好 B:中性 C:谨慎",
-                                            width="small"
-                                        ),
-                                        "筛选理由": st.column_config.TextColumn(
-                                            "筛选理由",
-                                            help="智能分析推荐原因",
-                                            width="large"
-                                        )
-                                    }
-                                )
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop('原始数据', axis=1)
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label=" 导出结果（CSV）",
-                                    data=csv,
-                                    file_name=f"核心策略_V5_启动确认_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                st.warning(f"未找到≥{score_threshold_v5}分的股票\n\n**建议：**\n1. 降低评分阈值到50-55分\n2. 扩大市值范围")
-                    
-                    except Exception as e:
-                        st.error(f"扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
-            # 显示之前的扫描结果
-            if 'v5_scan_results' in st.session_state:
-                st.markdown("---")
-                st.markdown("###  上次扫描结果")
-                results_df = st.session_state['v5_scan_results']
-                display_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
-            if async_scan_v5:
-                _render_async_scan_status("v5_async_task_id", "v5.0启动确认", "综合评分")
-        
-        
-        elif "v6.0" in strategy_mode:
-            evolve_v6_core = _load_evolve_params("v6_best.json")
-            # ---  v6.0 超短线·专业版 核心逻辑 ---
-            
-            #  v6.0版本说明
-            exp_v6 = st.expander("v6.0 策略说明", expanded=False)
-            exp_v6.markdown("""
-            <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-                        padding: 40px 30px; border-radius: 15px; color: white; 
-                        margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
-                <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     v6.0 超短线狙击·专业版 - 只选市场高质量1-3%
-                </h1>
-                <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
-                    三级过滤·七维严格评分·精英筛选·胜率80-90%·单次8-15%
-                </p>
-                <div style='display: flex; justify-content: center; gap: 30px; margin-top: 25px; flex-wrap: wrap;'>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>80-90%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>超高胜率</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>8-15%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>单次收益</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>1-3%</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>市场占比</div>
-                    </div>
-                    <div style='text-align: center;'>
-                        <div style='font-size: 2em; font-weight: 700;'>2-5天</div>
-                        <div style='font-size: 0.9em; opacity: 0.9;'>持仓周期</div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            #  v6.0版本特别提示
-            if V6_EVALUATOR_AVAILABLE:
-                exp_v6.success("""
-                 **当前使用 v6.0 超短线版**
-                
-                ** 核心理念：三级过滤，只选市场高质量的1-3%！**
-                
-                **【第一级】必要条件过滤（硬性淘汰）：**
-                -  板块3日涨幅 > 1%（板块必须走强）
-                -  资金净流入 > 0（必须有资金）
-                -  股票3日涨幅 > 0（必须上涨）
-                -  板块内排名 ≤ 30%（必须是板块前列）
-                -  价格位置 < 85%（不追高）
-                -  放量 > 0.8倍（不能严重缩量）
-                
-                **【第二级】七维严格评分（极度严格）：**
-                -  **资金流向**：30分（连续3天+20000万才给15分）
-                -  **板块热度**：25分（涨幅>8%才给12分）
-                -  **短期动量**：20分（涨幅>15%才给12分）
-                -  **龙头属性**：10分（板块前3名才给4分以上）
-                -  **相对强度**：8分（跑赢>10%才给8分）
-                -  **技术突破**：5分（放量>2.5倍才给5分）
-                -  **安全边际**：2分
-                
-                **【第三级】精英筛选：**
-                - 协同加分（0-30分）：板块总龙头+15分，资金趋势+12分
-                - 风险扣分（0-60分）：追高-25分，强势-20分，连续涨停-15分
-                
-                ** 适用场景：**
-                -  超短线高手
-                -  只做板块龙头
-                -  追求极致精准
-                -  宁缺毋滥
-                
-                ** 预期效果：**
-                - 85分门槛：10-50只精选标的，胜率80-85%
-                - 90分门槛：3-10只精选标的，胜率85-90%
-                - 95分门槛：1-3只高级标的，胜率90%+
-                """)
-            else:
-                exp_v6.error("""
-                 **v6.0 超短线版评分器未找到**
-                - 请确保 `comprehensive_stock_evaluator_v6_ultimate.py` 文件存在
-                - 建议重启应用后重试
-                """)
-                st.stop()
-            
-            #  选择扫描模式
-            st.markdown("###  选择扫描模式")
-            
-            scan_mode_v6 = st.radio(
-                "选择模式（v6.0专业版）",
-                [" 核心龙头（≥90分）- 精选标的3-10只", 
-                 " 精选龙头（≥85分）- 精选标的10-50只",
-                 " 候选池（≥80分）- 候选标的50-100只"],
-                horizontal=True,
-                help=" 90分：精选，胜率85-90% |  85分：精选，胜率80-85% |  80分：候选，胜率75-80%",
-                key="scan_mode_v6_tab1"
-            )
-            
-            # 参数设置
-            col_v6_a, col_v6_b = st.columns(2)
-            with col_v6_a:
-                if "90分" in scan_mode_v6:
-                    score_threshold_v6_tab1 = 90
-                elif "85分" in scan_mode_v6:
-                    score_threshold_v6_tab1 = 85
-                else:
-                    score_threshold_v6_tab1 = 80
-
-                evo_thr = evolve_v6_core.get("params", {}).get("score_threshold")
-                if isinstance(evo_thr, (int, float)):
-                    score_threshold_v6_tab1 = int(round(evo_thr))
-                
-                st.metric("评分阈值", f"{score_threshold_v6_tab1}分", help="自动根据模式设置")
-            evo_hold_v6 = evolve_v6_core.get("params", {}).get("holding_days")
-            if isinstance(evo_hold_v6, (int, float)):
-                st.caption(f"自动进化建议持仓周期：{int(evo_hold_v6)} 天（来源：自动进化）")
-            
-            with col_v6_b:
-                scan_all_stocks = st.checkbox(
-                    " 全市场扫描（推荐）",
-                    value=True,
-                    help="扫描所有A股，不限制市值范围",
-                    key="scan_all_v6_tab1"
-                )
-
-            filter_col1_v6, filter_col2_v6 = st.columns(2)
-            with filter_col1_v6:
-                select_mode_v6 = st.selectbox(
-                    "筛选模式",
-                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
-                    index=0,
-                    key="v6_select_mode_tab1"
-                )
-            with filter_col2_v6:
-                top_percent_v6 = st.slider("Top百分比", 1, 10, 2, 1, key="v6_top_percent_tab1")
-
-            filter_col3_v6, filter_col4_v6 = st.columns(2)
-            with filter_col3_v6:
-                enable_consistency_v6 = st.checkbox("启用多周期一致性过滤", value=True, key="v6_consistency_tab1")
-            with filter_col4_v6:
-                min_align_v6 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v6_consistency_min_tab1")
-            async_scan_v6 = st.checkbox("后台运行扫描（推荐）", value=True, key="v6_async_scan")
-            st.caption("开启后扫描会进入后台队列，页面刷新或短暂断线后仍可继续查看结果。")
-            
-            # 高级选项（折叠）
-            with st.expander("高级筛选选项（可选）"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    cap_min_v6_tab1 = st.number_input(
-                        "最小市值（亿元）", min_value=0, max_value=5000, value=0, step=10,
-                        help="0表示不限制。建议50亿以上",
-                        key="cap_min_v6_tab1"
-                    )
-                with col2:
-                    cap_max_v6_tab1 = st.number_input(
-                        "最大市值（亿元）", min_value=0, max_value=50000, value=0, step=50,
-                        help="0表示不限制。建议5000亿以内",
-                        key="cap_max_v6_tab1"
-                    )
-            
-            # 扫描按钮
-            v6_live_params = {
-                "score_threshold": int(score_threshold_v6_tab1),
-                "top_percent": int(top_percent_v6),
-                "select_mode": select_mode_v6,
-                "cap_min": float(cap_min_v6_tab1 if not scan_all_stocks else 0),
-                "cap_max": float(cap_max_v6_tab1 if not scan_all_stocks else 0),
-                "enable_consistency": bool(enable_consistency_v6),
-                "min_align": int(min_align_v6),
-                "scan_all": bool(scan_all_stocks),
-            }
-            _sync_scan_task_with_params("v6_async_task_id", v6_live_params, "v6.0策略")
-            _render_scan_param_hint("v6_async_task_id")
-            if st.button("开始扫描（v6.0专业版）", type="primary", use_container_width=True, key="scan_v6_tab1"):
-                heavy_running, heavy_reason = _detect_heavy_background_job()
-                if heavy_running:
-                    st.warning(f"{heavy_reason}，系统将继续执行扫描（可能稍慢）。")
-                if async_scan_v6:
-                    cap_min_async_v6 = float(cap_min_v6_tab1 if not scan_all_stocks else 0)
-                    cap_max_async_v6 = float(cap_max_v6_tab1 if not scan_all_stocks else 0)
-                    cache_params = {
-                        "score_threshold": int(score_threshold_v6_tab1),
-                        "top_percent": int(top_percent_v6),
-                        "select_mode": select_mode_v6,
-                        "cap_min": cap_min_async_v6,
-                        "cap_max": cap_max_async_v6,
-                        "enable_consistency": bool(enable_consistency_v6),
-                        "min_align": int(min_align_v6),
-                    }
-                    ok, msg, run_id = _start_async_scan_task("v6", cache_params, score_col="综合评分")
-                    if ok:
-                        st.session_state["v6_async_task_id"] = run_id
-                        _mark_scan_submitted("v6_async_task_id", cache_params)
-                        st.success(msg)
-                    else:
-                        st.warning(msg)
-                    st.rerun()
-                with st.spinner("v6.0专业版全市场扫描中...（三级过滤+严格评分）"):
-                    try:
-                        # 获取股票列表
-                        conn = _connect_permanent_db()
-                        
-                        # 构建查询条件
-                        if scan_all_stocks:
-                            # 全市场扫描
-                            stocks_df = _load_candidate_stocks(conn, scan_all=True)
-                            st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
-                        else:
-                            # 按市值筛选
-                            cap_min_wan = cap_min_v6_tab1 * 10000 if cap_min_v6_tab1 > 0 else 0
-                            cap_max_wan = cap_max_v6_tab1 * 10000 if cap_max_v6_tab1 > 0 else 999999999
-                            
-                            stocks_df = _load_candidate_stocks(
-                                conn,
-                                scan_all=False,
-                                cap_min_yi=cap_min_v6_tab1,
-                                cap_max_yi=cap_max_v6_tab1,
-                            )
-                        
-                        if len(stocks_df) == 0:
-                            st.error(f"未找到符合市值条件（{cap_min_v6_tab1}-{cap_max_v6_tab1}亿）的股票")
-                            conn.close()
-                        else:
-                            st.info(f"找到 {len(stocks_df)} 只符合市值条件的股票，开始三级过滤...")
-                            bonus_global = 0.0
-                            bonus_stock_map = {}
-                            top_list_set = set()
-                            top_inst_set = set()
-                            bonus_industry_map = {}
-                            try:
-                                bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
-                            except Exception:
-                                pass
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            results = []
-                            filter_failed_count = 0
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
-                                
-                                # 更新进度
-                                _update_scan_progress_ui(
-                                    progress_bar,
-                                    status_text,
-                                    idx,
-                                    len(stocks_df),
-                                    f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}",
-                                )
-                                
-                                try:
-                                    # 获取该股票的历史数据
-                                    stock_data = _load_stock_history(
-                                        conn,
-                                        ts_code,
-                                        120,
-                                        "trade_date, close_price, vol, pct_chg",
-                                    )
-                                    
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
-                                        
-                                        # 使用v6.0专业版评分器
-                                        score_result = vp_analyzer.evaluator_v6.evaluate_stock_v6(stock_data, ts_code)
-                                        
-                                        # 检查是否通过必要条件
-                                        if score_result.get('filter_failed', False):
-                                            filter_failed_count += 1
-                                            continue
-
-                                        if score_result:
-                                            extra = _calc_external_bonus(
-                                                ts_code,
-                                                row['industry'],
-                                                bonus_global,
-                                                bonus_stock_map,
-                                                top_list_set,
-                                                top_inst_set,
-                                                bonus_industry_map,
-                                            )
-                                            final_score = float(score_result.get('final_score', 0)) + extra
-                                        else:
-                                            extra = 0.0
-                                            final_score = 0.0
-
-                                        if score_result:
-                                            dim_scores = score_result.get('dimension_scores', {})
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': row['industry'],
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{final_score:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '资金加分': f"{extra:.1f}",
-                                                '资金流向': f"{dim_scores.get('资金流向', 0):.1f}",
-                                                '板块热度': f"{dim_scores.get('板块热度', 0):.1f}",
-                                                '短期动量': f"{dim_scores.get('短期动量', 0):.1f}",
-                                                '龙头属性': f"{dim_scores.get('龙头属性', 0):.1f}",
-                                                '相对强度': f"{dim_scores.get('相对强度', 0):.1f}",
-                                                '技术突破': f"{dim_scores.get('技术突破', 0):.1f}",
-                                                '安全边际': f"{dim_scores.get('安全边际', 0):.1f}",
-                                                '最新价格': f"{stock_data['close_price'].iloc[-1]:.2f}元",
-                                                '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
-                                                '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '筛选理由': score_result.get('description', ''),
-                                                '协同组合': score_result.get('synergy_combo', '无'),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            st.markdown("---")
-                            st.markdown(f"###  三级过滤结果")
-                            
-                            col1, col2, col3, col4 = st.columns(4)
-                            with col1:
-                                st.metric("候选股票", f"{len(stocks_df)}只")
-                            with col2:
-                                st.metric("必要条件淘汰", f"{filter_failed_count}只", 
-                                         delta=f"{filter_failed_count/len(stocks_df)*100:.1f}%")
-                            with col3:
-                                passed_count = len(stocks_df) - filter_failed_count
-                                st.metric("进入评分", f"{passed_count}只",
-                                         delta=f"{passed_count/len(stocks_df)*100:.1f}%")
-                            with col4:
-                                st.metric("最终筛选", f"{len(results)}只",
-                                         delta=f"{len(results)/len(stocks_df)*100:.2f}%")
-                            
-                            if results:
-                                results_df = pd.DataFrame(results)
-                                results_df = _apply_filter_mode(
-                                    results_df,
-                                    score_col="综合评分",
-                                    mode=select_mode_v6,
-                                    threshold=score_threshold_v6_tab1,
-                                    top_percent=top_percent_v6
-                                )
-                                if enable_consistency_v6 and not results_df.empty:
-                                    results_df = _apply_multi_period_filter(
-                                        results_df,
-                                        PERMANENT_DB_PATH,
-                                        min_align=min_align_v6
-                                    )
-                                results_df = _add_reason_summary(results_df, score_col="综合评分")
-                                if results_df.empty:
-                                    st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
-                                    st.stop()
-
-                                if select_mode_v6 == "阈值筛选":
-                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v6_tab1}分）")
-                                elif select_mode_v6 == "双重筛选(阈值+Top%)":
-                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v6_tab1}分，Top {top_percent_v6}%（{len(results_df)} 只）")
-                                else:
-                                    st.success(f"选出 Top {top_percent_v6}%（{len(results_df)} 只）")
-                                
-                                results_df = results_df.reset_index(drop=True)
-                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
-                                getattr(st, level)(msg)
-                                _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
-                                
-                                # 保存到session_state
-                                st.session_state['v6_scan_results_tab1'] = results_df
-                                _set_stock_pool_candidate(
-                                    "v6",
-                                    {
-                                        "score_threshold": int(score_threshold_v6_tab1),
-                                        "top_percent": int(top_percent_v6),
-                                        "select_mode": select_mode_v6,
-                                        "scan_all": bool(scan_all_stocks),
-                                        "cap_min": float(cap_min_v6_tab1),
-                                        "cap_max": float(cap_max_v6_tab1),
-                                        "enable_consistency": bool(enable_consistency_v6),
-                                        "min_align": int(min_align_v6),
-                                    },
-                                    "综合评分",
-                                    results_df,
-                                )
-                                
-                                # 显示统计
-                                st.markdown("---")
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("标的数量", f"{len(results)}只")
-                                with col2:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col3:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col4:
-                                    grade_s = sum(1 for g in results_df['评级'] if g == 'S')
-                                    grade_a = sum(1 for g in results_df['评级'] if g == 'A')
-                                    st.metric("S+A级", f"{grade_s+grade_a}只")
-                                
-                                st.markdown("---")
-                                st.subheader("结果列表（v6.0专业版·七维评分）")
-                                
-                                # 选择显示模式
-                                _view_modes = [" 完整评分", " 核心指标", " 简洁模式"]
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    [m.strip() for m in _view_modes],
-                                    horizontal=True,
-                                    key="view_mode_v6_tab1"
-                                )
-                                
-                                if view_mode == "完整评分":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '资金流向', '板块热度', '短期动量', '龙头属性', '相对强度', '技术突破', '安全边际',
-                                                   '最新价格', '止损价', '止盈价', '筛选理由', '协同组合']
-                                elif view_mode == "核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '资金流向', '板块热度', '龙头属性', '最新价格', '止损价', '止盈价', '筛选理由']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '资金加分', '评级', '最新价格', '筛选理由', '协同组合']
-                                
-                                display_cols = _append_reason_col(display_cols, results_df)
-                                
-                                display_df = results_df[display_cols]
-                                display_df = _standardize_result_df(display_df, score_col="综合评分")
-                                
-                                # 显示表格
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v6.0专业版评分（100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="S:优秀 A:良好 B:中性 C:谨慎",
-                                            width="small"
-                                        ),
-                                        "筛选理由": st.column_config.TextColumn(
-                                            "筛选理由",
-                                            help="智能分析推荐原因",
-                                            width="large"
-                                        )
-                                    }
-                                )
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label=" 导出结果（CSV）",
-                                    data=csv,
-                                    file_name=f"v6.0_专业版_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                st.warning(f"未找到≥{score_threshold_v6_tab1}分的股票\n\n**说明：**\nv6.0专业版使用极度严格的三级过滤标准，只选市场高质量的1-3%。\n\n**建议：**\n1. 降低评分阈值到80分\n2. 扩大市值范围到50-2000亿\n3. 这是正常现象，说明当前市场没有符合高级标准的股票")
-                    
-                    except Exception as e:
-                        st.error(f"扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
-            # 显示之前的扫描结果
-            if 'v6_scan_results_tab1' in st.session_state:
-                st.markdown("---")
-                st.markdown("###  上次扫描结果")
-                results_df = st.session_state['v6_scan_results_tab1']
-                display_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
-            _render_async_scan_status("v6_async_task_id", "v6.0超短线专业版", "综合评分")
-        
-        elif "v7.0" in strategy_mode:
-            evolve_v7_core = _load_evolve_params("v7_best.json")
-            # ---  v7.0 智能选股系统 核心逻辑 ---
-            
-            #  v7.0版本说明
-            exp_v7 = st.expander("v7.0 策略说明", expanded=False)
-            exp_v7.markdown("""
-            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                        padding: 32px 28px; border-radius: 15px; color: white; 
-                        margin-bottom: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
-                <h1 style='margin:0; color: white; font-size: 2.2em; font-weight: 700; text-align: center;'>
-                     v7.0 智能选股系统
-                </h1>
-                <p style='margin: 12px 0 0 0; font-size: 1.05em; text-align: center; opacity: 0.95;'>
-                    多因子协同，聚焦环境识别与行业轮动，强调稳定信号与一致性
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            #  v7.0版本特别提示
-            if V7_EVALUATOR_AVAILABLE:
-                exp_v7.success("""
-                **当前使用 v7.0 智能版**
-
-                **体系要点：**
-                - 环境识别：趋势、波动与风险偏好
-                - 情绪与资金：强弱扩散与成交结构
-                - 行业轮动：热度与相对强度跟踪
-                - 动态权重：随环境调整因子贡献
-                - 分层过滤：市场 → 行业 → 个股
-
-                **适用场景：**
-                - 需要随市自适应的稳定选股
-                - 重视行业轮动与结构一致性
-
-                **说明：**
-                - 回测指标以最新数据库与参数为准
-                """)
-            else:
-                exp_v7.error("""
-                 **v7.0智能选股系统评分器未找到**
-                - 请确保 `comprehensive_stock_evaluator_v7_ultimate.py` 文件存在
-                - 建议重启应用后重试
-                """)
-                st.stop()
-            
-            #  参数设置
-            st.markdown("###  扫描参数设置")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                evo_thr = evolve_v7_core.get("params", {}).get("score_threshold")
-                v7_default = int(round(evo_thr)) if isinstance(evo_thr, (int, float)) else 60
-                score_threshold_v7 = st.slider(
-                    "评分阈值",
-                    min_value=50,
-                    max_value=90,
-                    value=v7_default,  #  默认使用自动进化结果
-                    step=5,
-                    help="推荐70分起步，适应性强",
-                    key="score_threshold_v7_tab1"
-                )
-            evo_hold_v7 = evolve_v7_core.get("params", {}).get("holding_days")
-            if isinstance(evo_hold_v7, (int, float)):
-                st.caption(f"自动进化建议持仓周期：{int(evo_hold_v7)} 天（来源：自动进化）")
-            
-            with col2:
-                scan_all_v7 = st.checkbox(
-                    " 全市场扫描",
-                    value=True,
-                    help="扫描所有A股（推荐）",
-                    key="scan_all_v7_tab1"
-                )
-            
-            with col3:
-                show_details = st.checkbox(
-                    " 显示详细信息",
-                    value=True,
-                    help="显示市场环境、行业轮动等信息",
-                    key="show_details_v7_tab1"
-                )
-
-            filter_col1_v7, filter_col2_v7 = st.columns(2)
-            with filter_col1_v7:
-                select_mode_v7 = st.selectbox(
-                    "筛选模式",
-                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
-                    index=0,
-                    key="v7_select_mode_tab1"
-                )
-            with filter_col2_v7:
-                top_percent_v7 = st.slider("Top百分比", 1, 10, 2, 1, key="v7_top_percent_tab1")
-
-            filter_col3_v7, filter_col4_v7 = st.columns(2)
-            with filter_col3_v7:
-                enable_consistency_v7 = st.checkbox("启用多周期一致性过滤", value=True, key="v7_consistency_tab1")
-            with filter_col4_v7:
-                min_align_v7 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v7_consistency_min_tab1")
-            use_cache_v7 = st.checkbox("优先使用离线缓存结果", value=True, key="v7_cache_tab1")
-            async_scan_v7 = st.checkbox("后台运行扫描（推荐）", value=True, key="v7_async_scan")
-            st.caption("开启后扫描会进入后台队列，页面刷新或短暂断线后仍可继续查看结果。")
-            
-            # 高级选项（折叠）
-            with st.expander("高级筛选选项（可选）"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    cap_min_v7 = st.number_input(
-                        "最小市值（亿元）",
-                        min_value=0,
-                        max_value=5000,
-                        value=0,
-                        step=10,
-                        help="0表示不限制",
-                        key="cap_min_v7_tab1"
-                    )
-                with col2:
-                    cap_max_v7 = st.number_input(
-                        "最大市值（亿元）",
-                        min_value=0,
-                        max_value=50000,
-                        value=0,
-                        step=50,
-                        help="0表示不限制",
-                        key="cap_max_v7_tab1"
-                    )
-            
-            # 扫描按钮
-            v7_live_params = {
-                "score_threshold": int(score_threshold_v7),
-                "top_percent": int(top_percent_v7),
-                "select_mode": select_mode_v7,
-                "scan_all": bool(scan_all_v7),
-                "cap_min": float(cap_min_v7),
-                "cap_max": float(cap_max_v7),
-                "enable_consistency": bool(enable_consistency_v7),
-                "min_align": int(min_align_v7),
-            }
-            _sync_scan_task_with_params("v7_async_task_id", v7_live_params, "v7.0策略")
-            _render_scan_param_hint("v7_async_task_id")
-            if st.button("开始智能扫描（v7.0）", type="primary", use_container_width=True, key="scan_v7_tab1"):
-                heavy_running, heavy_reason = _detect_heavy_background_job()
-                if heavy_running:
-                    st.warning(f"{heavy_reason}，系统将继续执行扫描（可能稍慢）。")
-                if async_scan_v7:
-                    cache_params = {
-                        "score_threshold": int(score_threshold_v7),
-                        "top_percent": int(top_percent_v7),
-                        "select_mode": select_mode_v7,
-                        "scan_all": bool(scan_all_v7),
-                        "cap_min": float(cap_min_v7),
-                        "cap_max": float(cap_max_v7),
-                        "enable_consistency": bool(enable_consistency_v7),
-                        "min_align": int(min_align_v7),
-                    }
-                    ok, msg, run_id = _start_async_scan_task("v7", cache_params, score_col="综合评分")
-                    if ok:
-                        st.session_state["v7_async_task_id"] = run_id
-                        _mark_scan_submitted("v7_async_task_id", cache_params)
-                        st.success(msg)
-                    else:
-                        st.warning(msg)
-                    st.rerun()
-                with st.spinner("v7.0智能系统扫描中...（识别环境→计算情绪→分析行业→动态评分→三层过滤）"):
-                    try:
-                        cache_params = {
-                            "score_threshold": score_threshold_v7,
-                            "top_percent": top_percent_v7,
-                            "select_mode": select_mode_v7,
-                            "scan_all": bool(scan_all_v7),
-                            "cap_min": float(cap_min_v7),
-                            "cap_max": float(cap_max_v7),
-                            "enable_consistency": bool(enable_consistency_v7),
-                            "min_align": int(min_align_v7),
-                        }
-                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
-                        if use_cache_v7:
-                            cached_df, cached_meta = _load_v7_cache(cache_params, db_last)
-                            if cached_df is not None and not cached_df.empty:
-                                created_at = cached_meta.get("created_at", "未知")
-                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
-                                candidate_count = int(cached_meta.get("candidate_count", len(cached_df)))
-                                filter_failed = int(cached_meta.get("filter_failed", 0))
-                                _render_v7_results(
-                                    cached_df,
-                                    candidate_count=candidate_count,
-                                    filter_failed=filter_failed,
-                                    score_threshold_v7=score_threshold_v7,
-                                    select_mode_v7=select_mode_v7,
-                                    top_percent_v7=top_percent_v7,
-                                )
-                                st.markdown("---")
-                                st.subheader("智能结果列表（v7.0·缓存）")
-                                v7_cached_display_df = cached_df.drop(columns=["原始数据"], errors="ignore")
-                                st.dataframe(v7_cached_display_df, use_container_width=True, hide_index=True)
-                                st.session_state['v7_scan_results_tab1'] = cached_df
-                                _set_stock_pool_candidate("v7", cache_params, "综合评分", cached_df)
-                                st.stop()
-
-                        # 重置v7.0缓存
-                        if hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
-                            vp_analyzer.evaluator_v7.reset_cache()
-                        
-                        conn = _connect_permanent_db()
-                        
-                        # 构建查询条件
-                        if scan_all_v7 and cap_min_v7 == 0 and cap_max_v7 == 0:
-                            # 真正的全市场扫描
-                            stocks_df = _load_candidate_stocks(
-                                conn,
-                                scan_all=True,
-                                require_industry=True,
-                            )
-                            st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
-                        else:
-                            # 按市值筛选
-                            cap_min_wan = cap_min_v7 * 10000 if cap_min_v7 > 0 else 0
-                            cap_max_wan = cap_max_v7 * 10000 if cap_max_v7 > 0 else 999999999
-                            
-                            stocks_df = _load_candidate_stocks(
-                                conn,
-                                scan_all=False,
-                                cap_min_yi=cap_min_v7,
-                                cap_max_yi=cap_max_v7,
-                                require_industry=True,
-                            )
-                        
-                        if len(stocks_df) == 0:
-                            st.error(f"未找到符合条件的股票")
-                            conn.close()
-                        else:
-                            st.info(f"找到 {len(stocks_df)} 只候选股票，开始智能评分...")
-                            bonus_global = 0.0
-                            bonus_stock_map = {}
-                            top_list_set = set()
-                            top_inst_set = set()
-                            bonus_industry_map = {}
-                            try:
-                                bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
-                            except Exception:
-                                pass
-                            
-                            # 显示市场环境信息
-                            if show_details and hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
-                                market_regime = vp_analyzer.evaluator_v7.market_analyzer.identify_market_regime()
-                                market_sentiment = vp_analyzer.evaluator_v7.market_analyzer.calculate_market_sentiment()
-                                hot_industries = vp_analyzer.evaluator_v7.industry_analyzer.get_hot_industries(top_n=5)
-                                
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    st.metric("市场环境", market_regime)
-                                with col2:
-                                    sentiment_emoji = "" if market_sentiment > 0.3 else "" if market_sentiment > -0.3 else ""
-                                    st.metric(f"{sentiment_emoji} 市场情绪", f"{market_sentiment:.2f}")
-                                with col3:
-                                    st.metric("热门行业", f"Top{len(hot_industries)}")
-                                
-                                with st.expander("查看热门行业详情"):
-                                    for i, ind in enumerate(hot_industries, 1):
-                                        heat = vp_analyzer.evaluator_v7.industry_analyzer.sector_performance.get(ind, {}).get('heat', 0)
-                                        st.text(f"{i}. {ind} (热度: {heat:.2f})")
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            results = []
-                            filter_failed = 0
-                            
-                            history_cache = {}
-                            if len(stocks_df) <= BULK_HISTORY_LIMIT:
-                                history_cache = _load_stock_history_bulk(
-                                    conn,
-                                    stocks_df["ts_code"].tolist(),
-                                    120,
-                                    "ts_code, trade_date, close_price, vol, pct_chg",
-                                )
-
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
-                                industry = row['industry']
-                                
-                                # 更新进度
-                                progress = (idx + 1) / len(stocks_df)
-                                progress_bar.progress(progress)
-                                status_text.text(f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}")
-                                
-                                try:
-                                    # 获取该股票的历史数据（统一清洗口径）
-                                    stock_data = history_cache.get(ts_code)
-                                    if stock_data is None:
-                                        stock_data = _load_stock_history(
-                                            conn,
-                                            ts_code,
-                                            120,
-                                            "trade_date, close_price, vol, pct_chg",
-                                        )
-                                    
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
-                                        
-                                        # 使用v7.0评分器
-                                        score_result = vp_analyzer.evaluator_v7.evaluate_stock_v7(
-                                            stock_data=stock_data,
-                                            ts_code=ts_code,
-                                            industry=industry
-                                        )
-                                        
-                                        if not score_result['success']:
-                                            filter_failed += 1
-                                            continue
-                                        
-                                        extra = _calc_external_bonus(
-                                            ts_code,
-                                            industry,
-                                            bonus_global,
-                                            bonus_stock_map,
-                                            top_list_set,
-                                            top_inst_set,
-                                            bonus_industry_map,
-                                        )
-                                        final_score = float(score_result['final_score']) + extra
-                                        dim_scores = score_result.get('dimension_scores', {})
-                                        results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': industry,
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{final_score:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '资金加分': f"{extra:.1f}",
-                                                '市场环境': score_result.get('market_regime', '-'),
-                                                '行业热度': f"{score_result.get('industry_heat', 0):.2f}",
-                                                '行业排名': f"#{score_result.get('industry_rank', 0)}" if score_result.get('industry_rank', 0) > 0 else "未进Top8",
-                                                '行业加分': f"+{score_result.get('bonus_score', 0)}分",
-                                                '最新价格': f"{stock_data['close_price'].iloc[-1]:.2f}元",
-                                                '智能止损': f"{score_result.get('stop_loss', 0):.2f}元",
-                                                '智能止盈': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '筛选理由': score_result.get('signal_reasons', ''),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            if results:
-                                results_df = pd.DataFrame(results)
-                                results_df = _apply_filter_mode(
-                                    results_df,
-                                    score_col="综合评分",
-                                    mode=select_mode_v7,
-                                    threshold=score_threshold_v7,
-                                    top_percent=top_percent_v7
-                                )
-                                if enable_consistency_v7 and not results_df.empty:
-                                    results_df = _apply_multi_period_filter(
-                                        results_df,
-                                        PERMANENT_DB_PATH,
-                                        min_align=min_align_v7
-                                    )
-                                results_df = _add_reason_summary(results_df, score_col="综合评分")
-                                if results_df.empty:
-                                    st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
-                                    st.stop()
-
-                                _render_v7_results(
-                                    results_df,
-                                    candidate_count=len(stocks_df),
-                                    filter_failed=filter_failed,
-                                    score_threshold_v7=score_threshold_v7,
-                                    select_mode_v7=select_mode_v7,
-                                    top_percent_v7=top_percent_v7,
-                                )
-
-                                _save_v7_cache(
-                                    cache_params,
-                                    db_last,
-                                    results_df,
-                                    {"candidate_count": len(stocks_df), "filter_failed": filter_failed},
-                                )
-
-                                # 保存到session_state
-                                st.session_state['v7_scan_results_tab1'] = results_df
-                                _set_stock_pool_candidate("v7", cache_params, "综合评分", results_df)
-                                
-                                # 显示统计
-                                st.markdown("---")
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col2:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col3:
-                                    grade_high = sum(1 for g in results_df['评级'] if str(g).strip() in ("S", "A", "A+"))
-                                    st.metric("高评级", f"{grade_high}只")
-                                with col4:
-                                    # 统计热门行业股票
-                                    hot_count = sum(1 for r in results_df['行业排名'] if '#' in str(r) and int(str(r).replace('#', '')) <= 5)
-                                    st.metric("热门行业", f"{hot_count}只")
-                                
-                                st.markdown("---")
-                                st.subheader("智能结果列表（v7.0·动态权重）")
-                                
-                                # 选择显示模式
-                                _view_modes = [" 完整信息", " 核心指标", " 简洁模式"]
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    [m.strip() for m in _view_modes],
-                                    horizontal=True,
-                                    key="view_mode_v7_tab1"
-                                )
-                                
-                                if view_mode == "完整信息":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '市场环境', '行业热度', '行业排名', '行业加分',
-                                                   '最新价格', '智能止损', '智能止盈', '筛选理由']
-                                elif view_mode == "核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '行业热度', '行业排名', '最新价格', '智能止损', '智能止盈']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '资金加分', '评级', '最新价格', '筛选理由']
-                                
-                                display_cols = _append_reason_col(display_cols, results_df)
-                                
-                                display_df = results_df[display_cols]
-                                display_df = _standardize_result_df(display_df, score_col="综合评分")
-                                
-                                # 显示表格
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v7.0动态评分（100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="评级：S/A/B/C（优秀/良好/中性/谨慎)",
-                                            width="medium"
-                                        ),
-                                        "筛选理由": st.column_config.TextColumn(
-                                            "筛选理由",
-                                            help="智能分析推荐原因",
-                                            width="large"
-                                        )
-                                    }
-                                )
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label=" 导出结果（CSV）",
-                                    data=csv,
-                                    file_name=f"核心策略_V7_智能选股_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                st.warning(f"未找到≥{score_threshold_v7}分的股票\n\n**说明：**\nv7.0使用动态权重+三层过滤，门槛会根据市场环境自动调整。\n\n**建议：**\n1. 降低评分阈值到60分\n2. 查看市场环境信息，了解当前市场状态\n3. 当前可能不是最佳入场时机")
-                    
-                    except Exception as e:
-                        st.error(f"扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
-            # 显示之前的扫描结果
-            if 'v7_scan_results_tab1' in st.session_state:
-                st.markdown("---")
-                st.markdown("###  上次扫描结果")
-                results_df = st.session_state['v7_scan_results_tab1']
-                display_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
-            _render_async_scan_status("v7_async_task_id", "v7.0智能版", "综合评分")
-
-        elif "v8.0" in strategy_mode:
-            evolve_v8_core = _load_evolve_params("v8_best.json")
-            center_v8_params, center_v8_src = _load_strategy_center_scan_defaults("v8")
-            # ---  v8.0 进阶版 核心逻辑 ---
-            
-            #  v8.0版本说明
-            exp_v8 = st.expander("v8.0 策略说明", expanded=False)
-            exp_v8.markdown("""
-            <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #ffd700 100%); 
-                        padding: 40px 30px; border-radius: 15px; color: white; 
-                        margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
-                <h1 style='margin:0; color: white; font-size: 2.5em; font-weight: 700; text-align: center;'>
-                     v8.0 进阶版 · 量化风控体系
-                </h1>
-                <p style='margin: 15px 0 0 0; font-size: 1.2em; text-align: center; opacity: 0.95;'>
-                    ATR 风控 + 市场过滤 + 仓位管理 + 多因子评分
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            #  v8.0版本特别提示
-            if V8_EVALUATOR_AVAILABLE:
-                exp_v8.success("""
-                **当前使用 v8.0 进阶版**
-
-                **体系要点：**
-                - ATR 风控：按波动自动调节止损/止盈
-                - 市场过滤：趋势、情绪与成交热度
-                - 仓位管理：基于胜率与盈亏比的自适应仓位
-                - 多因子评分：结构、资金、动量、波动综合评估
-                - 动态再平衡：持仓持续复核与替换
-
-                **适用场景：**
-                - 强调风控与执行纪律
-                - 追求中短周期的稳定性与一致性
-
-                **说明：**
-                - 回测指标以最新数据库与参数为准
-                """)
-            else:
-                exp_v8.error("""
-                 **v8.0 进阶版评分器未找到**
-                - 请确保 `comprehensive_stock_evaluator_v8_ultimate.py` 文件存在
-                - 建议重启应用后重试
-                """)
-                st.stop()
-            
-            #  参数设置
-            st.markdown("###  扫描参数设置")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                evo_thr = evolve_v8_core.get("params", {}).get("score_threshold")
-                if isinstance(evo_thr, (int, float)):
-                    default_range = (int(round(evo_thr)), 90)
-                else:
-                    default_range = (55, 70)
-                center_thr_v8 = center_v8_params.get("score_threshold")
-                if isinstance(center_thr_v8, (int, float)):
-                    center_thr_int_v8 = max(45, min(90, int(round(center_thr_v8))))
-                    default_range = (center_thr_int_v8, 90)
-                score_threshold_v8 = st.slider(
-                    "评分阈值区间",
-                    min_value=45,
-                    max_value=90,
-                    value=default_range,
-                    step=5,
-                    help="可选最小和最大阈值：55-70建议，60-65稳健，75极致。仅落在区间内的股票会展示。",
-                    key="score_threshold_v8_tab1"
-                )
-                if isinstance(score_threshold_v8, (tuple, list)):
-                    _v8_thr_min = float(score_threshold_v8[0])
-                    _v8_thr_max = float(score_threshold_v8[1] if len(score_threshold_v8) > 1 else score_threshold_v8[0])
-                else:
-                    _v8_thr_min = float(score_threshold_v8)
-                    _v8_thr_max = float(score_threshold_v8)
-                score_threshold_v8_payload = [_v8_thr_min, _v8_thr_max]
-                if center_v8_src == "strategy_center":
-                    st.caption(f"当前参数来源：策略中心（v8最小阈值 {default_range[0]}）")
-            evo_hold_v8 = evolve_v8_core.get("params", {}).get("holding_days")
-            if isinstance(evo_hold_v8, (int, float)):
-                st.caption(f"自动进化建议持仓周期：{int(evo_hold_v8)} 天（来源：自动进化）")
-            
-            with col2:
-                scan_all_v8 = st.checkbox(
-                    " 全市场扫描",
-                    value=True,
-                    help="扫描所有A股（推荐）",
-                    key="scan_all_v8_tab1"
-                )
-            
-            with col3:
-                enable_kelly = st.checkbox(
-                    " 显示凯利仓位",
-                    value=True,
-                    help="显示凯利公式计算的最优仓位",
-                    key="enable_kelly_v8_tab1"
-                )
-
-            filter_col1_v8, filter_col2_v8 = st.columns(2)
-            with filter_col1_v8:
-                _modes_v8 = ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"]
-                if "v8_select_mode_tab1" not in st.session_state or st.session_state.get("v8_select_mode_tab1") not in _modes_v8:
-                    st.session_state["v8_select_mode_tab1"] = "分位数筛选(Top%)"
-                select_mode_v8 = st.selectbox(
-                    "筛选模式",
-                    _modes_v8,
-                    key="v8_select_mode_tab1"
-                )
-            with filter_col2_v8:
-                top_percent_v8 = st.slider("Top百分比", 1, 10, 2, 1, key="v8_top_percent_tab1")
-
-            filter_col3_v8, filter_col4_v8 = st.columns(2)
-            with filter_col3_v8:
-                enable_consistency_v8 = st.checkbox("启用多周期一致性过滤", value=True, key="v8_consistency_tab1")
-            with filter_col4_v8:
-                min_align_v8 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v8_consistency_min_tab1")
-            use_cache_v8 = st.checkbox("优先使用离线缓存结果", value=False, key="v8_cache_tab1")
-            async_scan_v8 = st.checkbox("切换为后台运行（断线续跑）", value=False, key="v8_async_scan")
-            if async_scan_v8:
-                st.caption("当前为后台模式：任务会进入后台队列，页面刷新或短暂断线后仍可继续查看结果。")
-            else:
-                st.caption("当前为前台实时模式：默认直接在当前页面执行，实时显示扫描进度和结果。")
-            
-            # 高级选项（折叠）
-            with st.expander("高级筛选选项（可选）"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    cap_min_v8 = st.number_input(
-                        "最小市值（亿元）",
-                        min_value=0,
-                        max_value=5000,
-                        value=100,
-                        step=10,
-                        help="0表示不限制",
-                        key="cap_min_v8_tab1"
-                    )
-                with col2:
-                    cap_max_v8 = st.number_input(
-                        "最大市值（亿元）",
-                        min_value=0,
-                        max_value=50000,
-                        value=15000,
-                        step=50,
-                        help="0表示不限制",
-                        key="cap_max_v8_tab1"
-                    )
-            if strict_full_market_mode:
-                scan_all_v8 = True
-                cap_min_v8 = 0.0
-                cap_max_v8 = 0.0
-                st.caption("全市场严格口径：v8 市值已切换为 0~0。")
-            
-            # 扫描按钮
-            v8_live_params = {
-                "score_threshold": score_threshold_v8_payload,
-                "top_percent": int(top_percent_v8),
-                "select_mode": select_mode_v8,
-                "scan_all": bool(scan_all_v8),
-                "cap_min": float(cap_min_v8),
-                "cap_max": float(cap_max_v8),
-                "enable_consistency": bool(enable_consistency_v8),
-                "min_align": int(min_align_v8),
-            }
-            _sync_scan_task_with_params("v8_async_task_id", v8_live_params, "v8.0策略")
-            _render_scan_param_hint("v8_async_task_id")
-            _render_front_scan_summary("v8", "v8.0进阶版")
-            if 'v8_scan_results_tab1' in st.session_state:
-                st.markdown("### 最近一次v8结果")
-                recent_v8_df = st.session_state['v8_scan_results_tab1']
-                st.dataframe(
-                    _standardize_result_df(recent_v8_df.drop(columns=['原始数据'], errors='ignore'), score_col="综合评分"),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-            if st.button("开始扫描（v8.0）", type="primary", use_container_width=True, key="scan_v8_tab1"):
-                heavy_running, heavy_reason = _detect_heavy_background_job()
-                if heavy_running:
-                    st.warning(f"{heavy_reason}，系统将继续执行扫描（可能稍慢）。")
-                if async_scan_v8:
-                    cache_params = {
-                        "score_threshold": score_threshold_v8_payload,
-                        "top_percent": int(top_percent_v8),
-                        "select_mode": select_mode_v8,
-                        "scan_all": bool(scan_all_v8),
-                        "cap_min": float(cap_min_v8),
-                        "cap_max": float(cap_max_v8),
-                        "enable_consistency": bool(enable_consistency_v8),
-                        "min_align": int(min_align_v8),
-                    }
-                    ok, msg, run_id = _start_async_scan_task("v8", cache_params, score_col="综合评分")
-                    if ok:
-                        st.session_state["v8_async_task_id"] = run_id
-                        _mark_scan_submitted("v8_async_task_id", cache_params)
-                        st.success(msg)
-                    else:
-                        if run_id:
-                            st.session_state["v8_async_task_id"] = run_id
-                        st.warning(msg)
-                    st.rerun()
-                with st.spinner("v8.0进阶版扫描中...（三级市场过滤→18维度评分→ATR风控→凯利仓位）"):
-                    try:
-                        cache_params = {
-                            "score_threshold": score_threshold_v8_payload,
-                            "top_percent": top_percent_v8,
-                            "select_mode": select_mode_v8,
-                            "scan_all": bool(scan_all_v8),
-                            "cap_min": float(cap_min_v8),
-                            "cap_max": float(cap_max_v8),
-                            "enable_consistency": bool(enable_consistency_v8),
-                            "min_align": int(min_align_v8),
-                            "enable_kelly": bool(enable_kelly),
-                        }
-                        results_df, meta = _run_front_scan_via_offline_pipeline(
-                            strategy="v8",
-                            params=cache_params,
-                            analyzer=vp_analyzer,
-                        )
-                        if results_df is None or results_df.empty:
-                            st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
-                            st.stop()
-                        st.session_state['v8_scan_results_tab1'] = results_df
-                        _mark_front_scan_completed(
-                            strategy="v8",
-                            results_df=results_df,
-                            meta=meta,
-                            score_col="综合评分",
-                        )
-                        _set_stock_pool_candidate("v8", cache_params, "综合评分", results_df)
-                        st.session_state["v8_front_scan_notice"] = f"v8.0扫描完成，返回 {len(results_df)} 条"
-                        st.rerun()
-                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
-                        if use_cache_v8:
-                            cached_df, cached_meta = _load_scan_cache("v8_scan", cache_params, db_last)
-                            if cached_df is not None and not cached_df.empty:
-                                created_at = cached_meta.get("created_at", "未知")
-                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
-                                _render_cached_scan_results(
-                                    "扫描结果（v8.0进阶版）",
-                                    cached_df,
-                                    score_col="综合评分",
-                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
-                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
-                                    select_mode=select_mode_v8,
-                                    threshold=_v8_thr_min,
-                                    top_percent=top_percent_v8,
-                                )
-                                st.session_state['v8_scan_results_tab1'] = cached_df
-                                _set_stock_pool_candidate("v8", cache_params, "综合评分", cached_df)
-                                st.stop()
-
-                        # 重置v8.0缓存
-                        if hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
-                            vp_analyzer.evaluator_v8.reset_cache()
-                        
-                        conn = _connect_permanent_db()
-                        
-                        #  先进行三级市场过滤
-                        st.info("正在进行三级市场过滤（择时系统）...")
-                        
-                        # 获取大盘指数数据（上证指数）
-                        # 统一走数据层，按 history -> trading_data -> daily_data 回退
-                        try:
-                            from data.history import load_history_full as _load_history_full_v2  # type: ignore
-                            index_data = _load_history_full_v2(
-                                db_path=PERMANENT_DB_PATH,
-                                ts_code="000001.SH",
-                                start_date=(datetime.now() - timedelta(days=420)).strftime('%Y%m%d'),
-                                end_date=datetime.now().strftime('%Y%m%d'),
-                                columns="trade_date, close_price AS close, vol AS volume",
-                                table_candidates=("daily_trading_history", "daily_trading_data", "daily_data"),
-                                normalize_fn=_normalize_stock_df,
-                            )
-                            if index_data is not None and len(index_data) > 120:
-                                index_data = index_data.tail(120).reset_index(drop=True)
-                        except Exception:
-                            index_data = pd.DataFrame()
-                        if len(index_data) >= 60:
-                            market_filter = vp_analyzer.evaluator_v8.market_filter
-                            market_status = market_filter.comprehensive_filter(index_data)
-                            
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                trend_status = market_status.get('trend', {})
-                                st.metric("市场趋势", 
-                                         f"{trend_status.get('trend', '未知')}")
-                            with col2:
-                                sentiment_status = market_status.get('sentiment', {})
-                                sentiment_val = sentiment_status.get('sentiment_score', 0)
-                                st.metric("市场情绪", 
-                                         f"{sentiment_val:.2f}",
-                                         delta="健康" if sentiment_val > -0.2 else "警告")
-                            with col3:
-                                volume_status = market_status.get('volume', {})
-                                st.metric("市场热度", 
-                                         f"{volume_status.get('volume_status', '未知')}")
-                        else:
-                            st.warning("大盘数据不足，跳过市场过滤")
-                            market_status = {'can_trade': True, 'position_multiplier': 1.0, 'reason': '数据不足，默认可交易'}
-                        
-                        if not market_status['can_trade']:
-                            st.warning(f"""
-                             **市场环境不佳，建议观望！**
-                            
-                            **未通过原因：**
-                            {market_status.get('reason', '综合评估不通过')}
-                            
-                            **v8.0择时系统建议：**
-                            当前市场环境不适合激进操作，建议：
-                            1. 空仓观望，等待更好时机
-                            2. 关注市场转势信号
-                            3. 可以小仓位试探（不超过20%）
-                            
-                             强行扫描请继续，但风险自负！
-                            """)
-                            
-                            if not st.checkbox("我理解风险，继续扫描", key="force_scan_v8"):
-                                st.stop()
-                        else:
-                            st.success("市场环境通过三级过滤，可以安全选股！")
-                        
-                        # 构建查询条件
-                        if scan_all_v8 and cap_min_v8 == 0 and cap_max_v8 == 0:
-                            # 真正的全市场扫描
-                            stocks_df = _load_candidate_stocks(
-                                conn,
-                                scan_all=True,
-                                require_industry=True,
-                            )
-                            st.info(f"全市场扫描模式：共{len(stocks_df)}只A股")
-                        else:
-                            # 按市值筛选
-                            cap_min_wan = cap_min_v8 * 10000 if cap_min_v8 > 0 else 0
-                            cap_max_wan = cap_max_v8 * 10000 if cap_max_v8 > 0 else 999999999
-                            
-                            stocks_df = _load_candidate_stocks(
-                                conn,
-                                scan_all=False,
-                                cap_min_yi=cap_min_v8,
-                                cap_max_yi=cap_max_v8,
-                                require_industry=True,
-                            )
-                        
-                        if len(stocks_df) == 0:
-                            st.error(f"未找到符合条件的股票")
-                            conn.close()
-                        else:
-                            st.info(f"找到 {len(stocks_df)} 只候选股票，开始18维度智能评分...")
-                            bonus_global = 0.0
-                            bonus_stock_map = {}
-                            top_list_set = set()
-                            top_inst_set = set()
-                            bonus_industry_map = {}
-                            try:
-                                bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
-                            except Exception:
-                                pass
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            results = []
-                            filter_failed = 0
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
-                                industry = row['industry']
-                                
-                                # 更新进度
-                                progress = (idx + 1) / len(stocks_df)
-                                progress_bar.progress(progress)
-                                status_text.text(f"正在评分: {stock_name} ({ts_code}) - {idx+1}/{len(stocks_df)}")
-                                
-                                try:
-                                    # 获取该股票的历史数据（优先history，统一清洗）
-                                    stock_data = _load_stock_history_fallback(
-                                        conn,
-                                        ts_code,
-                                        120,
-                                        "trade_date, close_price, high_price, low_price, vol, pct_chg",
-                                    )
-                                    
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
-                                        
-                                        # 使用v8.0评分器
-                                        score_result = vp_analyzer.evaluator_v8.evaluate_stock_v8(
-                                            stock_data=stock_data,
-                                            ts_code=ts_code,
-                                            index_data=index_data if 'index_data' in locals() else None
-                                        )
-                                        
-                                        if not score_result['success']:
-                                            filter_failed += 1
-                                            continue
-                                        
-                                        # 评分区间过滤（叠加资金加分）
-                                        extra = _calc_external_bonus(
-                                            ts_code,
-                                            industry,
-                                            bonus_global,
-                                            bonus_stock_map,
-                                            top_list_set,
-                                            top_inst_set,
-                                            bonus_industry_map,
-                                        )
-                                        final_score = float(score_result['final_score']) + extra
-                                        # 计算凯利仓位（如果启用）
-                                        kelly_position = ""
-                                        if enable_kelly and 'win_rate' in score_result and 'win_loss_ratio' in score_result:
-                                            kelly_pct = vp_analyzer.evaluator_v8._calculate_kelly_position(
-                                                score_result['win_rate'],
-                                                score_result['win_loss_ratio']
-                                            )
-                                            kelly_position = f"{kelly_pct*100:.1f}%"
-                                        
-                                        close_col = 'close_price' if 'close_price' in stock_data.columns else 'close'
-                                        latest_price = stock_data[close_col].iloc[-1]
-                                        
-                                        results.append({
-                                            '股票代码': ts_code,
-                                            '股票名称': stock_name,
-                                            '行业': industry,
-                                            '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                            '综合评分': f"{final_score:.1f}",
-                                            '评级': score_result.get('grade', '-'),
-                                            '资金加分': f"{extra:.1f}",
-                                            '星级': f"{score_result.get('star_rating', 0)}⭐" if score_result.get('star_rating', 0) else "-",
-                                            '建议仓位': f"{score_result.get('position_suggestion', 0)*100:.0f}%" if score_result.get('position_suggestion') else "-",
-                                            '预期胜率': f"{score_result.get('win_rate', 0)*100:.1f}%" if 'win_rate' in score_result else "-",
-                                            '盈亏比': f"{score_result.get('win_loss_ratio', 0):.2f}" if 'win_loss_ratio' in score_result else "-",
-                                            '凯利仓位': kelly_position if enable_kelly else "-",
-                                            '最新价格': f"{latest_price:.2f}元",
-                                            'ATR值': f"{score_result.get('atr_stops', {}).get('atr_value', 0):.2f}" if score_result.get('atr_stops') else "-",
-                                            'ATR止损': (
-                                                f"{score_result.get('atr_stops', {}).get('stop_loss', 0):.2f}元"
-                                                if score_result.get('atr_stops') and score_result['atr_stops'].get('stop_loss') is not None
-                                                else "-"
-                                            ),
-                                            'ATR止盈': (
-                                                f"{score_result.get('atr_stops', {}).get('take_profit', 0):.2f}元"
-                                                if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit') is not None
-                                                else "-"
-                                            ),
-                                            'ATR移动止损': (
-                                                f"{score_result.get('atr_stops', {}).get('trailing_stop', 0):.2f}元"
-                                                if score_result.get('atr_stops') and score_result['atr_stops'].get('trailing_stop') is not None
-                                                else "-"
-                                            ),
-                                            '止损幅度%': (
-                                                f"{score_result.get('atr_stops', {}).get('stop_loss_pct', 0):.2f}%"
-                                                if score_result.get('atr_stops') and score_result['atr_stops'].get('stop_loss_pct') is not None
-                                                else "-"
-                                            ),
-                                            '止盈幅度%': (
-                                                f"{score_result.get('atr_stops', {}).get('take_profit_pct', 0):.2f}%"
-                                                if score_result.get('atr_stops') and score_result['atr_stops'].get('take_profit_pct') is not None
-                                                else "-"
-                                            ),
-                                            '筛选理由': score_result.get('description', ''),
-                                            '原始数据': score_result
-                                        })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            st.markdown("---")
-                            st.markdown(f"###  扫描结果（v8.0）")
-                            
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("候选股票", f"{len(stocks_df)}只")
-                            with col2:
-                                st.metric("过滤淘汰", f"{filter_failed}只", 
-                                         delta=f"{filter_failed/len(stocks_df)*100:.1f}%")
-                            with col3:
-                                st.metric("最终推荐", f"{len(results)}只",
-                                         delta=f"{len(results)/len(stocks_df)*100:.2f}%")
-
-                            results_df = pd.DataFrame(results) if results else pd.DataFrame()
-                            filter_counts = {}
-                            if not results_df.empty:
-                                min_thr, max_thr = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
-                                filter_counts["raw"] = len(results_df)
-                                preview = results_df.copy()
-                                preview["score_val"] = pd.to_numeric(preview["综合评分"], errors="coerce")
-                                preview = preview.dropna(subset=["score_val"])
-                                if select_mode_v8 in ("阈值筛选", "双重筛选(阈值+Top%)"):
-                                    preview = preview[preview["score_val"] >= min_thr]
-                                filter_counts["after_threshold"] = len(preview)
-                                if select_mode_v8 in ("分位数筛选(Top%)", "双重筛选(阈值+Top%)") and len(preview) > 0:
-                                    preview = preview.sort_values("score_val", ascending=False)
-                                    keep_n = max(1, int(len(preview) * top_percent_v8 / 100))
-                                    preview = preview.head(keep_n)
-                                filter_counts["after_top"] = len(preview)
-                                if enable_consistency_v8 and not preview.empty:
-                                    preview = _apply_multi_period_filter(
-                                        preview,
-                                        PERMANENT_DB_PATH,
-                                        min_align=min_align_v8
-                                    )
-                                filter_counts["after_consistency"] = len(preview)
-
-                                results_df = _apply_filter_mode(
-                                    results_df,
-                                    score_col="综合评分",
-                                    mode=select_mode_v8,
-                                    threshold=min_thr,
-                                    top_percent=top_percent_v8
-                                )
-                                if enable_consistency_v8 and not results_df.empty:
-                                    results_df = _apply_multi_period_filter(
-                                        results_df,
-                                        PERMANENT_DB_PATH,
-                                        min_align=min_align_v8
-                                    )
-                                results_df = _add_reason_summary(results_df, score_col="综合评分")
-
-                            if results and results_df.empty:
-                                st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
-                                if filter_counts:
-                                    st.info(
-                                        f"过滤分布：原始{filter_counts.get('raw', 0)} → "
-                                        f"阈值后{filter_counts.get('after_threshold', 0)} → "
-                                        f"Top后{filter_counts.get('after_top', 0)} → "
-                                        f"一致性后{filter_counts.get('after_consistency', 0)}"
-                                    )
-                                st.stop()
-
-                            # 分布提示 & 一键推荐阈值
-                            if len(results) > 0 and not results_df.empty:
-                                try:
-                                    dist_scores = results_df['综合评分'].astype(float)
-                                    avg_score = dist_scores.mean()
-                                    median_score = dist_scores.median()
-                                    pct70 = (dist_scores >= 70).sum()
-                                    pct65 = (dist_scores >= 65).sum()
-                                    pct60 = (dist_scores >= 60).sum()
-                                    
-                                    st.info(f"""
-                                    **分布提示：**
-                                    - 平均分：{avg_score:.1f}，中位数：{median_score:.1f}
-                                    - ≥70分：{pct70} 只，≥65分：{pct65} 只，≥60分：{pct60} 只
-                                    
-                                    **推荐阈值：** {max(55, min(70, round(median_score)))} 分 （取中位数附近，范围[55,70]）
-                                    """)
-                                except Exception:
-                                    pass
-                            
-                            if results and not results_df.empty:
-                                if select_mode_v8 == "阈值筛选":
-                                    min_thr, _ = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
-                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{min_thr}分）")
-                                elif select_mode_v8 == "双重筛选(阈值+Top%)":
-                                    min_thr, _ = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
-                                    st.success(f"先阈值后Top筛选：≥{min_thr}分，Top {top_percent_v8}%（{len(results_df)} 只）")
-                                else:
-                                    st.success(f"选出 Top {top_percent_v8}%（{len(results_df)} 只）")
-                                _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
-                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
-                                getattr(st, level)(msg)
-                                
-                                _save_scan_cache(
-                                    "v8_scan",
-                                    cache_params,
-                                    db_last,
-                                    results_df,
-                                    {"candidate_count": len(stocks_df), "filter_failed": filter_failed},
-                                )
-
-                                # 保存到session_state
-                                st.session_state['v8_scan_results_tab1'] = results_df
-                                _set_stock_pool_candidate("v8", cache_params, "综合评分", results_df)
-                                
-                                # 显示统计
-                                st.markdown("---")
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col2:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col3:
-                                    # 统计高评级
-                                    grade_high = sum(1 for g in results_df['评级'] if str(g) in ("S", "A", "A+"))
-                                    st.metric("高评级", f"{grade_high}只")
-                                with col4:
-                                    # 平均凯利仓位
-                                    if enable_kelly:
-                                        kelly_series = results_df['凯利仓位'] if '凯利仓位' in results_df else pd.Series(dtype=float)
-                                        numeric_kelly = pd.to_numeric(
-                                            kelly_series.str.rstrip('%'),
-                                            errors='coerce'
-                                        ).dropna()
-                                        if len(numeric_kelly) > 0:
-                                            avg_kelly = numeric_kelly.mean()
-                                            st.metric("平均凯利仓位", f"{avg_kelly:.1f}%")
-                                        else:
-                                            st.metric("平均凯利仓位", "-")
-                                    else:
-                                        st.metric("平均凯利仓位", "-")
-                                
-                                st.markdown("---")
-                                st.subheader("结果列表（v8.0·18维度）")
-                                
-                                # 选择显示模式
-                                _view_modes = [" 完整信息", " 核心指标", " 简洁模式"]
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    [m.strip() for m in _view_modes],
-                                    horizontal=True,
-                                    key="view_mode_v8_tab1"
-                                )
-                                
-                                if view_mode == "完整信息":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '星级', '建议仓位', '预期胜率', '盈亏比', '凯利仓位',
-                                                   '最新价格', 'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损', '止损幅度%', '止盈幅度%',
-                                                   '筛选理由']
-                                elif view_mode == "核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '综合评分', '评级', '资金加分', '星级',
-                                                   '建议仓位', '预期胜率', '凯利仓位', '最新价格',
-                                                   'ATR值', 'ATR止损', 'ATR止盈', 'ATR移动止损']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '综合评分', 
-                                                   '资金加分', '评级', '星级', '建议仓位', '最新价格', '筛选理由']
-                                
-                                display_cols = _append_reason_col(display_cols, results_df)
-                                
-                                display_df = results_df[display_cols]
-                                display_df = _standardize_result_df(display_df, score_col="综合评分")
-                                
-                                # 显示表格
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v8.0评分（18维度·100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="评级：S/A/B/C（优秀/良好/中性/谨慎)",
-                                            width="medium"
-                                        ),
-                                        "星级": st.column_config.TextColumn(
-                                            "星级",
-                                            help="星级用于仓位建议",
-                                            width="small"
-                                        ),
-                                        "建议仓位": st.column_config.TextColumn(
-                                            "建议仓位",
-                                            help="根据星级/评分建议的单票仓位",
-                                            width="small"
-                                        ),
-                                        "凯利仓位": st.column_config.TextColumn(
-                                            "凯利仓位",
-                                            help="凯利公式计算的最优仓位比例",
-                                            width="small"
-                                        ),
-                                        "筛选理由": st.column_config.TextColumn(
-                                            "筛选理由",
-                                            help="v8.0智能分析推荐原因",
-                                            width="large"
-                                        )
-                                    }
-                                )
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label=" 导出结果（CSV）",
-                                    data=csv,
-                                    file_name=f"核心策略_V8_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                min_thr, _ = score_threshold_v8 if isinstance(score_threshold_v8, tuple) else (score_threshold_v8, 100)
-                                st.warning(
-                                    f"未找到≥{min_thr}分的股票\n\n**说明：**\n"
-                                    f"v8.0使用18维度评分+三级市场过滤，标准较严格。\n\n"
-                                    f"**建议：**\n1. 降低评分阈值到60-65分\n2. 放宽Top比例或关闭一致性过滤\n3. 当前可能不是最佳入场时机"
-                                )
-                                if 'filter_counts' in locals() and filter_counts:
-                                    st.info(
-                                        f"过滤分布：原始{filter_counts.get('raw', 0)} → "
-                                        f"阈值后{filter_counts.get('after_threshold', 0)} → "
-                                        f"Top后{filter_counts.get('after_top', 0)} → "
-                                        f"一致性后{filter_counts.get('after_consistency', 0)}"
-                                    )
-                    
-                    except Exception as e:
-                        st.error(f"扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
-            # 显示之前的扫描结果
-            notice_v8 = str(st.session_state.pop("v8_front_scan_notice", "") or "")
-            if notice_v8:
-                st.success(notice_v8)
-            if 'v8_scan_results_tab1' in st.session_state:
-                _render_front_scan_summary("v8", "v8.0进阶版")
-                st.markdown("---")
-                st.markdown("###  上次扫描结果")
-                results_df = st.session_state['v8_scan_results_tab1']
-                display_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
-            if async_scan_v8:
-                _render_async_scan_status("v8_async_task_id", "v8.0进阶版", "综合评分")
-
-        elif "v9.0" in strategy_mode:
-            exp_v9 = st.expander("v9.0 策略说明", expanded=False)
-            exp_v9.markdown("""
-            <div style='background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%); 
-                        padding: 35px 30px; border-radius: 15px; color: white; margin-bottom: 25px;'>
-                <h1 style='margin:0; color: white; font-size: 2.2em; font-weight: 700; text-align: center;'>
-                     v9.0 中线均衡版 - 资金流·动量·趋势·波动·板块强度
-                </h1>
-                <p style='margin: 12px 0 0 0; font-size: 1.1em; text-align: center; opacity: 0.9;'>
-                    中线周期 2-6 周 · 平衡风格 · 适合稳健进取型
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            evolve_v9 = _load_evolve_params("v9_best.json")
-            center_v9_params, center_v9_src = _load_strategy_center_scan_defaults("v9")
-            evo_params_v9 = evolve_v9.get("params", {}) if isinstance(evolve_v9, dict) else {}
-            if evo_params_v9:
-                exp_v9.success(f"已应用自动进化参数（v9.0，{evolve_v9.get('run_at', 'unknown')}）")
-                exp_v9.caption(f"推荐阈值: {evo_params_v9.get('score_threshold')} | 持仓: {evo_params_v9.get('holding_days')} | 窗口: {evo_params_v9.get('lookback_days')} | 最低成交额(亿): {evo_params_v9.get('min_turnover')}")
-            if center_v9_src == "strategy_center":
-                exp_v9.info(
-                    f"策略中心默认参数已接管：阈值 {center_v9_params.get('score_threshold')} | "
-                    f"持仓 {center_v9_params.get('holding_days')} 天"
-                )
-
-            def _load_history_full_fallback(ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-                try:
-                    from data.history import load_history_full as _load_history_full_v2  # type: ignore
-                    return _load_history_full_v2(
-                        db_path=PERMANENT_DB_PATH,
-                        ts_code=ts_code,
-                        start_date=start_date,
-                        end_date=end_date,
-                        columns="trade_date, close_price, vol, amount, pct_chg, turnover_rate",
-                    )
-                except Exception:
-                    return pd.DataFrame()
-
-            load_history_full = getattr(vp_analyzer, "_load_history_full", None)
-            if not callable(load_history_full):
-                load_history_full = _load_history_full_fallback
-
-            exp_v9.info("""
-            **v9.0 评分结构：**
-            - 资金流：成交额方向性
-            - 动量：20/60 日趋势一致
-            - 趋势：均线结构向上
-            - 波动：中等波动区间
-            - 板块：行业动量加权
-            """)
-
-            # 市场环境判断（弱市空仓保护）
-            market_env = "oscillation"
-            try:
-                market_env = vp_analyzer.get_market_environment()
-            except Exception:
-                market_env = "oscillation"
-
-            env_map = {"bull": " 牛市", "bear": " 熊市", "oscillation": " 震荡"}
-            env_label = env_map.get(market_env, " 震荡")
-            st.caption(f"当前市场环境：{env_label}")
-
-            evo_thr_v9 = int(evo_params_v9.get("score_threshold", 65))
-            evo_hold_v9 = int(evo_params_v9.get("holding_days", 20))
-            evo_lookback_v9 = int(evo_params_v9.get("lookback_days", 160))
-            evo_min_turnover_v9 = float(evo_params_v9.get("min_turnover", 5.0))
-            center_thr_v9 = center_v9_params.get("score_threshold")
-            center_hold_v9 = center_v9_params.get("holding_days")
-            if isinstance(center_thr_v9, (int, float)):
-                evo_thr_v9 = int(round(center_thr_v9))
-            if isinstance(center_hold_v9, (int, float)):
-                evo_hold_v9 = int(round(center_hold_v9))
-
-            evo_thr_v9 = max(50, min(90, evo_thr_v9))
-            evo_hold_v9 = max(3, min(30, evo_hold_v9))
-            evo_lookback_v9 = max(80, min(200, evo_lookback_v9))
-            evo_min_turnover_v9 = max(1.0, min(50.0, evo_min_turnover_v9))
-            sync_thr_v9 = evo_thr_v9
-            sync_hold_v9 = evo_hold_v9
-            v9_locked_by_unified = bool(st.session_state.get("v9_params_locked_by_unified", False))
-            if v9_locked_by_unified:
-                st.caption(
-                    "当前参数来源：统一口径（一键同步）"
-                    f"（阈值 {int(st.session_state.get('score_threshold_v9', sync_thr_v9))}，"
-                    f"持仓 {int(st.session_state.get('holding_days_v9', sync_hold_v9))} 天）"
-                )
-            elif center_v9_src == "strategy_center":
-                st.caption(
-                    f"当前参数来源：策略中心（阈值 {sync_thr_v9}，持仓 {sync_hold_v9} 天）"
-                )
-                # Streamlit key 会保留历史会话值，首次进入时主动与策略中心默认值对齐。
-                if not st.session_state.get("v9_center_defaults_initialized", False):
-                    st.session_state["score_threshold_v9"] = sync_thr_v9
-                    st.session_state["holding_days_v9"] = sync_hold_v9
-                    st.session_state["v9_center_defaults_initialized"] = True
-                if st.button("同步策略中心默认参数", key="sync_v9_center_defaults"):
-                    st.session_state["score_threshold_v9"] = sync_thr_v9
-                    st.session_state["holding_days_v9"] = sync_hold_v9
-                    st.session_state["v9_params_locked_by_unified"] = False
-                    st.rerun()
-            else:
-                # 避免 "value + session_state" 冲突告警：先初始化 key，再由 slider 仅使用 key。
-                if "score_threshold_v9" not in st.session_state:
-                    st.session_state["score_threshold_v9"] = evo_thr_v9
-                if "holding_days_v9" not in st.session_state:
-                    st.session_state["holding_days_v9"] = evo_hold_v9
-            if "lookback_days_v9" not in st.session_state:
-                st.session_state["lookback_days_v9"] = int(evo_lookback_v9)
-            st.session_state.setdefault("min_turnover_v9", float(evo_min_turnover_v9))
-            st.session_state.setdefault("top_percent_v9", 3)
-            if "scan_all_v9" not in st.session_state:
-                st.session_state["scan_all_v9"] = True
-            st.session_state.setdefault("cap_min_v9", 100.0)
-            st.session_state.setdefault("cap_max_v9", 15000.0)
-            if "candidate_count_v9" not in st.session_state:
-                st.session_state["candidate_count_v9"] = 3000
-
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                score_threshold_v9 = st.slider("评分阈值（v9.0）", 50, 90, step=5, key="score_threshold_v9")
-            with col2:
-                holding_days_v9 = st.slider("建议持仓天数", 3, 30, step=1, key="holding_days_v9")
-            with col3:
-                lookback_days_v9 = st.slider(
-                    "评分窗口（天）",
-                    80,
-                    200,
-                    int(st.session_state.get("lookback_days_v9", evo_lookback_v9)),
-                    10,
-                )
-
-            col4, col5, col6 = st.columns(3)
-            with col4:
-                min_turnover_v9 = st.slider("最低成交额（亿）", 1.0, 50.0, step=1.0, key="min_turnover_v9")
-            with col5:
-                candidate_count_v9 = st.slider(
-                    "候选数量（按市值）",
-                    200,
-                    3000,
-                    int(st.session_state.get("candidate_count_v9", 3000)),
-                    100,
-                )
-            with col6:
-                scan_all_v9 = st.checkbox(
-                    "全市场扫描",
-                    value=bool(st.session_state.get("scan_all_v9", True)),
-                )
-
-            col_mode1, col_mode2, col_mode3 = st.columns(3)
-            with col_mode1:
-                select_mode_v9 = st.selectbox("选股模式", ["分位数筛选(Top%)", "阈值筛选"], index=0, key="select_mode_v9")
-            with col_mode2:
-                top_percent_v9 = st.slider("Top百分比", 1, 10, step=1, key="top_percent_v9")
-            with col_mode3:
-                weak_market_filter_v9 = st.checkbox("弱市空仓保护", value=True, key="weak_market_filter_v9")
-
-            col_mode4, col_mode5 = st.columns(2)
-            with col_mode4:
-                enable_consistency_v9 = st.checkbox("启用多周期一致性过滤", value=True, key="v9_consistency")
-            with col_mode5:
-                min_align_v9 = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v9_consistency_min")
-            use_cache_v9 = st.checkbox("优先使用离线缓存结果", value=False, key="v9_cache")
-            async_scan_v9 = st.checkbox("切换为后台运行（断线续跑）", value=False, key="v9_async_scan")
-            if async_scan_v9:
-                st.caption("当前为后台模式：任务会进入后台队列，页面刷新或短暂断线后仍可继续查看结果。")
-            else:
-                st.caption("当前为前台实时模式：默认直接在当前页面执行，实时显示扫描进度和结果。")
-
-            col7, col8 = st.columns(2)
-            with col7:
-                cap_min_v9 = st.number_input("最小市值（亿元）", min_value=0, max_value=5000, step=10, key="cap_min_v9")
-            with col8:
-                cap_max_v9 = st.number_input("最大市值（亿元）", min_value=0, max_value=50000, step=50, key="cap_max_v9")
-            if strict_full_market_mode:
-                scan_all_v9 = True
-                cap_min_v9 = 0.0
-                cap_max_v9 = 0.0
-                candidate_count_v9 = 3000
-                st.caption("全市场严格口径：v9 市值=0~0，候选数=3000。")
-
-            v9_live_params = {
-                "score_threshold": int(score_threshold_v9),
-                "top_percent": int(top_percent_v9),
-                "select_mode": select_mode_v9,
-                "scan_all": bool(scan_all_v9),
-                "cap_min": float(cap_min_v9),
-                "cap_max": float(cap_max_v9),
-                "enable_consistency": bool(enable_consistency_v9),
-                "min_align": int(min_align_v9),
-                "holding_days": int(holding_days_v9),
-                "lookback_days": int(lookback_days_v9),
-                "min_turnover": float(min_turnover_v9),
-                "candidate_count": int(candidate_count_v9),
-            }
-            st.session_state["lookback_days_v9"] = int(lookback_days_v9)
-            st.session_state["scan_all_v9"] = bool(scan_all_v9)
-            st.session_state["candidate_count_v9"] = int(candidate_count_v9)
-            _sync_scan_task_with_params("v9_async_task_id", v9_live_params, "v9.0策略")
-            _render_scan_param_hint("v9_async_task_id")
-            if st.button("开始扫描（v9.0中线均衡版）", type="primary", use_container_width=True, key="scan_v9"):
-                heavy_running, heavy_reason = _detect_heavy_background_job()
-                if heavy_running:
-                    st.warning(f"{heavy_reason}，系统将继续执行扫描（可能稍慢）。")
-                if async_scan_v9:
-                    cache_params = {
-                        "score_threshold": score_threshold_v9,
-                        "top_percent": top_percent_v9,
-                        "select_mode": select_mode_v9,
-                        "scan_all": bool(scan_all_v9),
-                        "cap_min": float(cap_min_v9),
-                        "cap_max": float(cap_max_v9),
-                        "enable_consistency": bool(enable_consistency_v9),
-                        "min_align": int(min_align_v9),
-                        "holding_days": int(holding_days_v9),
-                        "lookback_days": int(lookback_days_v9),
-                        "min_turnover": float(min_turnover_v9),
-                        "candidate_count": int(candidate_count_v9),
-                    }
-                    ok, msg, run_id = _start_async_scan_task("v9", cache_params, score_col="综合评分")
-                    if ok:
-                        st.session_state["v9_async_task_id"] = run_id
-                        _mark_scan_submitted("v9_async_task_id", cache_params)
-                        st.success(msg)
-                    else:
-                        st.warning(msg)
-                    st.rerun()
-                with st.spinner("v9.0 中线均衡版扫描中..."):
-                    try:
-                        cache_params = {
-                            "score_threshold": score_threshold_v9,
-                            "top_percent": top_percent_v9,
-                            "select_mode": select_mode_v9,
-                            "scan_all": bool(scan_all_v9),
-                            "cap_min": float(cap_min_v9),
-                            "cap_max": float(cap_max_v9),
-                            "enable_consistency": bool(enable_consistency_v9),
-                            "min_align": int(min_align_v9),
-                            "holding_days": int(holding_days_v9),
-                            "lookback_days": int(lookback_days_v9),
-                            "min_turnover": float(min_turnover_v9),
-                            "candidate_count": int(candidate_count_v9),
-                        }
-                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
-                        if use_cache_v9:
-                            cached_df, cached_meta = _load_scan_cache("v9_scan", cache_params, db_last)
-                            if cached_df is not None and not cached_df.empty:
-                                created_at = cached_meta.get("created_at", "未知")
-                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
-                                _render_cached_scan_results(
-                                    "扫描结果（v9.0中线均衡版）",
-                                    cached_df,
-                                    score_col="综合评分",
-                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
-                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
-                                    select_mode=select_mode_v9,
-                                    threshold=score_threshold_v9,
-                                    top_percent=top_percent_v9,
-                                )
-                                st.session_state["v9_scan_results_tab1"] = cached_df
-                                _set_stock_pool_candidate("v9", cache_params, "综合评分", cached_df)
-                                st.stop()
-
-                        # 弱市空仓保护
-                        if weak_market_filter_v9 and market_env == "bear":
-                            st.warning(f"当前市场环境：{env_label}，建议空仓观望。")
-                            if not st.checkbox("我理解风险，仍要继续扫描", key="force_scan_v9"):
-                                st.stop()
-
-                        conn = _connect_permanent_db()
-                        stocks_df = _load_candidate_stocks(
-                            conn,
-                            scan_all=bool(scan_all_v9),
-                            cap_min_yi=cap_min_v9,
-                            cap_max_yi=cap_max_v9,
-                            require_industry=True,
-                        )
-
-                        if stocks_df.empty:
-                            st.error("未找到符合条件的股票")
-                            conn.close()
-                            st.stop()
-
-                        stocks_df = stocks_df.head(candidate_count_v9)
-
-                        try:
-                            bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
-                        except Exception:
-                            bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = (0.0, {}, set(), set(), {})
-
-                        # 预计算行业强度（20日动量均值）
-                        industry_scores = {}
-                        ind_vals = {}
-                        end_date = datetime.now().strftime("%Y%m%d")
-                        start_date = (datetime.now() - timedelta(days=lookback_days_v9 + 30)).strftime("%Y%m%d")
-
-                        history_cache = {}
-                        if len(stocks_df) <= BULK_HISTORY_LIMIT:
-                            history_cache = _load_history_range_bulk(
-                                conn,
-                                stocks_df["ts_code"].tolist(),
-                                start_date,
-                                end_date,
-                                "ts_code, trade_date, close_price, vol, amount, pct_chg, turnover_rate",
-                            )
-
-                        for _, row in stocks_df.iterrows():
-                            ts_code = row["ts_code"]
-                            hist = history_cache.get(ts_code)
-                            if hist is None:
-                                hist = load_history_full(ts_code, start_date, end_date)
-                            if hist is None or len(hist) < 21:
-                                continue
-                            close = pd.to_numeric(hist["close_price"], errors="coerce").ffill()
-                            r20 = (close.iloc[-1] / close.iloc[-21] - 1.0) * 100 if len(close) > 21 else 0.0
-                            ind_vals.setdefault(row["industry"], []).append(r20)
-
-                        for ind, vals in ind_vals.items():
-                            if vals:
-                                industry_scores[ind] = float(np.mean(vals))
-
-                        # 正式评分
-                        results = []
-                        progress_bar = st.progress(0)
-                        status_text = st.empty()
-
-                        for idx, row in stocks_df.iterrows():
-                            ts_code = row["ts_code"]
-                            _update_scan_progress_ui(
-                                progress_bar,
-                                status_text,
-                                idx,
-                                len(stocks_df),
-                                f"正在评分: {row['name']} ({idx+1}/{len(stocks_df)})",
-                            )
-
-                            hist = history_cache.get(ts_code)
-                            if hist is None:
-                                hist = load_history_full(ts_code, start_date, end_date)
-                            if hist is None or len(hist) < 80:
-                                continue
-
-                            # 成交额过滤
-                            avg_amount = pd.to_numeric(hist["amount"], errors="coerce").tail(20).mean()
-                            avg_amount_yi = avg_amount / 1e5
-                            if avg_amount_yi < min_turnover_v9:
-                                continue
-
-                            ind_strength = industry_scores.get(row["industry"], 0.0)
-                            score_info = vp_analyzer._calc_v9_score_from_hist(hist, industry_strength=ind_strength)
-                            base_score = float(score_info["score"])
-
-                            # 资金类加分
-                            extra = 0.0
-                            # 北向/融资全局加分
-                            extra += bonus_global
-                            # 个股资金流
-                            mf_net = bonus_stock_map.get(ts_code, 0.0)
-                            if mf_net > 1e8:
-                                extra += 2.0
-                            elif mf_net > 0:
-                                extra += 1.0
-                            elif mf_net < 0:
-                                extra -= 1.0
-                            # 龙虎榜
-                            if ts_code in top_list_set:
-                                extra += 1.5
-                            if ts_code in top_inst_set:
-                                extra += 1.0
-                            # 行业资金流
-                            ind_flow = bonus_industry_map.get(row["industry"], 0.0)
-                            if ind_flow > 0:
-                                extra += 1.0
-                            elif ind_flow < 0:
-                                extra -= 1.0
-
-                            score = base_score + extra
-                            latest_col = "close_price" if "close_price" in hist.columns else ("close" if "close" in hist.columns else "")
-                            latest_price_val = float(pd.to_numeric(hist[latest_col], errors="coerce").iloc[-1]) if latest_col else 0.0
-                            row_item = {
-                                "股票代码": ts_code,
-                                "股票名称": row["name"],
-                                "行业": row["industry"],
-                                "流通市值": f"{row['circ_mv']/10000:.1f}亿",
-                                "综合评分": f"{score:.1f}",
-                                "最新价格": f"{latest_price_val:.2f}元" if latest_price_val > 0 else "-",
-                                "资金流": score_info["details"].get("fund_score"),
-                                "动量": score_info["details"].get("momentum_score"),
-                                "趋势": score_info["details"].get("trend_score"),
-                                "波动": score_info["details"].get("volatility_score"),
-                                "板块强度": score_info["details"].get("sector_score"),
-                                "资金加分": f"{extra:.1f}",
-                                "建议持仓": f"{holding_days_v9}天",
-                            }
-
-                            if select_mode_v9 == "阈值筛选":
-                                if score >= score_threshold_v9:
-                                    results.append(row_item)
-                            else:
-                                results.append(row_item)
-
-                        progress_bar.empty()
-                        status_text.empty()
-                        conn.close()
-
-                        if results:
-                            results_df = pd.DataFrame(results)
-
-                            # 分位数筛选：取 Top N%
-                            if select_mode_v9 != "阈值筛选":
-                                results_df["score_val"] = pd.to_numeric(results_df["综合评分"], errors="coerce")
-                                results_df = results_df.sort_values("score_val", ascending=False)
-                                keep_n = max(1, int(len(results_df) * top_percent_v9 / 100))
-                                results_df = results_df.head(keep_n).drop(columns=["score_val"])
-                            if enable_consistency_v9 and not results_df.empty:
-                                results_df = _apply_multi_period_filter(
-                                    results_df,
-                                    PERMANENT_DB_PATH,
-                                    min_align=min_align_v9
-                                )
-                            results_df = _add_reason_summary(results_df, score_col="综合评分")
-
-                            _save_scan_cache(
-                                "v9_scan",
-                                cache_params,
-                                db_last,
-                                results_df,
-                                {"candidate_count": len(stocks_df), "filter_failed": 0},
-                            )
-
-                            st.session_state["v9_scan_results_tab1"] = results_df
-                            _set_stock_pool_candidate("v9", cache_params, "综合评分", results_df)
-                            if select_mode_v9 == "阈值筛选":
-                                st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v9}分）")
-                            else:
-                                st.success(f"选出 Top {top_percent_v9}%（{len(results_df)} 只）")
-                            _render_result_overview(results_df, score_col="综合评分", title="扫描结果概览")
-                            msg, level = _signal_density_hint(len(results_df), len(stocks_df))
-                            getattr(st, level)(msg)
-                            results_df = _standardize_result_df(results_df, score_col="综合评分")
-                            st.dataframe(results_df, use_container_width=True, hide_index=True)
-                            st.download_button(
-                                " 导出结果（CSV）",
-                                data=_df_to_csv_bytes(results_df),
-                                file_name=f"核心策略_V9_中线均衡_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                mime="text/csv; charset=utf-8"
-                            )
-                        else:
-                            st.warning("未找到符合条件的股票，请适当降低阈值或放宽筛选条件")
-                    except Exception as e:
-                        st.error(f"扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-
-            if 'v9_scan_results_tab1' in st.session_state:
-                st.markdown("---")
-                st.markdown("###  上次扫描结果")
-                results_df = st.session_state['v9_scan_results_tab1']
-                st.dataframe(results_df, use_container_width=True, hide_index=True)
-            if async_scan_v9:
-                _render_async_scan_status("v9_async_task_id", "v9.0中线均衡版", "综合评分")
-
-        elif "组合策略" in strategy_mode:
-            center_combo_params, center_combo_src = _load_strategy_center_scan_defaults("combo")
-            exp_combo = st.expander("组合策略说明", expanded=False)
-            exp_combo.markdown("""
-            <div style='background: linear-gradient(135deg, #1f4037 0%, #99f2c8 100%); 
-                        padding: 35px 30px; border-radius: 15px; color: #0b1f17; margin-bottom: 25px;'>
-                <h1 style='margin:0; color: #0b1f17; font-size: 2.1em; font-weight: 700; text-align: center;'>
-                     组合策略共识评分（v4/v5/v7/v8/v9）
-                </h1>
-                <p style='margin: 12px 0 0 0; font-size: 1.05em; text-align: center; opacity: 0.9;'>
-                    多策略协同共识 · 过滤噪音 · 提升稳定性 · 强调胜率与一致性
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            exp_combo.info("""
-            **共识逻辑：**
-            - v4/v5/v7/v8/v9 五大策略同时评分
-            - 评分按权重融合为“共识分”
-            - 满足最小一致数量（agree_count）后进入候选
-            - 叠加资金加分（北向/龙虎榜/机构/行业资金）
-            """)
-
-            evolve_combo = _load_evolve_params("combo_best.json")
-            evo_params_combo = evolve_combo.get("params", {}) if isinstance(evolve_combo, dict) else {}
-            if evo_params_combo:
-                exp_combo.success(f"已应用自动进化参数（COMBO，{evolve_combo.get('run_at', 'unknown')}）")
-            center_thr_combo = center_combo_params.get("score_threshold")
-            combo_threshold_default = int(evo_params_combo.get("combo_threshold", 68))
-            if isinstance(center_thr_combo, (int, float)):
-                combo_threshold_default = max(50, min(90, int(round(center_thr_combo))))
-            if center_combo_src == "strategy_center":
-                st.caption(f"当前参数来源：策略中心（组合阈值 {combo_threshold_default}）")
-
-            # 参数设置
-            col_a, col_b, col_c = st.columns(3)
-            with col_a:
-                candidate_count = st.slider(
-                    "候选数量（按市值）",
-                    200,
-                    3000,
-                    int(evo_params_combo.get("candidate_count", 800)),
-                    100,
-                    key="combo_candidate_count",
-                )
-            with col_b:
-                min_turnover = st.slider("最低成交额（亿）", 1.0, 50.0, float(evo_params_combo.get("min_turnover", 5.0)), 1.0, key="combo_min_turnover")
-            with col_c:
-                min_agree = st.slider("最小一致数量（策略数）", 2, 5, int(evo_params_combo.get("min_agree", 3)), 1, key="combo_min_agree")
-
-            col_d, col_e, col_f = st.columns(3)
-            with col_d:
-                cap_min_combo = st.number_input("最小市值（亿元）", min_value=0, max_value=5000, value=100, step=10, key="combo_cap_min")
-            with col_e:
-                cap_max_combo = st.number_input("最大市值（亿元）", min_value=0, max_value=50000, value=15000, step=50, key="combo_cap_max")
-            with col_f:
-                _modes_combo = ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"]
-                if "combo_select_mode" not in st.session_state or st.session_state.get("combo_select_mode") not in _modes_combo:
-                    st.session_state["combo_select_mode"] = str(evo_params_combo.get("select_mode", "分位数筛选(Top%)"))
-                select_mode_combo = st.selectbox(
-                    "筛选模式",
-                    _modes_combo,
-                    key="combo_select_mode"
-                )
-            if strict_full_market_mode:
-                cap_min_combo = 0.0
-                cap_max_combo = 0.0
-                candidate_count = 3000
-                st.caption("全市场严格口径：组合策略市值=0~0，候选数=3000。")
-
-            col_g, col_h, col_i = st.columns(3)
-            with col_g:
-                combo_threshold = st.slider("共识阈值", 50, 90, combo_threshold_default, 5, key="combo_threshold")
-            with col_h:
-                top_percent_combo = st.slider("Top百分比", 1, 10, int(evo_params_combo.get("top_percent", 2)), 1, key="combo_top_percent")
-            with col_i:
-                lookback_days_combo = st.slider("评分窗口（天）", 80, 200, int(evo_params_combo.get("lookback_days", 120)), 10, key="combo_lookback_days")
-
-            col_j, col_k, col_l = st.columns(3)
-            with col_j:
-                disagree_std_weight = st.slider("分歧惩罚强度", 0.0, 1.5, 0.35, 0.05, key="combo_disagree_std")
-            with col_k:
-                disagree_count_weight = st.slider("分歧惩罚/项", 0.0, 5.0, 1.0, 0.5, key="combo_disagree_count")
-            with col_l:
-                market_adjust_strength = st.slider("市场状态调节强度", 0.0, 1.0, 0.5, 0.05, key="combo_market_strength")
-
-            col_m, col_n = st.columns(2)
-            with col_m:
-                enable_consistency_combo = st.checkbox("启用多周期一致性过滤", value=bool(evo_params_combo.get("enable_consistency", True)), key="combo_consistency")
-            with col_n:
-                min_align_combo = st.slider("一致性要求（2/3或3/3）", 2, 3, int(evo_params_combo.get("min_align", 2)), 1, key="combo_consistency_min")
-            use_cache_combo = st.checkbox("优先使用离线缓存结果", value=False, key="combo_cache")
-            async_scan_combo = st.checkbox("切换为后台运行（断线续跑）", value=False, key="combo_async_scan")
-            if async_scan_combo:
-                st.caption("当前为后台模式：任务会进入后台队列，页面刷新或短暂断线后仍可继续查看结果。")
-            else:
-                st.caption("当前为前台实时模式：默认直接在当前页面执行，实时显示扫描进度和结果。")
-
-            st.markdown("---")
-            st.subheader("权重设置（总和自动归一化）")
-            # 市场环境判断用于动态权重
-            market_env_combo = "oscillation"
-            try:
-                market_env_combo = vp_analyzer.get_market_environment()
-            except Exception:
-                market_env_combo = "oscillation"
-            env_label_combo = "震荡市" if market_env_combo == "oscillation" else ("牛市" if market_env_combo == "bull" else "弱市")
-
-            auto_weights = st.checkbox("根据市场环境自动调整权重", value=bool(evo_params_combo.get("auto_weights", True)), key="combo_auto_weights")
-            st.caption(f"当前市场环境判断：{env_label_combo}")
-
-            weight_presets = {
-                "bull": {"v4": 0.10, "v5": 0.20, "v7": 0.30, "v8": 0.30, "v9": 0.10},
-                "oscillation": {"v4": 0.15, "v5": 0.15, "v7": 0.30, "v8": 0.25, "v9": 0.15},
-                "bear": {"v4": 0.25, "v5": 0.15, "v7": 0.20, "v8": 0.15, "v9": 0.25},
-            }
-            preset = weight_presets.get(market_env_combo, weight_presets["oscillation"])
-
-            w1, w2, w3, w4, w5 = st.columns(5)
-            with w1:
-                w_v4 = st.slider("v4权重", 0.0, 1.0, float(evo_params_combo.get("w_v4", preset["v4"])), 0.05, key="w_v4", disabled=auto_weights)
-            with w2:
-                w_v5 = st.slider("v5权重", 0.0, 1.0, float(evo_params_combo.get("w_v5", preset["v5"])), 0.05, key="w_v5", disabled=auto_weights)
-            with w3:
-                w_v7 = st.slider("v7权重", 0.0, 1.0, float(evo_params_combo.get("w_v7", preset["v7"])), 0.05, key="w_v7", disabled=auto_weights)
-            with w4:
-                w_v8 = st.slider("v8权重", 0.0, 1.0, float(evo_params_combo.get("w_v8", preset["v8"])), 0.05, key="w_v8", disabled=auto_weights)
-            with w5:
-                w_v9 = st.slider("v9权重", 0.0, 1.0, float(evo_params_combo.get("w_v9", preset["v9"])), 0.05, key="w_v9", disabled=auto_weights)
-
-            if auto_weights:
-                w_v4, w_v5, w_v7, w_v8, w_v9 = preset["v4"], preset["v5"], preset["v7"], preset["v8"], preset["v9"]
-                st.info(f"已应用动态权重（{env_label_combo}）：v4={w_v4} v5={w_v5} v7={w_v7} v8={w_v8} v9={w_v9}")
-
-            st.markdown("---")
-            st.subheader("各策略阈值（用于一致性判断）")
-            t1, t2, t3, t4, t5 = st.columns(5)
-            with t1:
-                thr_v4 = st.slider("v4阈值", 50, 90, int(evo_params_combo.get("thr_v4", 60)), 5, key="thr_v4")
-            with t2:
-                thr_v5 = st.slider("v5阈值", 50, 90, int(evo_params_combo.get("thr_v5", 60)), 5, key="thr_v5")
-            with t3:
-                thr_v7 = st.slider("v7阈值", 50, 90, int(evo_params_combo.get("thr_v7", 65)), 5, key="thr_v7")
-            with t4:
-                thr_v8 = st.slider("v8阈值", 50, 90, int(evo_params_combo.get("thr_v8", 65)), 5, key="thr_v8")
-            with t5:
-                thr_v9 = st.slider("v9阈值", 50, 90, int(evo_params_combo.get("thr_v9", 60)), 5, key="thr_v9")
-
-            def _load_history_full_combo(ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-                try:
-                    from data.history import load_history_full as _load_history_full_v2  # type: ignore
-                    return _load_history_full_v2(
-                        db_path=PERMANENT_DB_PATH,
-                        ts_code=ts_code,
-                        start_date=start_date,
-                        end_date=end_date,
-                        columns="trade_date, close_price, high_price, low_price, vol, amount, pct_chg, turnover_rate",
-                        normalize_fn=_normalize_stock_df,
-                    )
-                except Exception:
-                    return pd.DataFrame()
-
-            combo_live_params = {
-                "candidate_count": int(candidate_count),
-                "min_turnover": float(min_turnover),
-                "min_agree": int(min_agree),
-                "cap_min": float(cap_min_combo),
-                "cap_max": float(cap_max_combo),
-                "select_mode": select_mode_combo,
-                "combo_threshold": float(combo_threshold),
-                "top_percent": int(top_percent_combo),
-                "lookback_days": int(lookback_days_combo),
-                "disagree_std_weight": float(disagree_std_weight),
-                "disagree_count_weight": float(disagree_count_weight),
-                "market_adjust_strength": float(market_adjust_strength),
-                "enable_consistency": bool(enable_consistency_combo),
-                "min_align": int(min_align_combo),
-                "auto_weights": bool(auto_weights),
-                "w_v4": float(w_v4),
-                "w_v5": float(w_v5),
-                "w_v7": float(w_v7),
-                "w_v8": float(w_v8),
-                "w_v9": float(w_v9),
-                "thr_v4": float(thr_v4),
-                "thr_v5": float(thr_v5),
-                "thr_v7": float(thr_v7),
-                "thr_v8": float(thr_v8),
-                "thr_v9": float(thr_v9),
-            }
-            _sync_scan_task_with_params("combo_async_task_id", combo_live_params, "组合策略")
-            _render_scan_param_hint("combo_async_task_id")
-            _render_front_scan_summary("combo", "组合共识策略")
-            if 'combo_scan_results' in st.session_state:
-                st.markdown("### 最近一次组合结果")
-                recent_combo_df = st.session_state['combo_scan_results']
-                st.dataframe(
-                    _standardize_result_df(recent_combo_df.drop(columns=['原始数据'], errors='ignore'), score_col="共识评分"),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-            if st.button("开始扫描（组合共识）", type="primary", use_container_width=True, key="scan_combo"):
-                heavy_running, heavy_reason = _detect_heavy_background_job()
-                if heavy_running:
-                    st.warning(f"{heavy_reason}，系统将继续执行扫描（可能稍慢）。")
-                if async_scan_combo:
-                    cache_params = {
-                        "candidate_count": int(candidate_count),
-                        "min_turnover": float(min_turnover),
-                        "min_agree": int(min_agree),
-                        "cap_min": float(cap_min_combo),
-                        "cap_max": float(cap_max_combo),
-                        "select_mode": select_mode_combo,
-                        "combo_threshold": float(combo_threshold),
-                        "top_percent": int(top_percent_combo),
-                        "lookback_days": int(lookback_days_combo),
-                        "disagree_std_weight": float(disagree_std_weight),
-                        "disagree_count_weight": float(disagree_count_weight),
-                        "market_adjust_strength": float(market_adjust_strength),
-                        "enable_consistency": bool(enable_consistency_combo),
-                        "min_align": int(min_align_combo),
-                        "auto_weights": bool(auto_weights),
-                        "w_v4": float(w_v4),
-                        "w_v5": float(w_v5),
-                        "w_v7": float(w_v7),
-                        "w_v8": float(w_v8),
-                        "w_v9": float(w_v9),
-                        "thr_v4": float(thr_v4),
-                        "thr_v5": float(thr_v5),
-                        "thr_v7": float(thr_v7),
-                        "thr_v8": float(thr_v8),
-                        "thr_v9": float(thr_v9),
-                    }
-                    ok, msg, run_id = _start_async_scan_task("combo", cache_params, score_col="共识评分")
-                    if ok:
-                        st.session_state["combo_async_task_id"] = run_id
-                        _mark_scan_submitted("combo_async_task_id", cache_params)
-                        st.success(msg)
-                    else:
-                        st.warning(msg)
-                    st.rerun()
-                with st.spinner("组合共识评分计算中..."):
-                    try:
-                        cache_params = {
-                            "candidate_count": int(candidate_count),
-                            "min_turnover": float(min_turnover),
-                            "min_agree": int(min_agree),
-                            "cap_min": float(cap_min_combo),
-                            "cap_max": float(cap_max_combo),
-                            "select_mode": select_mode_combo,
-                            "combo_threshold": float(combo_threshold),
-                            "top_percent": int(top_percent_combo),
-                            "lookback_days": int(lookback_days_combo),
-                            "disagree_std_weight": float(disagree_std_weight),
-                            "disagree_count_weight": float(disagree_count_weight),
-                            "market_adjust_strength": float(market_adjust_strength),
-                            "enable_consistency": bool(enable_consistency_combo),
-                            "min_align": int(min_align_combo),
-                            "auto_weights": bool(auto_weights),
-                            "w_v4": float(w_v4),
-                            "w_v5": float(w_v5),
-                            "w_v7": float(w_v7),
-                            "w_v8": float(w_v8),
-                            "w_v9": float(w_v9),
-                            "thr_v4": float(thr_v4),
-                            "thr_v5": float(thr_v5),
-                            "thr_v7": float(thr_v7),
-                            "thr_v8": float(thr_v8),
-                            "thr_v9": float(thr_v9),
-                        }
-                        results_df, meta = _run_front_scan_via_offline_pipeline(
-                            strategy="combo",
-                            params=cache_params,
-                            analyzer=vp_analyzer,
-                        )
-                        if results_df is None or results_df.empty:
-                            st.warning("未找到符合条件的股票，请降低阈值或减少一致数量")
-                            st.stop()
-                        st.session_state["combo_scan_results"] = results_df
-                        _mark_front_scan_completed(
-                            strategy="combo",
-                            results_df=results_df,
-                            meta=meta,
-                            score_col="共识评分",
-                        )
-                        _set_stock_pool_candidate("combo", cache_params, "共识评分", results_df)
-                        st.session_state["combo_front_scan_notice"] = f"组合策略扫描完成，返回 {len(results_df)} 条"
-                        st.rerun()
-                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
-                        if use_cache_combo:
-                            cached_df, cached_meta = _load_scan_cache("combo_scan", cache_params, db_last)
-                            if cached_df is not None and not cached_df.empty:
-                                created_at = cached_meta.get("created_at", "未知")
-                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
-                                _render_cached_scan_results(
-                                    "组合策略结果概览",
-                                    cached_df,
-                                    score_col="共识评分",
-                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
-                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
-                                    select_mode=select_mode_combo,
-                                    threshold=combo_threshold,
-                                    top_percent=top_percent_combo,
-                                )
-                                st.session_state["combo_scan_results"] = cached_df
-                                _set_stock_pool_candidate("combo", cache_params, "共识评分", cached_df)
-                                st.stop()
-
-                        conn = _connect_permanent_db()
-                        stocks_df = _load_candidate_stocks(
-                            conn,
-                            scan_all=True,
-                            cap_min_yi=cap_min_combo,
-                            cap_max_yi=cap_max_combo,
-                            require_industry=True,
-                        )
-
-                        if stocks_df.empty:
-                            st.error("未找到符合条件的股票")
-                            conn.close()
-                            st.stop()
-
-                        stocks_df = stocks_df.head(candidate_count)
-
-                        bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
-
-                        # 加载指数数据（供v8评分使用）
-                        try:
-                            from data.history import load_history_full as _load_history_full_v2  # type: ignore
-                            index_data = _load_history_full_v2(
-                                db_path=PERMANENT_DB_PATH,
-                                ts_code="000001.SH",
-                                start_date=(datetime.now() - timedelta(days=420)).strftime("%Y%m%d"),
-                                end_date=datetime.now().strftime("%Y%m%d"),
-                                columns="trade_date, close_price AS close, vol AS volume",
-                                table_candidates=("daily_trading_history", "daily_trading_data", "daily_data"),
-                                normalize_fn=_normalize_stock_df,
-                            )
-                            if index_data is not None and len(index_data) > 120:
-                                index_data = index_data.tail(120).reset_index(drop=True)
-                        except Exception:
-                            index_data = pd.DataFrame()
-                        if len(index_data) >= 60 and 'trade_date' in index_data.columns:
-                            index_data = index_data
-                        else:
-                            index_data = None
-
-                        end_date = datetime.now().strftime("%Y%m%d")
-                        start_date = (datetime.now() - timedelta(days=lookback_days_combo + 30)).strftime("%Y%m%d")
-
-                        history_cache = {}
-                        if len(stocks_df) <= BULK_HISTORY_LIMIT:
-                            history_cache = _load_history_range_bulk(
-                                conn,
-                                stocks_df["ts_code"].tolist(),
-                                start_date,
-                                end_date,
-                                "ts_code, trade_date, close_price, high_price, low_price, vol, amount, pct_chg, turnover_rate",
-                            )
-                        conn.close()
-
-                        # 预计算行业强度（20日动量均值）
-                        ind_vals = {}
-                        for _, row in stocks_df.iterrows():
-                            hist = history_cache.get(row["ts_code"])
-                            if hist is None:
-                                hist = _load_history_full_combo(row["ts_code"], start_date, end_date)
-                            if hist is None or len(hist) < 21:
-                                continue
-                            close = pd.to_numeric(hist["close_price"], errors="coerce").ffill()
-                            if len(close) > 21:
-                                r20 = (close.iloc[-1] / close.iloc[-21] - 1.0) * 100
-                                ind_vals.setdefault(row["industry"], []).append(r20)
-                        industry_scores = {ind: float(np.mean(vals)) for ind, vals in ind_vals.items() if vals}
-
-                        results = []
-                        progress_bar = st.progress(0)
-                        status_text = st.empty()
-
-                        weights = {
-                            "v4": w_v4,
-                            "v5": w_v5,
-                            "v7": w_v7,
-                            "v8": w_v8,
-                            "v9": w_v9,
-                        }
-
-                        for idx, row in stocks_df.iterrows():
-                            ts_code = row["ts_code"]
-                            stock_name = row["name"]
-                            industry = row["industry"]
-
-                            _update_scan_progress_ui(
-                                progress_bar,
-                                status_text,
-                                idx,
-                                len(stocks_df),
-                                f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})",
-                            )
-
-                            hist = history_cache.get(ts_code)
-                            if hist is None:
-                                hist = _load_history_full_combo(ts_code, start_date, end_date)
-                            if hist is None or len(hist) < 80:
-                                continue
-
-                            # 成交额过滤
-                            avg_amount = pd.to_numeric(hist["amount"], errors="coerce").tail(20).mean()
-                            avg_amount_yi = avg_amount / 1e5
-                            if avg_amount_yi < min_turnover:
-                                continue
-
-                            # 构造评分输入
-                            stock_data = hist.copy()
-                            stock_data["name"] = stock_name
-
-                            # v4
-                            v4_res = vp_analyzer.evaluator_v4.evaluate_stock_v4(stock_data)
-                            v4_score = float(v4_res.get("final_score", 0)) if v4_res else None
-
-                            # v5
-                            v5_res = vp_analyzer.evaluator_v5.evaluate_stock_v4(stock_data)
-                            v5_score = float(v5_res.get("final_score", 0)) if v5_res else None
-
-                            # v7
-                            v7_res = vp_analyzer.evaluator_v7.evaluate_stock_v7(
-                                stock_data=stock_data,
-                                ts_code=ts_code,
-                                industry=industry
-                            )
-                            v7_score = float(v7_res.get("final_score", 0)) if v7_res and v7_res.get("success") else None
-
-                            # v8
-                            v8_res = vp_analyzer.evaluator_v8.evaluate_stock_v8(
-                                stock_data=stock_data,
-                                ts_code=ts_code,
-                                index_data=index_data if index_data is not None else None
-                            )
-                            v8_score = float(v8_res.get("final_score", 0)) if v8_res and v8_res.get("success") else None
-
-                            # v9
-                            ind_strength = industry_scores.get(industry, 0.0)
-                            v9_info = vp_analyzer._calc_v9_score_from_hist(hist, industry_strength=ind_strength)
-                            v9_score = float(v9_info.get("score", 0)) if v9_info else None
-
-                            scores = {
-                                "v4": v4_score,
-                                "v5": v5_score,
-                                "v7": v7_score,
-                                "v8": v8_score,
-                                "v9": v9_score,
-                            }
-
-                            agree_count = 0
-                            if v4_score is not None and v4_score >= thr_v4:
-                                agree_count += 1
-                            if v5_score is not None and v5_score >= thr_v5:
-                                agree_count += 1
-                            if v7_score is not None and v7_score >= thr_v7:
-                                agree_count += 1
-                            if v8_score is not None and v8_score >= thr_v8:
-                                agree_count += 1
-                            if v9_score is not None and v9_score >= thr_v9:
-                                agree_count += 1
-
-                            if agree_count < min_agree:
-                                continue
-
-                            weight_sum = sum(weights[k] for k, v in scores.items() if v is not None)
-                            if weight_sum <= 0:
-                                continue
-                            weighted_score = sum(
-                                (scores[k] * weights[k]) for k in scores if scores[k] is not None
-                            ) / weight_sum
-
-                            score_list = [v for v in scores.values() if v is not None]
-                            score_std = float(np.std(score_list)) if len(score_list) > 1 else 0.0
-
-                            disagree_count = 0
-                            if v4_score is not None and v4_score < thr_v4:
-                                disagree_count += 1
-                            if v5_score is not None and v5_score < thr_v5:
-                                disagree_count += 1
-                            if v7_score is not None and v7_score < thr_v7:
-                                disagree_count += 1
-                            if v8_score is not None and v8_score < thr_v8:
-                                disagree_count += 1
-                            if v9_score is not None and v9_score < thr_v9:
-                                disagree_count += 1
-
-                            penalty = (score_std * disagree_std_weight) + (disagree_count * disagree_count_weight)
-
-                            env_multiplier = 1.0
-                            if market_env_combo == "bull":
-                                env_multiplier = 1.02
-                            elif market_env_combo == "bear":
-                                env_multiplier = 0.95
-                            else:
-                                env_multiplier = 0.98
-                            adj_factor = 1.0 - market_adjust_strength + (market_adjust_strength * env_multiplier)
-
-                            contrib = {
-                                "v4贡献": (scores["v4"] * weights["v4"] / weight_sum) if scores["v4"] is not None else 0.0,
-                                "v5贡献": (scores["v5"] * weights["v5"] / weight_sum) if scores["v5"] is not None else 0.0,
-                                "v7贡献": (scores["v7"] * weights["v7"] / weight_sum) if scores["v7"] is not None else 0.0,
-                                "v8贡献": (scores["v8"] * weights["v8"] / weight_sum) if scores["v8"] is not None else 0.0,
-                                "v9贡献": (scores["v9"] * weights["v9"] / weight_sum) if scores["v9"] is not None else 0.0,
-                            }
-
-                            extra = _calc_external_bonus(
-                                ts_code,
-                                industry,
-                                bonus_global,
-                                bonus_stock_map,
-                                top_list_set,
-                                top_inst_set,
-                                bonus_industry_map,
-                            )
-
-                            final_score = (weighted_score * adj_factor) + extra - penalty
-
-                            row_item = {
-                                "股票代码": ts_code,
-                                "股票名称": stock_name,
-                                "行业": industry,
-                                "流通市值": f"{row['circ_mv']/10000:.1f}亿",
-                                "共识评分": f"{final_score:.1f}",
-                                "共识基础分": f"{weighted_score:.1f}",
-                                "资金加分": f"{extra:.1f}",
-                                "分歧惩罚": f"{penalty:.2f}",
-                                "市场因子": f"{adj_factor:.2f}",
-                                "一致数": agree_count,
-                                "v4": f"{v4_score:.1f}" if v4_score is not None else "-",
-                                "v5": f"{v5_score:.1f}" if v5_score is not None else "-",
-                                "v7": f"{v7_score:.1f}" if v7_score is not None else "-",
-                                "v8": f"{v8_score:.1f}" if v8_score is not None else "-",
-                                "v9": f"{v9_score:.1f}" if v9_score is not None else "-",
-                                **{k: f"{v:.1f}" for k, v in contrib.items()},
-                                "建议持仓": "5-15天",
-                            }
-
-                            if select_mode_combo == "阈值筛选":
-                                if final_score >= combo_threshold:
-                                    results.append(row_item)
-                            elif select_mode_combo == "双重筛选(阈值+Top%)":
-                                if final_score >= combo_threshold:
-                                    results.append(row_item)
-                            else:
-                                results.append(row_item)
-
-                        progress_bar.empty()
-                        status_text.empty()
-
-                        if results:
-                            results_df = pd.DataFrame(results)
-                            if select_mode_combo != "阈值筛选":
-                                results_df["score_val"] = pd.to_numeric(results_df["共识评分"], errors="coerce")
-                                results_df = results_df.sort_values("score_val", ascending=False)
-                                keep_n = max(1, int(len(results_df) * top_percent_combo / 100))
-                                results_df = results_df.head(keep_n).drop(columns=["score_val"])
-                            if enable_consistency_combo and not results_df.empty:
-                                results_df = _apply_multi_period_filter(
-                                    results_df,
-                                    PERMANENT_DB_PATH,
-                                    min_align=min_align_combo
-                                )
-                            results_df = _add_reason_summary(results_df, score_col="共识评分")
-
-                            _save_scan_cache(
-                                "combo_scan",
-                                cache_params,
-                                db_last,
-                                results_df,
-                                {"candidate_count": len(stocks_df), "filter_failed": 0},
-                            )
-
-                            st.session_state["combo_scan_results"] = results_df
-                            _set_stock_pool_candidate("combo", cache_params, "共识评分", results_df)
-                            if select_mode_combo == "阈值筛选":
-                                st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{combo_threshold}分）")
-                            elif select_mode_combo == "双重筛选(阈值+Top%)":
-                                st.success(f"先阈值后Top筛选：≥{combo_threshold}分，Top {top_percent_combo}%（{len(results_df)} 只）")
-                            else:
-                                st.success(f"选出 Top {top_percent_combo}%（{len(results_df)} 只）")
-
-                            _render_result_overview(results_df, score_col="共识评分", title="组合策略结果概览")
-                            msg, level = _signal_density_hint(len(results_df), len(stocks_df))
-                            getattr(st, level)(msg)
-                            results_df = _standardize_result_df(results_df, score_col="共识评分")
-                            st.dataframe(results_df, use_container_width=True, hide_index=True)
-                            with st.expander("共识贡献拆解", expanded=False):
-                                cols = [
-                                    "股票代码", "股票名称", "共识评分", "共识基础分", "资金加分", "一致数",
-                                    "v4贡献", "v5贡献", "v7贡献", "v8贡献", "v9贡献",
-                                    "v4", "v5", "v7", "v8", "v9",
-                                ]
-                                show_cols = [c for c in cols if c in results_df.columns]
-                                st.dataframe(results_df[show_cols], use_container_width=True, hide_index=True)
-                            st.download_button(
-                                " 导出结果（CSV）",
-                                data=_df_to_csv_bytes(results_df),
-                                file_name=f"组合策略_共识评分_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                mime="text/csv; charset=utf-8"
-                            )
-                        else:
-                            st.warning("未找到符合条件的股票，请降低阈值或减少一致数量")
-
-                    except Exception as e:
-                        st.error(f"扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-
-            notice_combo = str(st.session_state.pop("combo_front_scan_notice", "") or "")
-            if notice_combo:
-                st.success(notice_combo)
-            if 'combo_scan_results' in st.session_state:
-                _render_front_scan_summary("combo", "组合共识策略")
-                st.markdown("---")
-                st.markdown("###  上次扫描结果")
-                results_df = st.session_state['combo_scan_results']
-                display_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
-                st.download_button(
-                    label="导出最近一次结果（CSV）",
-                    data=_df_to_csv_bytes(display_df),
-                    file_name=f"组合策略_最近结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv; charset=utf-8",
-                    key="combo_recent_export_csv",
-                )
-            if async_scan_combo:
-                _render_async_scan_status("combo_async_task_id", "组合共识策略", "共识评分")
-
-        elif "AI 辅助选股" in strategy_mode:
-            show_ai_signal_panel = True
-            st.info("已切换至实验策略：AI 辅助选股。下方将显示 AI 智能选股面板。")
-
-        else:  # fallback
-            st.info("该策略不在核心生产区。请在“实验策略入口（手动启用）”中选择 v4/v6/v7/stable/ai。")
-            st.stop()
-
-            # Legacy block kept below for reference; no longer reachable.
-            st.header("v6.0超短线狙击·专业版 - 只选市场高质量1-3%")
-            st.caption("三级过滤+七维严格评分：必要条件淘汰→极度严格评分→精英筛选，胜率80-90%，单次8-15%")
-            
-            if not V6_EVALUATOR_AVAILABLE or not hasattr(vp_analyzer, "evaluator_v6") or vp_analyzer.evaluator_v6 is None:
-                st.error("v6.0超短线评分器未找到，请确保 `comprehensive_stock_evaluator_v6.py` 存在并可导入后重试")
-                st.stop()
-            
-            st.success("""
-             已集成v6.0八维100分评分体系（超短线狙击版）
-            - 板块热度25分 + 资金流向20分 + 技术突破20分 + 短期动量15分 + 相对强度10分 + 量能配合5分 + 筹码结构3分 + 安全边际2分
-            - 预期：胜率60-80%，单次3-8%，持仓2-5天
-            """)
-            
-            # 参数设置
-            col_v6_a, col_v6_b, col_v6_c = st.columns(3)
-            with col_v6_a:
-                score_threshold_v6 = st.slider(
-                    "评分阈值（v6.0专业版）", 50, 100, 85, 5,
-                    help="专业版：85分（精选10-50只），90分（精选3-10只），95分（高级1-3只）",
-                    key="score_threshold_v6"
-                )
-            with col_v6_b:
-                cap_min_v6 = st.number_input(
-                    "最小市值（亿元）", min_value=10, max_value=5000, value=50, step=10,
-                    help="建议50亿以上，流动性更好",
-                    key="cap_min_v6"
-                )
-            with col_v6_c:
-                cap_max_v6 = st.number_input(
-                    "最大市值（亿元）", min_value=cap_min_v6, max_value=5000, value=max(1000, cap_min_v6), step=50,
-                    help="超短线聚焦中大市值龙头",
-                    key="cap_max_v6"
-                )
-
-            filter_col1_v6b, filter_col2_v6b = st.columns(2)
-            with filter_col1_v6b:
-                select_mode_v6b = st.selectbox(
-                    "筛选模式",
-                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
-                    index=0,
-                    key="v6_select_mode"
-                )
-            with filter_col2_v6b:
-                top_percent_v6b = st.slider("Top百分比", 1, 10, 2, 1, key="v6_top_percent")
-
-            filter_col3_v6b, filter_col4_v6b = st.columns(2)
-            with filter_col3_v6b:
-                enable_consistency_v6b = st.checkbox("启用多周期一致性过滤", value=True, key="v6_consistency")
-            with filter_col4_v6b:
-                min_align_v6b = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="v6_consistency_min")
-            use_cache_v6b = st.checkbox("优先使用离线缓存结果", value=True, key="v6_cache")
-            
-            # v6.0数据依赖说明
-            st.warning("""
-             **v6.0超短线策略数据依赖说明**：
-            - **板块热度**（25分）：需要查询行业数据
-            - **资金流向**（20分）：需要Tushare Pro高级接口（2000+积分）
-            - **技术指标**（55分）：使用本地历史数据
-            
-             **建议**：
-            - 如果Tushare积分不足，板块和资金流维度可能为0分
-            - 建议从60分开始扫描（而不是75分）
-            - 或使用v4.0/v5.0策略（不依赖高级接口）
-            """)
-            
-            st.info("v6.0策略将扫描所有符合市值条件的股票（无数量限制）")
-            
-            st.markdown("---")
-            if st.button("开始扫描（v6.0超短线）", type="primary", use_container_width=True, key="scan_btn_v6"):
-                heavy_running, heavy_reason = _detect_heavy_background_job()
-                if heavy_running:
-                    st.warning(f"{heavy_reason}，系统将继续执行扫描（可能稍慢）。")
-                with st.spinner("正在扫描..."):
-                    try:
-                        cache_params = {
-                            "score_threshold": score_threshold_v6,
-                            "top_percent": top_percent_v6b,
-                            "select_mode": select_mode_v6b,
-                            "cap_min": float(cap_min_v6),
-                            "cap_max": float(cap_max_v6),
-                            "enable_consistency": bool(enable_consistency_v6b),
-                            "min_align": int(min_align_v6b),
-                        }
-                        db_last = _get_db_last_trade_date(PERMANENT_DB_PATH)
-                        if use_cache_v6b:
-                            cached_df, cached_meta = _load_scan_cache("v6_scan", cache_params, db_last)
-                            if cached_df is not None and not cached_df.empty:
-                                created_at = cached_meta.get("created_at", "未知")
-                                st.info(f"已加载离线缓存（数据日期 {db_last}，生成时间 {created_at}）")
-                                _render_cached_scan_results(
-                                    "扫描结果（v6.0超短线）",
-                                    cached_df,
-                                    score_col="综合评分",
-                                    candidate_count=int(cached_meta.get("candidate_count", len(cached_df))),
-                                    filter_failed=int(cached_meta.get("filter_failed", 0)),
-                                    select_mode=select_mode_v6b,
-                                    threshold=score_threshold_v6,
-                                    top_percent=top_percent_v6b,
-                                )
-                                st.session_state['v6_scan_results'] = cached_df
-                                st.stop()
-
-                        conn = _connect_permanent_db()
-                        
-                        # 查询符合市值条件的股票（扫描全市场）
-                        stocks_df = _load_candidate_stocks(
-                            conn,
-                            scan_all=False,
-                            cap_min_yi=cap_min_v6,
-                            cap_max_yi=cap_max_v6,
-                            random_order=True,
-                        )
-                        
-                        if stocks_df.empty:
-                            st.error(f"未找到符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，请检查是否已更新市值数据")
-                            st.info("提示：请先到Tab5（数据中心）点击「更新市值数据」")
-                            conn.close()
-                        else:
-                            st.success(f"找到 {len(stocks_df)} 只符合市值条件（{cap_min_v6}-{cap_max_v6}亿）的股票，开始评分...")
-                            
-                            # 显示市值范围确认
-                            if len(stocks_df) > 0:
-                                actual_min_mv = stocks_df['circ_mv'].min() / 10000
-                                actual_max_mv = stocks_df['circ_mv'].max() / 10000
-                                st.info(f"实际市值范围: {actual_min_mv:.1f} - {actual_max_mv:.1f} 亿元")
-                            
-                            # 评分结果列表
-                            results = []
-                            
-                            # 进度条
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            for idx, row in stocks_df.iterrows():
-                                ts_code = row['ts_code']
-                                stock_name = row['name']
-                                
-                                # 更新进度
-                                progress = (idx + 1) / len(stocks_df)
-                                progress_bar.progress(progress)
-                                status_text.text(f"正在评分: {stock_name} ({idx+1}/{len(stocks_df)})")
-                                
-                                try:
-                                    # 获取该股票的历史数据
-                                    stock_data = _load_stock_history(
-                                        conn,
-                                        ts_code,
-                                        120,
-                                        "trade_date, close_price, vol, pct_chg",
-                                    )
-                                    
-                                    if len(stock_data) >= 60:
-                                        # 添加name列用于ST检查
-                                        stock_data['name'] = stock_name
-                                        
-                                        # 使用v6.0评分器（必须传ts_code）
-                                        score_result = vp_analyzer.evaluator_v6.evaluate_stock_v6(stock_data, ts_code)
-                                        
-                                        if score_result:
-                                            extra = _calc_external_bonus(
-                                                ts_code,
-                                                row['industry'],
-                                                bonus_global,
-                                                bonus_stock_map,
-                                                top_list_set,
-                                                top_inst_set,
-                                                bonus_industry_map,
-                                            )
-                                            final_score = float(score_result.get('final_score', 0)) + extra
-                                        else:
-                                            extra = 0.0
-                                            final_score = 0.0
-
-                                        if score_result:
-                                            dim_scores = score_result.get('dim_scores', {})
-                                            results.append({
-                                                '股票代码': ts_code,
-                                                '股票名称': stock_name,
-                                                '行业': row['industry'],
-                                                '流通市值': f"{row['circ_mv']/10000:.1f}亿",
-                                                '综合评分': f"{final_score:.1f}",
-                                                '评级': score_result.get('grade', '-'),
-                                                '资金加分': f"{extra:.1f}",
-                                                '板块热度': f"{dim_scores.get('板块热度', 0):.1f}",
-                                                '资金流向': f"{dim_scores.get('资金流向', 0):.1f}",
-                                                '技术突破': f"{dim_scores.get('技术突破', 0):.1f}",
-                                                '短期动量': f"{dim_scores.get('短期动量', 0):.1f}",
-                                                '相对强度': f"{dim_scores.get('相对强度', 0):.1f}",
-                                                '量能配合': f"{dim_scores.get('量能配合', 0):.1f}",
-                                                '筹码结构': f"{dim_scores.get('筹码结构', 0):.1f}",
-                                                '安全边际': f"{dim_scores.get('安全边际', 0):.1f}",
-                                                '最新价格': f"{stock_data['close_price'].iloc[-1]:.2f}元",
-                                                '止损价': f"{score_result.get('stop_loss', 0):.2f}元",
-                                                '止盈价': f"{score_result.get('take_profit', 0):.2f}元",
-                                                '筛选理由': score_result.get('description', ''),
-                                                '原始数据': score_result
-                                            })
-                                
-                                except Exception as e:
-                                    logger.warning(f"评分失败 {ts_code}: {e}")
-                                    continue
-                            
-                            progress_bar.empty()
-                            status_text.empty()
-                            conn.close()
-                            
-                            # 显示结果
-                            if results:
-                                results_df = pd.DataFrame(results)
-                                results_df = _apply_filter_mode(
-                                    results_df,
-                                    score_col="综合评分",
-                                    mode=select_mode_v6b,
-                                    threshold=score_threshold_v6,
-                                    top_percent=top_percent_v6b
-                                )
-                                if enable_consistency_v6b and not results_df.empty:
-                                    results_df = _apply_multi_period_filter(
-                                        results_df,
-                                        PERMANENT_DB_PATH,
-                                        min_align=min_align_v6b
-                                    )
-                                results_df = _add_reason_summary(results_df, score_col="综合评分")
-                                if results_df.empty:
-                                    st.warning("未找到符合条件的股票，请降低阈值或放宽筛选条件")
-                                    st.stop()
-
-                                if select_mode_v6b == "阈值筛选":
-                                    st.success(f"找到 {len(results_df)} 只符合条件的股票（≥{score_threshold_v6}分）")
-                                elif select_mode_v6b == "双重筛选(阈值+Top%)":
-                                    st.success(f"先阈值后Top筛选：≥{score_threshold_v6}分，Top {top_percent_v6b}%（{len(results_df)} 只）")
-                                else:
-                                    st.success(f"选出 Top {top_percent_v6b}%（{len(results_df)} 只）")
-                                
-                                results_df = results_df.reset_index(drop=True)
-                                msg, level = _signal_density_hint(len(results_df), len(stocks_df))
-                                getattr(st, level)(msg)
-                                
-                                _save_scan_cache(
-                                    "v6_scan",
-                                    cache_params,
-                                    db_last,
-                                    results_df,
-                                    {"candidate_count": len(stocks_df), "filter_failed": 0},
-                                )
-
-                                # 保存到session_state
-                                st.session_state['v6_scan_results'] = results_df
-                                
-                                # 显示统计
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("标的数量", f"{len(results)}只")
-                                with col2:
-                                    avg_score = results_df['综合评分'].astype(float).mean()
-                                    st.metric("平均评分", f"{avg_score:.1f}分")
-                                with col3:
-                                    max_score = results_df['综合评分'].astype(float).max()
-                                    st.metric("最高评分", f"{max_score:.1f}分")
-                                with col4:
-                                    grade_s = sum(1 for g in results_df['评级'] if g == 'S')
-                                    grade_a = sum(1 for g in results_df['评级'] if g == 'A')
-                                    st.metric("S+A级", f"{grade_s+grade_a}只")
-                                
-                                st.markdown("---")
-                                st.subheader("结果列表（v6.0超短线·8维评分）")
-                                
-                                # 选择显示模式
-                                view_mode = st.radio(
-                                    "显示模式",
-                                    [" 完整评分", " 核心指标", " 简洁模式"],
-                                    horizontal=True,
-                                    key="v6_view_mode"
-                                )
-                                
-                                # 根据模式选择列
-                                if view_mode == " 完整评分":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '板块热度', '资金流向', '技术突破', '短期动量', 
-                                                   '相对强度', '量能配合', '筹码结构', '安全边际',
-                                                   '最新价格', '止损价', '止盈价', '筛选理由']
-                                elif view_mode == " 核心指标":
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', '评级',
-                                                   '资金加分', '板块热度', '资金流向', '最新价格', '止损价', '止盈价', '筛选理由']
-                                else:  # 简洁模式
-                                    display_cols = ['股票代码', '股票名称', '行业', '流通市值', '综合评分', 
-                                                   '资金加分', '评级', '最新价格', '筛选理由']
-                                
-                                display_cols = _append_reason_col(display_cols, results_df)
-                                
-                                display_df = results_df[display_cols]
-                                
-                                # 显示表格
-                                st.dataframe(
-                                    display_df,
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config={
-                                        "综合评分": st.column_config.NumberColumn(
-                                            "综合评分",
-                                            help="v6.0超短线评分（100分制）",
-                                            format="%.1f分"
-                                        ),
-                                        "评级": st.column_config.TextColumn(
-                                            "评级",
-                                            help="S:优秀 A:良好 B:中性 C:谨慎",
-                                            width="small"
-                                        ),
-                                        "筛选理由": st.column_config.TextColumn(
-                                            "筛选理由",
-                                            help="智能分析推荐原因",
-                                            width="large"
-                                        )
-                                    }
-                                )
-                                
-                                # 导出功能
-                                st.markdown("---")
-                                export_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                                csv = _df_to_csv_bytes(export_df)
-                                st.download_button(
-                                    label=" 导出结果（CSV）",
-                                    data=csv,
-                                    file_name=f"核心策略_V6_超短线_扫描结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                    mime="text/csv; charset=utf-8"
-                                )
-                                
-                            else:
-                                st.warning(f"未找到≥{score_threshold_v6}分的股票\n\n**建议：**\n1. 降低评分阈值\n2. 扩大市值范围")
-                    
-                    except Exception as e:
-                        st.error(f"扫描失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-            
-            # 显示之前的扫描结果
-            if 'v6_scan_results' in st.session_state:
-                st.markdown("---")
-                st.markdown("###  上次扫描结果")
-                results_df = st.session_state['v6_scan_results']
-                display_df = results_df.drop(columns=["原始数据"], errors="ignore")
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+        show_ai_signal_panel = render_today_strategy_dispatcher(
+            strategy_mode=strategy_mode,
+            show_ai_signal_panel=show_ai_signal_panel,
+            vp_analyzer=vp_analyzer,
+            logger=logger,
+            permanent_db_path=PERMANENT_DB_PATH,
+            db_manager=db_manager,
+            bulk_history_limit=BULK_HISTORY_LIMIT,
+            strict_full_market_mode=bool(strict_full_market_mode),
+            v4_evaluator_available=V4_EVALUATOR_AVAILABLE,
+            v5_evaluator_available=V5_EVALUATOR_AVAILABLE,
+            v6_evaluator_available=V6_EVALUATOR_AVAILABLE,
+            v7_evaluator_available=V7_EVALUATOR_AVAILABLE,
+            v8_evaluator_available=V8_EVALUATOR_AVAILABLE,
+            stable_uptrend_available=STABLE_UPTREND_AVAILABLE,
+            stable_uptrend_context_cls=_StableUptrendContext,
+            render_stable_uptrend_strategy=render_stable_uptrend_strategy,
+            load_evolve_params=_load_evolve_params,
+            load_strategy_center_scan_defaults=_load_strategy_center_scan_defaults,
+            sync_scan_task_with_params=_sync_scan_task_with_params,
+            render_scan_param_hint=_render_scan_param_hint,
+            render_front_scan_summary=_render_front_scan_summary,
+            has_role=_airivo_has_role,
+            guard_action=_airivo_guard_action,
+            append_action_audit=_airivo_append_action_audit,
+            detect_heavy_background_job=_detect_heavy_background_job,
+            start_async_scan_task=_start_async_scan_task,
+            mark_scan_submitted=_mark_scan_submitted,
+            run_front_scan_via_offline_pipeline=_run_front_scan_via_offline_pipeline,
+            mark_front_scan_completed=_mark_front_scan_completed,
+            get_db_last_trade_date=_get_db_last_trade_date,
+            load_scan_cache=_load_scan_cache,
+            save_scan_cache=_save_scan_cache,
+            load_v7_cache=_load_v7_cache,
+            save_v7_cache=_save_v7_cache,
+            connect_permanent_db=_connect_permanent_db,
+            load_candidate_stocks=_load_candidate_stocks,
+            load_external_bonus_maps=_load_external_bonus_maps,
+            load_stock_history=_load_stock_history,
+            load_stock_history_bulk=_load_stock_history_bulk,
+            load_stock_history_fallback=_load_stock_history_fallback,
+            load_history_range_bulk=_load_history_range_bulk,
+            batch_load_stock_histories=_batch_load_stock_histories,
+            calc_external_bonus=_calc_external_bonus,
+            update_scan_progress_ui=_update_scan_progress_ui,
+            apply_filter_mode=_apply_filter_mode,
+            apply_multi_period_filter=_apply_multi_period_filter,
+            add_reason_summary=_add_reason_summary,
+            render_result_overview=_render_result_overview,
+            render_v7_results=_render_v7_results,
+            signal_density_hint=_signal_density_hint,
+            set_stock_pool_candidate=_set_stock_pool_candidate,
+            append_reason_col=_append_reason_col,
+            standardize_result_df=_standardize_result_df,
+            normalize_stock_df=_normalize_stock_df,
+            df_to_csv_bytes=_df_to_csv_bytes,
+            render_cached_scan_results=_render_cached_scan_results,
+            render_async_scan_status=_render_async_scan_status,
+        )
 
     # ==================== Tab 2: 股票池分析 ====================
     with tab_pool:
@@ -18250,118 +11132,10 @@ def main():
 
     # ==================== Tab 3:  板块热点分析 ====================
     with tab_sector:
-        _render_page_header(
-            " 板块热点分析",
-            "快速识别热门板块 · 生命周期分析 · 萌芽期重点关注",
-            tag="Sector Flow",
+        render_sector_flow_page(
+            render_page_header=_render_page_header,
+            market_scanner_cls=MarketScanner,
         )
-        
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            scan_days = st.slider("扫描周期（天）", 30, 120, 60, 5, 
-                                key='sector_scan_days',
-                                help="扫描最近N天的板块数据，建议60天")
-        
-        with col2:
-            st.markdown("<br>", unsafe_allow_html=True)
-            start_scan = st.button("开始扫描", type="primary", use_container_width=True, key="start_sector_scan")
-        
-        if start_scan:
-            with st.spinner("正在扫描全市场板块..."):
-                try:
-                    # 初始化scanner
-                    if 'scanner' not in st.session_state:
-                        st.session_state.scanner = MarketScanner()
-                    
-                    scan_results = st.session_state.scanner.scan_all_sectors(days=scan_days)
-                    st.session_state['scan_results'] = scan_results
-                    st.success("扫描完成！")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"扫描失败: {e}")
-                    import traceback
-                    st.code(traceback.format_exc())
-        
-        if 'scan_results' in st.session_state:
-            results = st.session_state['scan_results']
-            
-            st.markdown("---")
-            st.subheader("板块生命周期分布")
-            
-            col1, col2, col3, col4, col5 = st.columns(5)
-            
-            with col1:
-                st.metric("萌芽期", f"{len(results['emerging'])}个", 
-                         help="成交量低迷但价格稳定，主力可能在布局")
-            with col2:
-                st.metric("启动期", f"{len(results['launching'])}个",
-                         help="量价齐升，板块开始启动")
-            with col3:
-                st.metric("加速期", f"{len(results['exploding'])}个",
-                         help="成交量趋势，价格大涨")
-            with col4:
-                st.metric("衰退期", f"{len(results['declining'])}个",
-                         help="量价齐跌，板块进入衰退")
-            with col5:
-                st.metric("过渡期", f"{len(results['transitioning'])}个",
-                         help="处于过渡阶段，观察为主")
-            
-            # 萌芽期板块（重点关注）
-            if results['emerging']:
-                st.markdown("---")
-                st.markdown("###  萌芽期板块（重点关注 - 最佳布局时机）")
-                st.info("萌芽期特征：成交量低迷，价格稳定，主力可能在悄悄布局，是最佳介入时机！")
-                
-                for i, sector in enumerate(results['emerging'][:10], 1):
-                    with st.expander(f"{i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**所处阶段**: {sector['stage']}")
-                            st.markdown(f"**综合评分**: {sector['score']}分")
-                        with col2:
-                            st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
-                        
-                        st.success("建议：密切关注该板块龙头股，等待启动信号")
-            
-            # 启动期板块
-            if results['launching']:
-                st.markdown("---")
-                st.markdown("###  启动期板块（关注 - 确认突破）")
-                
-                for i, sector in enumerate(results['launching'][:5], 1):
-                    with st.expander(f"{i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**所处阶段**: {sector['stage']}")
-                            st.markdown(f"**综合评分**: {sector['score']}分")
-                        with col2:
-                            st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
-                        
-                        st.warning("建议：关注龙头股突破，可考虑介入")
-            
-            # 加速期板块
-            if results['exploding']:
-                st.markdown("---")
-                st.markdown("###  加速期板块（谨慎 - 短线为主）")
-                
-                for i, sector in enumerate(results['exploding'][:5], 1):
-                    with st.expander(f"{i}. 【{sector['sector_name']}】 评分: {sector['score']}分"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**所处阶段**: {sector['stage']}")
-                            st.markdown(f"**综合评分**: {sector['score']}分")
-                        with col2:
-                            st.markdown(f"**关键信号**: {', '.join(sector['signals'])}")
-                        
-                        st.error("建议：高位追涨风险大，仅供短线高手参与")
-            
-            # 使用指南
-            st.markdown("---")
-            with st.expander("操作提示"):
-                st.markdown("优先看萌芽期与启动期；加速期仅短线，衰退期回避。")
-        else:
-            st.info("点击“开始扫描”后查看板块阶段分布。")
 
     # ==================== Tab 3:  回测系统 ====================
     with tab_backtest:
@@ -18383,3697 +11157,125 @@ def main():
         )
 
         if backtest_mode == "策略横向对比（辅助）":
-            st.subheader("六大策略对比")
-            
-            exp_backtest = st.expander("策略速览", expanded=False)
-            exp_backtest.info("""
-            - v4：潜伏与提前布局
-            - v5：启动确认与趋势跟随
-            - v6：超短线快进快出
-            - v7：动态自适应与轮动
-            - v8：强化风控与仓位管理
-            - v9：中线均衡与回撤控制
-            """)
-            
-            col1, col2 = st.columns([3, 1])
-            strict_full_market_mode = bool(st.session_state.get("strict_full_market_mode", False))
-            st.session_state.setdefault("comparison_full_market_mode", strict_full_market_mode)
-            if strict_full_market_mode:
-                st.session_state["comparison_full_market_mode"] = True
-            
-            with col1:
-                full_market_mode_compare = st.checkbox(
-                    "全量模式（不抽样）",
-                    key="comparison_full_market_mode",
-                    help="开启后按当前历史数据中的全部股票回测，耗时会显著增加。",
-                )
-                backtest_sample_size = st.slider(
-                    "回测样本数量", 
-                    100, 6000, 3000 if strict_full_market_mode else 500, 100,
-                    help="建议500-1500；全量模式开启时该项仅作展示。",
-                    disabled=bool(full_market_mode_compare),
-                )
-                comparison_validation_mode = st.selectbox(
-                    "验证模式",
-                    ["快速全样本", "Walk-forward（滚动样本外）"],
-                    index=0,
-                    help="快速全样本：速度快；Walk-forward：按时间滚动分窗，更接近实盘稳定性验证。",
-                    key="comparison_validation_mode"
-                )
-                if comparison_validation_mode == "Walk-forward（滚动样本外）":
-                    wf_cols = st.columns(3)
-                    with wf_cols[0]:
-                        wf_folds = st.slider("滚动窗口数", 2, 8, 4, 1, key="wf_folds")
-                    with wf_cols[1]:
-                        wf_window_days = st.slider("单窗口交易日", 120, 260, 180, 10, key="wf_window_days")
-                    with wf_cols[2]:
-                        wf_step_days = st.slider("滚动步长交易日", 20, 120, 40, 5, key="wf_step_days")
-                if full_market_mode_compare:
-                    st.caption("当前为全量模式：回测将使用当前历史数据中的全部股票。")
-            
-            with col2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                async_compare = st.checkbox("后台运行（可选）", value=False, key="comparison_async_run")
-                start_comparison = st.button(
-                    " 开始对比", 
-                    type="primary", 
-                    use_container_width=True,
-                    key="start_strategy_comparison"
-                )
-            
-            if start_comparison:
-                compare_strategy_params = _get_production_compare_params()
-                if async_compare:
-                    payload = {
-                        "sample_size": int(backtest_sample_size),
-                        "full_market_mode": bool(full_market_mode_compare),
-                        "history_days": 240,
-                        "strategy_params": compare_strategy_params,
-                        "validation_mode": comparison_validation_mode,
-                        "wf_folds": int(st.session_state.get("wf_folds", 4)),
-                        "wf_window_days": int(st.session_state.get("wf_window_days", 180)),
-                        "wf_step_days": int(st.session_state.get("wf_step_days", 40)),
-                    }
-                    ok, msg, run_id = _start_async_backtest_job("comparison", payload)
-                    if ok:
-                        st.session_state["comparison_async_job_id"] = run_id
-                        st.success(msg)
-                    else:
-                        st.error(msg)
-                    st.rerun()
-                with st.spinner("正在对比六大策略表现（包含v9.0！）...这可能需要几分钟..."):
-                    try:
-                        # 获取历史数据
-                        from data.dao import DataAccessError, detect_daily_table  # type: ignore
-
-                        conn = _connect_permanent_db()
-                        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-
-                        try:
-                            daily_table = detect_daily_table(conn)
-                        except DataAccessError:
-                            conn.close()
-                            st.error("无法识别日线数据表（daily_trading_data/daily_data）")
-                            st.stop()
-
-                        query = f"""
-                            SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
-                                   dtd.open_price, dtd.high_price, dtd.low_price, 
-                                   dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
-                            FROM {daily_table} dtd
-                            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-                            WHERE dtd.trade_date >= ?
-                            ORDER BY dtd.ts_code, dtd.trade_date
-                        """
-                        
-                        df = pd.read_sql_query(query, conn, params=(start_date,))
-                        conn.close()
-                        
-                        if df.empty:
-                            st.error("无法获取历史数据，请先到「数据与系统」更新数据")
-                        else:
-                            #  v49修复：保留原始列名以兼容v6/v7/v8评分器
-                            # v4/v5评分器已支持多种列名格式
-                            # v6/v7/v8评分器需要close_price格式（不能重命名为close）
-                            # df = df.rename(columns={...})  # 已注释，保持数据库原始列名
-                            
-                            sample_for_run = int(backtest_sample_size)
-                            if (not full_market_mode_compare) and comparison_validation_mode == "Walk-forward（滚动样本外）":
-                                sample_for_run = max(60, min(int(backtest_sample_size), int(300 / max(1, int(wf_folds)))))
-
-                            def _run_compare_once(df_slice: pd.DataFrame, label: str = "") -> Dict[str, Dict]:
-                                results_local: Dict[str, Dict] = {}
-                                prefix = f"[{label}] " if label else ""
-                                sample_size_for_slice = (
-                                    max(1, int(df_slice["ts_code"].nunique()))
-                                    if full_market_mode_compare and "ts_code" in df_slice.columns
-                                    else int(sample_for_run)
-                                )
-                                st.info(f"{prefix}正在回测 v4.0 长期稳健版...")
-                                v4_result = vp_analyzer.backtest_explosive_hunter(
-                                    df_slice,
-                                    sample_size=sample_size_for_slice,
-                                    holding_days=5
-                                )
-                                if v4_result.get('success'):
-                                    results_local['v4.0 长期稳健版'] = v4_result['stats']
-
-                                st.info(f"{prefix}正在回测 v5.0 趋势趋势版...")
-                                v5_result = vp_analyzer.backtest_bottom_breakthrough(
-                                    df_slice,
-                                    sample_size=sample_size_for_slice,
-                                    holding_days=int(compare_strategy_params.get("v5", {}).get("holding_days", 8))
-                                )
-                                if v5_result.get('success'):
-                                    results_local['v5.0 趋势趋势版'] = v5_result['stats']
-
-                                st.info(f"{prefix}正在回测 v6.0 高级超短线...")
-                                v6_result = vp_analyzer.backtest_v6_ultra_short(
-                                    df_slice,
-                                    sample_size=sample_size_for_slice,
-                                    holding_days=3,
-                                    score_threshold=60.0
-                                )
-                                if v6_result.get('success'):
-                                    results_local['v6.0 高级超短线'] = v6_result['stats']
-
-                                if V7_EVALUATOR_AVAILABLE and hasattr(vp_analyzer, 'evaluator_v7') and vp_analyzer.evaluator_v7:
-                                    st.info(f"{prefix}正在回测 v7.0 智能版...")
-                                    v7_result = vp_analyzer.backtest_v7_intelligent(
-                                        df_slice,
-                                        sample_size=sample_size_for_slice,
-                                        holding_days=5,
-                                        score_threshold=60.0
-                                    )
-                                    if v7_result.get('success'):
-                                        results_local['v7.0 智能版'] = v7_result['stats']
-
-                                if V8_EVALUATOR_AVAILABLE and hasattr(vp_analyzer, 'evaluator_v8') and vp_analyzer.evaluator_v8:
-                                    st.info(f"{prefix}正在回测 v8.0 进阶版...")
-                                    v8_result = vp_analyzer.backtest_v8_ultimate(
-                                        df_slice,
-                                        sample_size=sample_size_for_slice,
-                                        holding_days=int(compare_strategy_params.get("v8", {}).get("holding_days", 10)),
-                                        score_threshold=float(compare_strategy_params.get("v8", {}).get("score_threshold", 65))
-                                    )
-                                    if v8_result.get('success'):
-                                        results_local['v8.0 进阶版'] = v8_result['stats']
-
-                                st.info(f"{prefix}正在回测 v9.0 中线均衡版...")
-                                v9_result = vp_analyzer.backtest_v9_midterm(
-                                    df_slice,
-                                    sample_size=sample_size_for_slice,
-                                    holding_days=int(compare_strategy_params.get("v9", {}).get("holding_days", 20)),
-                                    score_threshold=float(compare_strategy_params.get("v9", {}).get("score_threshold", 65))
-                                )
-                                if v9_result.get('success'):
-                                    results_local['v9.0 中线均衡版'] = v9_result['stats']
-
-                                st.info(f"{prefix}正在回测 组合策略（生产共识）...")
-                                combo_result = vp_analyzer.backtest_combo_production(
-                                    df_slice,
-                                    sample_size=sample_size_for_slice,
-                                    holding_days=int(compare_strategy_params.get("combo", {}).get("holding_days", 10)),
-                                    combo_threshold=float(compare_strategy_params.get("combo", {}).get("score_threshold", 68)),
-                                    min_agree=2,
-                                )
-                                if combo_result.get("success"):
-                                    results_local["组合策略（生产共识）"] = combo_result["stats"]
-                                return results_local
-
-                            def _aggregate_fold_results(fold_results: List[Dict[str, Dict]]) -> Dict[str, Dict]:
-                                by_strategy: Dict[str, List[Dict]] = {}
-                                for fr in fold_results:
-                                    for k, stt in fr.items():
-                                        by_strategy.setdefault(k, []).append(stt)
-                                out: Dict[str, Dict] = {}
-                                for k, rows in by_strategy.items():
-                                    total_signals = float(sum(float(r.get('total_signals', 0) or 0) for r in rows))
-                                    w = total_signals if total_signals > 0 else float(len(rows))
-                                    def _wavg(field: str) -> float:
-                                        if total_signals > 0:
-                                            return float(sum(float(r.get(field, 0) or 0) * float(r.get('total_signals', 0) or 0) for r in rows) / w)
-                                        return float(sum(float(r.get(field, 0) or 0) for r in rows) / max(1, len(rows)))
-                                    out[k] = {
-                                        'total_signals': int(total_signals),
-                                        'analyzed_stocks': int(sum(int(r.get('analyzed_stocks', 0) or 0) for r in rows)),
-                                        'win_rate': _wavg('win_rate'),
-                                        'avg_return': _wavg('avg_return'),
-                                        'median_return': _wavg('median_return'),
-                                        'max_return': max(float(r.get('max_return', -999) or -999) for r in rows),
-                                        'min_return': min(float(r.get('min_return', 999) or 999) for r in rows),
-                                        'sharpe_ratio': _wavg('sharpe_ratio'),
-                                        'sortino_ratio': _wavg('sortino_ratio'),
-                                        'max_drawdown': _wavg('max_drawdown'),
-                                        'profit_loss_ratio': _wavg('profit_loss_ratio'),
-                                        'avg_holding_days': _wavg('avg_holding_days'),
-                                        'annualized_return': _wavg('annualized_return'),
-                                        'volatility': _wavg('volatility'),
-                                        'fold_count': len(rows),
-                                    }
-                                return out
-
-                            meta: Dict[str, Any] = {"validation_mode": comparison_validation_mode}
-                            if comparison_validation_mode == "Walk-forward（滚动样本外）":
-                                unique_dates = sorted([str(x) for x in df['trade_date'].dropna().unique()])
-                                fold_results: List[Dict[str, Dict]] = []
-                                fold_ranges: List[str] = []
-                                fold_details: List[Dict[str, Any]] = []
-                                pos = max(0, len(unique_dates) - int(wf_window_days))
-                                for i in range(int(wf_folds)):
-                                    start_pos = pos - i * int(wf_step_days)
-                                    end_pos = start_pos + int(wf_window_days)
-                                    if start_pos < 0 or end_pos > len(unique_dates):
-                                        continue
-                                    d0 = unique_dates[start_pos]
-                                    d1 = unique_dates[end_pos - 1]
-                                    df_fold = df[(df['trade_date'] >= d0) & (df['trade_date'] <= d1)].copy()
-                                    if df_fold.empty:
-                                        continue
-                                    fold_ranges.append(f"{d0}-{d1}")
-                                    one = _run_compare_once(df_fold, label=f"WF{i+1}")
-                                    if one:
-                                        fold_results.append(one)
-                                        for sk, ss in one.items():
-                                            fold_details.append({
-                                                "fold": int(i + 1),
-                                                "range": f"{d0}-{d1}",
-                                                "strategy": sk,
-                                                "win_rate": float(ss.get("win_rate", 0) or 0),
-                                                "avg_return": float(ss.get("avg_return", 0) or 0),
-                                                "sharpe_ratio": float(ss.get("sharpe_ratio", 0) or 0),
-                                                "max_drawdown": float(ss.get("max_drawdown", 0) or 0),
-                                                "total_signals": int(ss.get("total_signals", 0) or 0),
-                                            })
-                                fold_results = list(reversed(fold_results))
-                                results = _aggregate_fold_results(fold_results)
-                                meta.update({
-                                    "fold_count": len(fold_results),
-                                    "fold_ranges": fold_ranges,
-                                    "fold_details": fold_details,
-                                    "wf_window_days": int(wf_window_days),
-                                    "wf_step_days": int(wf_step_days),
-                                })
-                            else:
-                                results = _run_compare_once(df)
-
-                            if results:
-                                st.session_state['comparison_results'] = results
-                                st.session_state['comparison_results_meta'] = meta
-                                st.success("策略对比完成！")
-                                st.rerun()
-                            else:
-                                st.error("所有策略回测都失败了")
-                    
-                    except Exception as e:
-                        st.error(f"回测失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-
-            compare_job_id = str(st.session_state.get("comparison_async_job_id", "") or "")
-            if compare_job_id:
-                job = _get_async_backtest_job(compare_job_id)
-                if job:
-                    st.info(f"后台任务状态：{job.get('status')}（ID={compare_job_id}）")
-                    cj1, cj2 = st.columns([1, 1])
-                    with cj1:
-                        if st.button("刷新后台任务状态", key=f"refresh_compare_job_{compare_job_id}"):
-                            st.rerun()
-                    with cj2:
-                        if str(job.get("status")) == "running" and st.button("取消对比任务", key=f"cancel_compare_job_{compare_job_id}"):
-                            pid = int(job.get("pid", 0) or 0)
-                            if pid > 0 and _is_pid_alive(pid):
-                                try:
-                                    os.killpg(pid, signal.SIGTERM)
-                                except Exception:
-                                    try:
-                                        os.kill(pid, signal.SIGTERM)
-                                    except Exception:
-                                        pass
-                            _merge_async_backtest_job(
-                                compare_job_id,
-                                job,
-                                status="failed",
-                                error="任务已手动取消",
-                                ended_at=_now_ts(),
-                            )
-                            st.session_state["comparison_async_job_id"] = ""
-                            st.rerun()
-                    if str(job.get("status")) == "success":
-                        out = (job.get("result") or {})
-                        if out.get("success"):
-                            st.session_state['comparison_results'] = out.get("results", {}) or {}
-                            st.session_state['comparison_results_meta'] = out.get("meta", {}) or {}
-                            st.success("后台策略对比已完成，结果已更新。")
-                            st.session_state["comparison_async_job_id"] = ""
-                            st.rerun()
-                    elif str(job.get("status")) == "failed":
-                        st.error(f"后台策略对比失败：{job.get('error', '未知错误')}")
-                        if str(job.get("traceback", "")).strip():
-                            with st.expander("查看后台任务错误详情", expanded=False):
-                                st.code(str(job.get("traceback", "")))
-                        st.session_state["comparison_async_job_id"] = ""
-            
-            # 显示对比结果
-            if 'comparison_results' in st.session_state:
-                results = st.session_state['comparison_results']
-                comparison_meta = st.session_state.get('comparison_results_meta', {}) or {}
-                
-                st.markdown("---")
-                st.subheader("策略对比结果")
-                mode_text = str(comparison_meta.get("validation_mode", "快速全样本"))
-                if mode_text:
-                    st.caption(f"验证模式：{mode_text}")
-                if str(mode_text).startswith("Walk-forward"):
-                    st.caption(
-                        f"窗口数：{comparison_meta.get('fold_count', 0)} | "
-                        f"窗口长度：{comparison_meta.get('wf_window_days', 'N/A')}交易日 | "
-                        f"步长：{comparison_meta.get('wf_step_days', 'N/A')}交易日"
-                    )
-                
-                # 创建对比表格
-                comparison_data = []
-                for strategy_name, stats in results.items():
-                    comparison_data.append({
-                        '策略': strategy_name,
-                        '胜率': f"{stats.get('win_rate', 0):.1f}%",
-                        '平均收益': f"{stats.get('avg_return', 0):.2f}%",
-                        '夏普比率': f"{stats.get('sharpe_ratio', 0):.2f}",
-                        '信号数量': stats.get('total_signals', 0),
-                        '平均持仓天数': stats.get('avg_holding_days', 0)
-                    })
-                
-                comparison_df = pd.DataFrame(comparison_data)
-                st.dataframe(comparison_df, use_container_width=True, hide_index=True)
-
-                if str(mode_text).startswith("Walk-forward"):
-                    fold_details = comparison_meta.get("fold_details", []) or []
-                    if fold_details:
-                        st.markdown("---")
-                        st.subheader("Walk-forward 分窗口明细")
-                        fold_df = pd.DataFrame(fold_details)
-                        if not fold_df.empty:
-                            fold_df = fold_df.sort_values(["fold", "strategy"]).reset_index(drop=True)
-                            show_df = fold_df.copy()
-                            show_df["win_rate"] = show_df["win_rate"].map(lambda x: f"{x:.1f}%")
-                            show_df["avg_return"] = show_df["avg_return"].map(lambda x: f"{x:.2f}%")
-                            show_df["sharpe_ratio"] = show_df["sharpe_ratio"].map(lambda x: f"{x:.2f}")
-                            show_df["max_drawdown"] = show_df["max_drawdown"].map(lambda x: f"{x:.2f}%")
-                            show_df = show_df.rename(columns={
-                                "fold": "窗口",
-                                "range": "时间范围",
-                                "strategy": "策略",
-                                "win_rate": "胜率",
-                                "avg_return": "平均收益",
-                                "sharpe_ratio": "夏普比率",
-                                "max_drawdown": "最大回撤",
-                                "total_signals": "信号数",
-                            })
-                            st.dataframe(show_df, use_container_width=True, hide_index=True)
-
-                            metric_opt = st.selectbox(
-                                "分窗口观察指标",
-                                ["win_rate", "avg_return", "sharpe_ratio", "max_drawdown", "total_signals"],
-                                index=0,
-                                key="wf_metric_selector"
-                            )
-                            metric_title = {
-                                "win_rate": "胜率(%)",
-                                "avg_return": "平均收益(%)",
-                                "sharpe_ratio": "夏普比率",
-                                "max_drawdown": "最大回撤(%)",
-                                "total_signals": "信号数",
-                            }.get(metric_opt, metric_opt)
-                            pivot_df = fold_df.pivot_table(index="fold", columns="strategy", values=metric_opt, aggfunc="mean")
-                            st.line_chart(pivot_df, height=280)
-                            st.caption(f"上图为各策略在不同窗口的 {metric_title} 变化，用于识别阶段性失效。")
-                
-                #  高级可视化对比（v49增强版）
-                st.markdown("---")
-                st.subheader("全方位可视化对比")
-                
-                # 第一行：胜率和收益对比
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    # 胜率对比 - 美化版
-                    fig_winrate = go.Figure()
-                    
-                    colors = ['#667eea', '#764ba2', '#FF6B6B', '#FFD700', '#FF1493']  # v4紫/v5深紫/v6红/v7金/v8粉
-                    strategies = list(results.keys())
-                    win_rates = [stats.get('win_rate', 0) for stats in results.values()]
-                    
-                    fig_winrate.add_trace(go.Bar(
-                        x=strategies,
-                        y=win_rates,
-                        marker=dict(
-                            color=colors,
-                            line=dict(color='white', width=2)
-                        ),
-                        text=[f"{wr:.1f}%" for wr in win_rates],
-                        textposition='auto',
-                        hovertemplate='<b>%{x}</b><br>胜率: %{y:.1f}%<extra></extra>'
-                    ))
-                    
-                    fig_winrate.update_layout(
-                        title={'text': ' 胜率对比', 'x': 0.5, 'xanchor': 'center'},
-                        yaxis_title='胜率 (%)',
-                        height=350,
-                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
-                        showlegend=False,
-                        yaxis=dict(gridcolor='rgba(128, 128, 128, 0.2)')
-                    )
-                    st.plotly_chart(fig_winrate, use_container_width=True)
-                
-                with col2:
-                    # 平均收益对比 - 美化版
-                    fig_return = go.Figure()
-                    
-                    avg_returns = [stats.get('avg_return', 0) for stats in results.values()]
-                    
-                    fig_return.add_trace(go.Bar(
-                        x=strategies,
-                        y=avg_returns,
-                        marker=dict(
-                            color=colors,
-                            line=dict(color='white', width=2)
-                        ),
-                        text=[f"{ar:.2f}%" for ar in avg_returns],
-                        textposition='auto',
-                        hovertemplate='<b>%{x}</b><br>平均收益: %{y:.2f}%<extra></extra>'
-                    ))
-                    
-                    fig_return.update_layout(
-                        title={'text': ' 平均收益对比', 'x': 0.5, 'xanchor': 'center'},
-                        yaxis_title='收益 (%)',
-                        height=350,
-                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
-                        showlegend=False,
-                        yaxis=dict(gridcolor='rgba(128, 128, 128, 0.2)')
-                    )
-                    st.plotly_chart(fig_return, use_container_width=True)
-                
-                # 第二行：风险指标对比
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    # 夏普比率和Sortino比率对比
-                    fig_risk = go.Figure()
-                    
-                    sharpe_ratios = [stats.get('sharpe_ratio', 0) for stats in results.values()]
-                    sortino_ratios = [stats.get('sortino_ratio', 0) for stats in results.values()]
-                    
-                    fig_risk.add_trace(go.Bar(
-                        name='夏普比率',
-                        x=strategies,
-                        y=sharpe_ratios,
-                        marker_color='#667eea',
-                        text=[f"{sr:.2f}" for sr in sharpe_ratios],
-                        textposition='auto'
-                    ))
-                    
-                    fig_risk.add_trace(go.Bar(
-                        name='Sortino比率',
-                        x=strategies,
-                        y=sortino_ratios,
-                        marker_color='#764ba2',
-                        text=[f"{sr:.2f}" for sr in sortino_ratios],
-                        textposition='auto'
-                    ))
-                    
-                    fig_risk.update_layout(
-                        title={'text': ' 风险调整收益对比', 'x': 0.5, 'xanchor': 'center'},
-                        yaxis_title='比率',
-                        barmode='group',
-                        height=350,
-                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
-                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
-                    )
-                    st.plotly_chart(fig_risk, use_container_width=True)
-                
-                with col2:
-                    # 最大回撤和盈亏比对比
-                    fig_drawdown = go.Figure()
-                    
-                    max_drawdowns = [abs(stats.get('max_drawdown', 0)) for stats in results.values()]
-                    profit_loss_ratios = [min(stats.get('profit_loss_ratio', 0), 10) for stats in results.values()]  # 限制最大值避免显示问题
-                    
-                    fig_drawdown.add_trace(go.Bar(
-                        name='最大回撤',
-                        x=strategies,
-                        y=max_drawdowns,
-                        marker_color='#FF6B6B',
-                        text=[f"{md:.2f}%" for md in max_drawdowns],
-                        textposition='auto',
-                        yaxis='y'
-                    ))
-                    
-                    fig_drawdown.add_trace(go.Scatter(
-                        name='盈亏比',
-                        x=strategies,
-                        y=profit_loss_ratios,
-                        marker=dict(size=15, color='#00D9FF', line=dict(width=2, color='white')),
-                        mode='markers+lines',
-                        line=dict(width=3),
-                        text=[f"{pl:.2f}" for pl in profit_loss_ratios],
-                        textposition='top center',
-                        yaxis='y2'
-                    ))
-                    
-                    fig_drawdown.update_layout(
-                        title={'text': ' 风险与盈亏比', 'x': 0.5, 'xanchor': 'center'},
-                        yaxis=dict(title='最大回撤 (%)', side='left'),
-                        yaxis2=dict(title='盈亏比', side='right', overlaying='y'),
-                        height=350,
-                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
-                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
-                    )
-                    st.plotly_chart(fig_drawdown, use_container_width=True)
-                
-                #  策略对比雷达图
-                st.markdown("---")
-                st.subheader("策略综合评分雷达图")
-                
-                # 计算每个策略的标准化评分
-                radar_fig = go.Figure()
-                
-                for i, (strategy_name, stats) in enumerate(results.items()):
-                    # 标准化各项指标到0-100分
-                    normalized_scores = {
-                        '胜率': stats.get('win_rate', 0),
-                        '平均收益': min(stats.get('avg_return', 0) * 5, 100),  # 假设20%收益对应100分
-                        '夏普比率': min(stats.get('sharpe_ratio', 0) * 25, 100),  # 假设4.0对应100分
-                        '盈亏比': min(stats.get('profit_loss_ratio', 0) * 20, 100),  # 假设5.0对应100分
-                        '信号数量': min(stats.get('total_signals', 0) / 5, 100),  # 假设500个对应100分
-                        '稳定性': max(100 - abs(stats.get('max_drawdown', 0)) * 10, 0)  # 回撤越小越好
-                    }
-                    
-                    categories = list(normalized_scores.keys())
-                    values = list(normalized_scores.values())
-                    values.append(values[0])  # 闭合雷达图
-                    
-                    radar_fig.add_trace(go.Scatterpolar(
-                        r=values,
-                        theta=categories + [categories[0]],
-                        fill='toself',
-                        name=strategy_name,
-                        line=dict(color=colors[i % len(colors)], width=2)
-                    ))
-                
-                radar_fig.update_layout(
-                    polar=dict(
-                        radialaxis=dict(
-                            visible=True,
-                            range=[0, 100],
-                            tickmode='linear',
-                            tick0=0,
-                            dtick=20
-                        )
-                    ),
-                    showlegend=True,
-                    legend=dict(orientation='h', yanchor='bottom', y=-0.2, xanchor='center', x=0.5),
-                    height=500,
-                    title={'text': '策略六维评分（标准化）', 'x': 0.5, 'xanchor': 'center'}
-                )
-                
-                st.plotly_chart(radar_fig, use_container_width=True)
-                
-                # 推荐最佳策略
-                st.markdown("---")
-                best_strategy = max(results.items(), 
-                                  key=lambda x: x[1].get('avg_return', 0) * x[1].get('win_rate', 0) / 100)
-                
-                st.success(f"""
-                ###  推荐策略：{best_strategy[0]}
-                
-                **综合表现**：
-                - 胜率：{best_strategy[1].get('win_rate', 0):.1f}%
-                - 平均收益：{best_strategy[1].get('avg_return', 0):.2f}%
-                - 夏普比率：{best_strategy[1].get('sharpe_ratio', 0):.2f}
-                - 信号数量：{best_strategy[1].get('total_signals', 0)}
-                
-                 根据历史回测数据，该策略综合表现最佳，建议优先使用！
-                """)
-                
-                # ==================== 回测+ 增强功能 ====================
-                st.markdown("---")
-                st.markdown("###  回测+ 增强分析")
-                
-                # 创建标签页
-                _analysis_tabs = [" 高级指标", " 收益分析", " 信号质量", " 导出报告"]
-                analysis_tab1, analysis_tab2, analysis_tab3, analysis_tab4 = st.tabs([t.strip() for t in _analysis_tabs])
-                
-                with analysis_tab1:
-                    st.subheader("高级性能指标（v49增强版）")
-                    
-                    # 为每个策略计算高级指标
-                    for strategy_name, stats in results.items():
-                        with st.expander(f"{strategy_name} - 详细指标", expanded=True):
-                            # 基础指标
-                            st.markdown("####  核心指标")
-                            col1, col2, col3, col4 = st.columns(4)
-                            
-                            with col1:
-                                st.metric("总信号数", stats.get('total_signals', 0))
-                                st.metric("胜率", f"{stats.get('win_rate', 0):.1f}%")
-                            
-                            with col2:
-                                st.metric("平均收益", f"{stats.get('avg_return', 0):.2f}%")
-                                st.metric("中位数收益", f"{stats.get('median_return', 0):.2f}%")
-                            
-                            with col3:
-                                st.metric("最大收益", f"{stats.get('max_return', 0):.2f}%")
-                                st.metric("最大亏损", f"{stats.get('min_return', 0):.2f}%")
-                            
-                            with col4:
-                                st.metric("夏普比率", f"{stats.get('sharpe_ratio', 0):.2f}")
-                                profit_loss = stats.get('profit_loss_ratio', 0)
-                                if profit_loss == float('inf'):
-                                    st.metric("盈亏比", "∞")
-                                else:
-                                    st.metric("盈亏比", f"{profit_loss:.2f}")
-                            
-                            #  高级风险指标
-                            st.markdown("---")
-                            st.markdown("####  风险控制指标")
-                            col1, col2, col3, col4 = st.columns(4)
-                            
-                            with col1:
-                                max_dd = stats.get('max_drawdown', 0)
-                                st.metric(
-                                    " 最大回撤", 
-                                    f"{max_dd:.2f}%",
-                                    delta=None,
-                                    help="资金曲线从高点到最低点的最大跌幅"
-                                )
-                                st.metric(
-                                    " 波动率",
-                                    f"{stats.get('volatility', 0):.2f}%",
-                                    help="收益率的标准差，越小越稳定"
-                                )
-                            
-                            with col2:
-                                st.metric(
-                                    " Sortino比率",
-                                    f"{stats.get('sortino_ratio', 0):.2f}",
-                                    help="只考虑下行风险的风险调整收益率"
-                                )
-                                st.metric(
-                                    " Calmar比率",
-                                    f"{stats.get('calmar_ratio', 0):.2f}",
-                                    help="年化收益率与最大回撤的比值"
-                                )
-                            
-                            with col3:
-                                st.metric(
-                                    " 最长连胜",
-                                    f"{stats.get('max_consecutive_wins', 0)} 次",
-                                    help="连续盈利交易的最长记录"
-                                )
-                                st.metric(
-                                    " 最长连亏",
-                                    f"{stats.get('max_consecutive_losses', 0)} 次",
-                                    help="连续亏损交易的最长记录"
-                                )
-                            
-                            with col4:
-                                st.metric(
-                                    " 年化收益",
-                                    f"{stats.get('annualized_return', 0):.2f}%",
-                                    help="按252个交易日计算的年化收益率"
-                                )
-                                st.metric(
-                                    " 期望值",
-                                    f"{stats.get('expected_value', 0):.2f}%",
-                                    help="每笔交易的期望收益"
-                                )
-                            
-                            # 收益分位数
-                            st.markdown("---")
-                            st.markdown("####  收益分布")
-                            col1, col2, col3 = st.columns(3)
-                            
-                            with col1:
-                                st.metric("25%分位数", f"{stats.get('return_25_percentile', 0):.2f}%")
-                            with col2:
-                                st.metric("50%分位数(中位)", f"{stats.get('median_return', 0):.2f}%")
-                            with col3:
-                                st.metric("75%分位数", f"{stats.get('return_75_percentile', 0):.2f}%")
-                            
-                            # 分强度统计
-                            if 'strength_performance' in stats:
-                                st.markdown("---")
-                                st.markdown("####  分强度表现统计")
-                                strength_data = []
-                                for strength_range, perf in stats['strength_performance'].items():
-                                    strength_data.append({
-                                        '信号强度': strength_range,
-                                        '信号数量': perf['count'],
-                                        '平均收益': f"{perf['avg_return']:.2f}%",
-                                        '胜率': f"{perf['win_rate']:.1f}%",
-                                        '最大收益': f"{perf.get('max_return', 0):.2f}%",
-                                        '最大亏损': f"{perf.get('min_return', 0):.2f}%"
-                                    })
-                                
-                                if strength_data:
-                                    strength_df = pd.DataFrame(strength_data)
-                                    st.dataframe(strength_df, use_container_width=True, hide_index=True)
-                                    
-                                    # 可视化信号强度分布
-                                    fig_strength = go.Figure()
-                                    
-                                    fig_strength.add_trace(go.Bar(
-                                        name='信号数量',
-                                        x=[d['信号强度'] for d in strength_data],
-                                        y=[d['信号数量'] for d in strength_data],
-                                        yaxis='y',
-                                        marker_color='lightblue'
-                                    ))
-                                    
-                                    fig_strength.add_trace(go.Scatter(
-                                        name='平均收益',
-                                        x=[d['信号强度'] for d in strength_data],
-                                        y=[float(d['平均收益'].rstrip('%')) for d in strength_data],
-                                        yaxis='y2',
-                                        mode='lines+markers',
-                                        marker=dict(size=10, color='red'),
-                                        line=dict(width=3)
-                                    ))
-                                    
-                                    fig_strength.update_layout(
-                                        title='信号强度 vs 收益表现',
-                                        xaxis_title='信号强度',
-                                        yaxis=dict(title='信号数量', side='left'),
-                                        yaxis2=dict(title='平均收益 (%)', side='right', overlaying='y'),
-                                        height=400,
-                                        showlegend=True
-                                    )
-                                    
-                                    st.plotly_chart(fig_strength, use_container_width=True)
-                
-                with analysis_tab2:
-                    st.subheader("收益分布与资金曲线（v49增强版）")
-                    
-                    # 选择要分析的策略
-                    selected_for_analysis = st.selectbox(
-                        "选择策略进行详细分析",
-                        list(results.keys()),
-                        key="analysis_strategy_select"
-                    )
-                    
-                    stats_for_analysis = results[selected_for_analysis]
-                    
-                    # 基础统计
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown("####  收益统计")
-                        st.info(f"""
-                        **平均收益**: {stats_for_analysis.get('avg_return', 0):.2f}%
-                        
-                        **中位数收益**: {stats_for_analysis.get('median_return', 0):.2f}%
-                        
-                        **最大收益**: {stats_for_analysis.get('max_return', 0):.2f}%
-                        
-                        **最大亏损**: {stats_for_analysis.get('min_return', 0):.2f}%
-                        
-                        **标准差**: {stats_for_analysis.get('volatility', 0):.2f}%
-                        """)
-                    
-                    with col2:
-                        st.markdown("####  风险指标")
-                        win_rate = stats_for_analysis.get('win_rate', 0)
-                        avg_return = stats_for_analysis.get('avg_return', 0)
-                        
-                        # 计算风险等级
-                        if win_rate >= 60 and avg_return >= 5:
-                            risk_level = " 低风险"
-                        elif win_rate >= 50 and avg_return >= 3:
-                            risk_level = " 中风险"
-                        else:
-                            risk_level = " 高风险"
-                        
-                        st.metric("风险等级", risk_level)
-                        st.metric("胜率", f"{win_rate:.1f}%")
-                        st.metric("夏普比率", f"{stats_for_analysis.get('sharpe_ratio', 0):.2f}")
-                        st.metric("盈亏比", f"{stats_for_analysis.get('profit_loss_ratio', 0):.2f}")
-                    
-                    #  资金曲线图
-                    st.markdown("---")
-                    st.markdown("####  资金曲线")
-                    
-                    if 'cumulative_returns' in stats_for_analysis and stats_for_analysis['cumulative_returns']:
-                        cumulative_returns = stats_for_analysis['cumulative_returns']
-                        
-                        fig_equity = go.Figure()
-                        
-                        # 主资金曲线
-                        fig_equity.add_trace(go.Scatter(
-                            x=list(range(len(cumulative_returns))),
-                            y=cumulative_returns,
-                            mode='lines',
-                            name='资金曲线',
-                            line=dict(color='#667eea', width=3),
-                            fill='tozeroy',
-                            fillcolor='rgba(102, 126, 234, 0.1)'
-                        ))
-                        
-                        # 添加基准线
-                        fig_equity.add_trace(go.Scatter(
-                            x=[0, len(cumulative_returns)-1],
-                            y=[1, 1],
-                            mode='lines',
-                            name='基准线',
-                            line=dict(color='gray', width=2, dash='dash')
-                        ))
-                        
-                        fig_equity.update_layout(
-                            title='累计收益率曲线',
-                            xaxis_title='交易次数',
-                            yaxis_title='累计收益倍数',
-                            height=400,
-                            hovermode='x unified',
-                            plot_bgcolor='rgba(240, 242, 246, 0.5)'
-                        )
-                        
-                        st.plotly_chart(fig_equity, use_container_width=True)
-                    else:
-                        st.info("资金曲线数据不可用")
-                    
-                    #  Monte Carlo模拟
-                    st.markdown("---")
-                    st.markdown("####  Monte Carlo模拟（未来收益预测）")
-                    
-                    col1, col2 = st.columns([2, 1])
-                    
-                    with col2:
-                        mc_simulations = st.slider("模拟次数", 100, 1000, 500, 100, key="mc_sims")
-                        mc_periods = st.slider("预测周期", 10, 100, 50, 10, key="mc_periods")
-                        run_mc = st.button("运行Monte Carlo模拟", type="primary", use_container_width=True)
-                    
-                    with col1:
-                        if run_mc:
-                            with st.spinner("正在运行Monte Carlo模拟..."):
-                                # 基于历史收益率进行蒙特卡洛模拟
-                                avg_ret = stats_for_analysis.get('avg_return', 0) / 100
-                                vol = stats_for_analysis.get('volatility', 0) / 100
-                                
-                                # 生成随机收益路径
-                                np.random.seed(42)
-                                simulations = []
-                                
-                                for _ in range(mc_simulations):
-                                    returns = np.random.normal(avg_ret, vol, mc_periods)
-                                    cumulative = np.cumprod(1 + returns)
-                                    simulations.append(cumulative)
-                                
-                                simulations = np.array(simulations)
-                                
-                                # 绘制Monte Carlo模拟结果
-                                fig_mc = go.Figure()
-                                
-                                # 绘制所有模拟路径（半透明）
-                                for i in range(min(100, mc_simulations)):  # 最多显示100条路径
-                                    fig_mc.add_trace(go.Scatter(
-                                        x=list(range(mc_periods)),
-                                        y=simulations[i],
-                                        mode='lines',
-                                        line=dict(color='lightblue', width=0.5),
-                                        opacity=0.3,
-                                        showlegend=False,
-                                        hoverinfo='skip'
-                                    ))
-                                
-                                # 添加中位数、25%和75%分位数
-                                median_path = np.median(simulations, axis=0)
-                                percentile_25 = np.percentile(simulations, 25, axis=0)
-                                percentile_75 = np.percentile(simulations, 75, axis=0)
-                                
-                                fig_mc.add_trace(go.Scatter(
-                                    x=list(range(mc_periods)),
-                                    y=median_path,
-                                    mode='lines',
-                                    name='中位数预测',
-                                    line=dict(color='red', width=3)
-                                ))
-                                
-                                fig_mc.add_trace(go.Scatter(
-                                    x=list(range(mc_periods)),
-                                    y=percentile_75,
-                                    mode='lines',
-                                    name='75%分位',
-                                    line=dict(color='green', width=2, dash='dash')
-                                ))
-                                
-                                fig_mc.add_trace(go.Scatter(
-                                    x=list(range(mc_periods)),
-                                    y=percentile_25,
-                                    mode='lines',
-                                    name='25%分位',
-                                    line=dict(color='orange', width=2, dash='dash'),
-                                    fill='tonexty',
-                                    fillcolor='rgba(102, 126, 234, 0.1)'
-                                ))
-                                
-                                fig_mc.update_layout(
-                                    title=f'Monte Carlo模拟 ({mc_simulations}次模拟, {mc_periods}期)',
-                                    xaxis_title='交易周期',
-                                    yaxis_title='累计收益倍数',
-                                    height=450,
-                                    hovermode='x unified',
-                                    plot_bgcolor='rgba(240, 242, 246, 0.5)'
-                                )
-                                
-                                st.plotly_chart(fig_mc, use_container_width=True)
-                                
-                                # 显示统计结果
-                                final_values = simulations[:, -1]
-                                st.success(f"""
-                                ###  Monte Carlo模拟结果
-                                
-                                **{mc_periods}个周期后的预期收益：**
-                                - 中位数：{(median_path[-1] - 1) * 100:.2f}%
-                                - 25%分位：{(percentile_25[-1] - 1) * 100:.2f}%
-                                - 75%分位：{(percentile_75[-1] - 1) * 100:.2f}%
-                                - 最好情况：{(final_values.max() - 1) * 100:.2f}%
-                                - 最坏情况：{(final_values.min() - 1) * 100:.2f}%
-                                - 盈利概率：{(final_values > 1).sum() / len(final_values) * 100:.1f}%
-                                """)
-                    
-                    # 收益区间分布
-                    st.markdown("---")
-                    st.markdown("####  收益区间分布")
-                    if 'strength_performance' in stats_for_analysis:
-                        strength_perf = stats_for_analysis['strength_performance']
-                        
-                        labels = list(strength_perf.keys())
-                        counts = [perf['count'] for perf in strength_perf.values()]
-                        returns = [perf['avg_return'] for perf in strength_perf.values()]
-                        
-                        fig = go.Figure()
-                        
-                        fig.add_trace(go.Bar(
-                            x=labels,
-                            y=counts,
-                            name='信号数量',
-                            marker_color='lightblue',
-                            yaxis='y'
-                        ))
-                        
-                        fig.add_trace(go.Scatter(
-                            x=labels,
-                            y=returns,
-                            name='平均收益',
-                            marker_color='red',
-                            yaxis='y2',
-                            mode='lines+markers',
-                            marker=dict(size=10),
-                            line=dict(width=3)
-                        ))
-                        
-                        fig.update_layout(
-                            title='信号强度 vs 收益表现',
-                            xaxis_title='信号强度',
-                            yaxis=dict(title='信号数量', side='left'),
-                            yaxis2=dict(title='平均收益 (%)', side='right', overlaying='y'),
-                            height=400
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                with analysis_tab3:
-                    st.subheader("信号质量分析（v49增强版）")
-                    
-                    # 整体信号质量评估
-                    st.markdown("####  策略信号质量对比")
-                    
-                    quality_data = []
-                    quality_scores_list = []
-                    
-                    for strategy_name, stats in results.items():
-                        # 计算综合质量分数（增强版）
-                        win_rate = stats.get('win_rate', 0)
-                        avg_return = stats.get('avg_return', 0)
-                        sharpe = stats.get('sharpe_ratio', 0)
-                        sortino = stats.get('sortino_ratio', 0)
-                        total_signals = stats.get('total_signals', 0)
-                        max_drawdown = abs(stats.get('max_drawdown', 0))
-                        profit_loss = min(stats.get('profit_loss_ratio', 0), 10)  # 限制最大值
-                        
-                        # 质量分数 = 胜率*0.25 + 平均收益*3*0.25 + 夏普比率*10*0.15 + 
-                        #            Sortino*8*0.1 + min(信号数/100, 1)*100*0.15 + 
-                        #            (10-回撤)*0.05 + 盈亏比*3*0.05
-                        quality_score = (
-                            win_rate * 0.25 +
-                            avg_return * 3 * 0.25 +
-                            sharpe * 10 * 0.15 +
-                            sortino * 8 * 0.1 +
-                            min(total_signals / 100, 1) * 100 * 0.15 +
-                            max(10 - max_drawdown, 0) * 0.05 +
-                            profit_loss * 3 * 0.05
-                        )
-                        
-                        quality_scores_list.append(quality_score)
-                        
-                        # 评级
-                        if quality_score >= 80:
-                            grade = "S 级（优秀）"
-                            grade_icon = ""
-                            grade_color = "#FFD700"
-                        elif quality_score >= 70:
-                            grade = "A 级（良好）"
-                            grade_icon = "⭐"
-                            grade_color = "#C0C0C0"
-                        elif quality_score >= 60:
-                            grade = "B 级（合格）"
-                            grade_icon = ""
-                            grade_color = "#CD7F32"
-                        else:
-                            grade = "C 级（待改进）"
-                            grade_icon = ""
-                            grade_color = "#808080"
-                        
-                        quality_data.append({
-                            '策略': strategy_name,
-                            '质量分数': f"{quality_score:.1f}",
-                            '评级': f"{grade_icon} {grade}",
-                            '胜率': f"{win_rate:.1f}%",
-                            '平均收益': f"{avg_return:.2f}%",
-                            '夏普比率': f"{sharpe:.2f}",
-                            'Sortino比率': f"{sortino:.2f}",
-                            '最大回撤': f"{max_drawdown:.2f}%",
-                            '盈亏比': f"{profit_loss:.2f}",
-                            '信号数量': total_signals
-                        })
-                    
-                    quality_df = pd.DataFrame(quality_data)
-                    st.dataframe(quality_df, use_container_width=True, hide_index=True)
-                    
-                    #  质量分数可视化对比
-                    st.markdown("---")
-                    st.markdown("####  质量分数可视化")
-                    
-                    fig_quality = go.Figure()
-                    
-                    colors_quality = ['#FFD700' if score >= 80 else '#C0C0C0' if score >= 70 else '#CD7F32' if score >= 60 else '#808080' 
-                                     for score in quality_scores_list]
-                    
-                    fig_quality.add_trace(go.Bar(
-                        x=list(results.keys()),
-                        y=quality_scores_list,
-                        marker=dict(
-                            color=colors_quality,
-                            line=dict(color='white', width=2)
-                        ),
-                        text=[f"{score:.1f}" for score in quality_scores_list],
-                        textposition='auto'
-                    ))
-                    
-                    # 添加评级线
-                    fig_quality.add_hline(y=80, line_dash="dash", line_color="gold", 
-                                         annotation_text="S级线", annotation_position="right")
-                    fig_quality.add_hline(y=70, line_dash="dash", line_color="silver", 
-                                         annotation_text="A级线", annotation_position="right")
-                    fig_quality.add_hline(y=60, line_dash="dash", line_color="#CD7F32", 
-                                         annotation_text="B级线", annotation_position="right")
-                    
-                    fig_quality.update_layout(
-                        title='策略质量分数对比',
-                        yaxis_title='质量分数',
-                        height=400,
-                        plot_bgcolor='rgba(240, 242, 246, 0.5)',
-                        showlegend=False
-                    )
-                    
-                    st.plotly_chart(fig_quality, use_container_width=True)
-                    
-                    #  策略对比热力图
-                    st.markdown("---")
-                    st.markdown("####  策略指标热力图")
-                    
-                    # 准备热力图数据
-                    heatmap_metrics = ['胜率', '平均收益', '夏普比率', 'Sortino比率', '盈亏比']
-                    heatmap_data = []
-                    
-                    for strategy_name, stats in results.items():
-                        row = [
-                            stats.get('win_rate', 0),
-                            stats.get('avg_return', 0) * 5,  # 归一化
-                            stats.get('sharpe_ratio', 0) * 20,  # 归一化
-                            stats.get('sortino_ratio', 0) * 15,  # 归一化
-                            min(stats.get('profit_loss_ratio', 0) * 15, 100)  # 归一化
-                        ]
-                        heatmap_data.append(row)
-                    
-                    fig_heatmap = go.Figure(data=go.Heatmap(
-                        z=heatmap_data,
-                        x=heatmap_metrics,
-                        y=list(results.keys()),
-                        colorscale='RdYlGn',
-                        text=[[f"{val:.1f}" for val in row] for row in heatmap_data],
-                        texttemplate='%{text}',
-                        textfont={"size": 12},
-                        colorbar=dict(title="标准化分数")
-                    ))
-                    
-                    fig_heatmap.update_layout(
-                        title='策略指标热力图（标准化）',
-                        height=300,
-                        xaxis_title='指标',
-                        yaxis_title='策略'
-                    )
-                    
-                    st.plotly_chart(fig_heatmap, use_container_width=True)
-                    
-                    # 质量评估说明
-                    st.info("""
-                    ###  质量评级标准（v49增强版）
-                    
-                    **评分公式**：
-                    - 胜率 × 25%
-                    - 平均收益 × 25%
-                    - 夏普比率 × 15%
-                    - Sortino比率 × 10%
-                    - 信号数量 × 15%
-                    - 回撤控制 × 5%
-                    - 盈亏比 × 5%
-                    
-                    **评级标准**：
-                    -  **S 级（优秀）**：质量分数 ≥ 80分 - 胜率高、收益好、风险可控、信号充足，建议重点使用
-                    - ⭐ **A 级（良好）**：质量分数 70-80分 - 综合表现良好，建议正常使用
-                    -  **B 级（合格）**：质量分数 60-70分 - 表现尚可，有改进空间，谨慎使用
-                    -  **C 级（待改进）**：质量分数 < 60分 - 需要优化参数或策略，不建议使用
-                    """)
-                
-                with analysis_tab4:
-                    st.subheader("导出回测报告（v49增强版）")
-                    
-                    st.markdown("####  可导出内容")
-                    
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        if st.button("生成Markdown报告", use_container_width=True):
-                            # 生成Markdown格式的详细报告
-                            report_md = f"""#  回测对比报告 v49.0
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    量价策略系统 · 策略回测分析报告
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                            
-##  回测概况
-
-- **回测时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-- **回测策略**: {', '.join(results.keys())}
-- **系统版本**: v49.0 长期稳健版
-- **数据来源**: Tushare Pro（真实数据）
-
----
-
-##  策略表现汇总
-
-"""
-                            for strategy_name, stats in results.items():
-                                report_md += f"""
-###  {strategy_name}
-
-#### 核心指标
-| 指标 | 数值 | 说明 |
-|------|------|------|
-| 总信号数 | {stats.get('total_signals', 0)} | 历史回测产生的有效信号数量 |
-| 分析股票数 | {stats.get('analyzed_stocks', 0)} | 回测分析的股票总数 |
-| 胜率 | {stats.get('win_rate', 0):.1f}% | 盈利交易占比 |
-| 平均收益 | {stats.get('avg_return', 0):.2f}% | 所有交易的平均收益率 |
-| 中位数收益 | {stats.get('median_return', 0):.2f}% | 收益率的中位数 |
-| 最大收益 | {stats.get('max_return', 0):.2f}% | 单笔最大盈利 |
-| 最大亏损 | {stats.get('min_return', 0):.2f}% | 单笔最大亏损 |
-
-#### 风险指标
-| 指标 | 数值 | 说明 |
-|------|------|------|
-| 夏普比率 | {stats.get('sharpe_ratio', 0):.2f} | 风险调整后收益（>1为良好）|
-| Sortino比率 | {stats.get('sortino_ratio', 0):.2f} | 下行风险调整收益 |
-| 最大回撤 | {stats.get('max_drawdown', 0):.2f}% | 资金曲线最大跌幅 |
-| 波动率 | {stats.get('volatility', 0):.2f}% | 收益率标准差 |
-| Calmar比率 | {stats.get('calmar_ratio', 0):.2f} | 年化收益/最大回撤 |
-
-#### 盈亏分析
-| 指标 | 数值 | 说明 |
-|------|------|------|
-| 盈亏比 | {stats.get('profit_loss_ratio', 0):.2f} | 平均盈利/平均亏损 |
-| 平均盈利 | {stats.get('avg_win', 0):.2f}% | 盈利交易的平均收益 |
-| 平均亏损 | {stats.get('avg_loss', 0):.2f}% | 亏损交易的平均损失 |
-| 最长连胜 | {stats.get('max_consecutive_wins', 0)} 次 | 连续盈利交易记录 |
-| 最长连亏 | {stats.get('max_consecutive_losses', 0)} 次 | 连续亏损交易记录 |
-
-#### 收益分布
-| 分位数 | 数值 |
-|--------|------|
-| 25%分位 | {stats.get('return_25_percentile', 0):.2f}% |
-| 50%分位 | {stats.get('median_return', 0):.2f}% |
-| 75%分位 | {stats.get('return_75_percentile', 0):.2f}% |
-
-#### 年化指标
-| 指标 | 数值 |
-|------|------|
-| 年化收益 | {stats.get('annualized_return', 0):.2f}% |
-| 期望值 | {stats.get('expected_value', 0):.2f}% |
-
-"""
-                            
-                            report_md += f"""
----
-
-##  最佳策略推荐
-
-### 推荐策略：{best_strategy[0]}
-
-**综合评分最高！**
-
-#### 筛选理由
--  **胜率**: {best_strategy[1].get('win_rate', 0):.1f}% - {"超过50%，表现优秀" if best_strategy[1].get('win_rate', 0) > 50 else "有提升空间"}
--  **平均收益**: {best_strategy[1].get('avg_return', 0):.2f}% - {"收益可观" if best_strategy[1].get('avg_return', 0) > 3 else "稳健增长"}
--  **夏普比率**: {best_strategy[1].get('sharpe_ratio', 0):.2f} - {"风险收益比优秀" if best_strategy[1].get('sharpe_ratio', 0) > 1 else "风险适中"}
--  **最大回撤**: {best_strategy[1].get('max_drawdown', 0):.2f}% - {"回撤控制良好" if abs(best_strategy[1].get('max_drawdown', 0)) < 10 else "注意风险控制"}
--  **信号数量**: {best_strategy[1].get('total_signals', 0)} - {"样本充足" if best_strategy[1].get('total_signals', 0) > 100 else "样本适中"}
-
-根据历史回测数据，该策略在风险收益平衡方面表现最佳，建议优先使用！
-
----
-
-##  策略对比分析
-
-### 核心指标对比表
-
-| 策略 | 胜率 | 平均收益 | 夏普比率 | 最大回撤 | 信号数 |
-|------|------|----------|----------|----------|--------|
-"""
-                            for strategy_name, stats in results.items():
-                                report_md += f"| {strategy_name} | {stats.get('win_rate', 0):.1f}% | {stats.get('avg_return', 0):.2f}% | {stats.get('sharpe_ratio', 0):.2f} | {stats.get('max_drawdown', 0):.2f}% | {stats.get('total_signals', 0)} |\n"
-                            
-                            report_md += f"""
-
----
-
-##  实战操作建议
-
-###  仓位管理
-1. **初始仓位**: 建议每次投入不超过总资金的 **15-20%**
-2. **最大持仓**: 同时持有不超过 **5只股票**（避免过度分散）
-3. **加仓策略**: 盈利达到+5%后可适当加仓10%
-4. **减仓原则**: 单只股票浮亏超过-3%立即减半仓位
-
-###  风险控制
-1. **止损设置**: **严格设置-5%止损位**，触及立即清仓
-2. **移动止损**: 盈利超过+10%后，将止损位移至成本价
-3. **时间止损**: 持仓超过10个交易日未盈利，考虑减仓
-4. **大盘止损**: 大盘跌破重要支撑位，减仓50%观望
-
-###  止盈策略
-1. **首次止盈**: 盈利达到 **+10%** 时止盈50%仓位
-2. **二次止盈**: 盈利达到 **+15%** 时再止盈30%仓位
-3. **持有利润**: 保留20%仓位博取更大收益，移动止损保护
-4. **分批止盈**: 避免一次性清仓，保持市场敏感度
-
-###  信号筛选
-1. **高分优先**: 优先选择评分 **≥75分** 的信号
-2. **行业分散**: 避免所有持仓集中在同一行业
-3. **市值均衡**: 大中小市值合理配置（建议3:5:2）
-4. **成交量确认**: 必须确认成交量配合，避免假突破
-
-###  最佳操作时间
-1. **买入时机**: 开盘后30分钟或尾盘最后30分钟
-2. **卖出时机**: 触发止盈止损立即执行，不要犹豫
-3. **持仓周期**: 建议 **5-10个交易日**（平均持仓约5天）
-4. **避开时段**: 重大会议、节假日前后减少操作
-
----
-
-##  数据质量说明
-
-### 数据来源
-- **真实数据源**: Tushare Pro专业金融数据接口
-- **数据完整性**:  100%真实市场数据，无模拟无演示
-- **更新频率**: 每日收盘后自动更新
-- **数据范围**: 最近1年历史数据，覆盖完整牛熊周期
-
-### 回测可靠性
-- **样本数量**: 充足（{sum(stats.get('total_signals', 0) for stats in results.values())}个信号）
-- **时间跨度**: 覆盖不同市场环境
-- **无未来函数**:  严格按照时间顺序回测
-- **滑点处理**: 已考虑1%交易滑点和手续费
-
----
-
-##  快速开始
-
-### 第一步：选择策略
-根据上述分析，建议使用 **{best_strategy[0]}**
-
-### 第二步：设置参数
-- 评分阈值：**60分**起（可根据市场调整）
-- 持仓周期：**5-10天**（平均持仓约5天）
-- 单只仓位：**15-20%**（最多5只）
-
-### 第三步：实盘验证
-- 先用小资金测试1-2周
-- 验证信号质量和操作感觉
-- 稳定盈利后逐步加大资金
-
-### 第四步：持续优化
-- 定期查看回测结果
-- 根据市场环境调整参数
-- 记录交易日志，总结经验
-
----
-
-##  技术支持
-
-- 系统版本：v49.0 长期稳健版
-- 更新日期：{datetime.now().strftime('%Y-%m-%d')}
-- 数据来源：Tushare Pro
-- 核心策略：八维评分体系（潜伏策略）
-
----
-
-##  免责声明
-
-本报告基于历史数据回测分析，仅供参考。历史表现不代表未来收益，股市有风险，投资需谨慎。
-建议投资者：
-1. 充分理解策略逻辑和风险
-2. 严格遵守风险控制原则
-3. 根据自身情况调整策略参数
-4. 不要盲目追涨杀跌
-5. 保持理性投资心态
-
----
-
-*报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
-*报告类型: 策略对比回测报告*
-*系统版本: 量价策略系统 v49.0*
-"""
-                            
-                            # 生成文件名
-                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                            
-                            st.download_button(
-                                label=" 下载 Markdown 报告",
-                                data=report_md,
-                                file_name=f"回测报告_v49_{timestamp}.md",
-                                mime="text/markdown",
-                                help="下载完整的Markdown格式回测报告，包含所有分析细节"
-                            )
-                            
-                            st.success("报告已生成！点击上方按钮下载")
-                    
-                    with col2:
-                        if st.button("导出 CSV 数据", use_container_width=True):
-                            # 准备CSV数据（v49增强版 - 包含更多字段）
-                            csv_data = []
-                            for strategy_name, stats in results.items():
-                                csv_data.append({
-                                    '策略名称': strategy_name,
-                                    '总信号数': stats.get('total_signals', 0),
-                                    '分析股票数': stats.get('analyzed_stocks', 0),
-                                    '胜率(%)': f"{stats.get('win_rate', 0):.1f}",
-                                    '平均收益(%)': f"{stats.get('avg_return', 0):.2f}",
-                                    '中位数收益(%)': f"{stats.get('median_return', 0):.2f}",
-                                    '最大收益(%)': f"{stats.get('max_return', 0):.2f}",
-                                    '最大亏损(%)': f"{stats.get('min_return', 0):.2f}",
-                                    '夏普比率': f"{stats.get('sharpe_ratio', 0):.2f}",
-                                    'Sortino比率': f"{stats.get('sortino_ratio', 0):.2f}",
-                                    '最大回撤(%)': f"{stats.get('max_drawdown', 0):.2f}",
-                                    'Calmar比率': f"{stats.get('calmar_ratio', 0):.2f}",
-                                    '盈亏比': f"{stats.get('profit_loss_ratio', 0):.2f}",
-                                    '年化收益(%)': f"{stats.get('annualized_return', 0):.2f}",
-                                    '波动率(%)': f"{stats.get('volatility', 0):.2f}",
-                                    '期望值(%)': f"{stats.get('expected_value', 0):.2f}",
-                                    '最长连胜': stats.get('max_consecutive_wins', 0),
-                                    '最长连亏': stats.get('max_consecutive_losses', 0)
-                                })
-                            
-                            csv_df = pd.DataFrame(csv_data)
-                            csv_string = csv_df.to_csv(index=False, encoding='utf-8-sig')
-                            
-                            # 生成文件名
-                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                            
-                            st.download_button(
-                                label=" 下载 CSV 文件",
-                                data=csv_string,
-                                file_name=f"回测对比数据_v49_{timestamp}.csv",
-                                mime="text/csv",
-                                help="下载CSV格式数据，包含所有关键指标"
-                            )
-                            
-                            st.success("CSV数据已准备好！点击上方按钮下载")
-                    
-                    with col3:
-                        if st.button("导出Excel完整版", use_container_width=True):
-                            st.info("""
-                            ###  Excel完整版报告功能
-                            
-                            包含以下工作表：
-                            1. **策略对比** - 所有策略的核心指标
-                            2. **详细统计** - 每个策略的详细统计数据
-                            3. **信号记录** - 所有交易信号的明细
-                            4. **强度分析** - 信号强度分布统计
-                            
-                             该功能需要安装 `openpyxl` 库
-                            
-                            如需使用，请联系技术支持或手动导出CSV后用Excel打开
-                            """)
-                    
-                    st.markdown("---")
-                    st.info("""
-                    ###  导出功能说明（v49增强版）
-                    
-                    ####  Markdown报告
-                    -  包含完整的策略分析和操作建议
-                    -  可直接在Markdown阅读器或记事本中查看
-                    -  格式清晰，适合打印或分享
-                    
-                    ####  CSV数据
-                    -  包含18项核心指标
-                    -  适合导入Excel进行进一步分析
-                    -  支持数据透视表和图表制作
-                    
-                    ####  Excel完整版（即将上线）
-                    -  多工作表结构化报告
-                    -  自动生成图表和分析
-                    -  交互式数据筛选
-                    
-                    ####  建议
-                    - 定期保存回测结果，建立策略表现档案
-                    - 对比不同时期的回测数据，观察策略稳定性
-                    - 根据回测结果优化参数和选股标准
-                    """)
+            render_strategy_comparison_page(
+                vp_analyzer=vp_analyzer,
+                get_production_compare_params=_get_production_compare_params,
+                start_async_backtest_job=_start_async_backtest_job,
+                connect_permanent_db=_connect_permanent_db,
+                get_async_backtest_job=_get_async_backtest_job,
+                is_pid_alive=_is_pid_alive,
+                merge_async_backtest_job=_merge_async_backtest_job,
+                now_ts=_now_ts,
+                v7_evaluator_available=V7_EVALUATOR_AVAILABLE,
+                v8_evaluator_available=V8_EVALUATOR_AVAILABLE,
+            )
         
         elif backtest_mode == "单策略深度回测":
-            st.subheader("单策略深度回测")
-
-            strategy_options = [
-                "v9.0 中线均衡版（生产）",
-                "v8.0 进阶版（生产）",
-                "v5.0 趋势版（生产）",
-                "组合策略（生产共识）",
-            ]
-
-            def _num_or_none(val: Any) -> Optional[float]:
-                if isinstance(val, (int, float)):
-                    return float(val)
-                return None
-
-            def _v8_threshold_from_state() -> Optional[float]:
-                raw = st.session_state.get("score_threshold_v8_tab1")
-                if isinstance(raw, (list, tuple)) and raw:
-                    return _num_or_none(raw[0])
-                return _num_or_none(raw)
-
-            def _single_backtest_defaults(strategy_name: str) -> Dict[str, Any]:
-                hold_default = 10
-                thr_default = 65
-                sample_default = 800
-                hold_source = "evolution"
-                thr_source = "evolution"
-                sample_source = "default"
-
-                if "v9.0" in strategy_name:
-                    evo = _load_evolve_params("v9_best.json").get("params", {})
-                    hold_default = int(evo.get("holding_days", 20))
-                    thr_default = int(evo.get("score_threshold", 65))
-                    sample_default = int(evo.get("candidate_count", 800))
-                    hold_state = _num_or_none(st.session_state.get("holding_days_v9"))
-                    thr_state = _num_or_none(st.session_state.get("score_threshold_v9"))
-                    sample_state = _num_or_none(st.session_state.get("candidate_count_v9"))
-                    if hold_state is not None:
-                        hold_default, hold_source = int(hold_state), "策略中心"
-                    if thr_state is not None:
-                        thr_default, thr_source = int(thr_state), "策略中心"
-                    if sample_state is not None:
-                        sample_default, sample_source = int(sample_state), "策略中心"
-                elif "v8.0" in strategy_name:
-                    evo = _load_evolve_params("v8_best.json").get("params", {})
-                    hold_default = int(evo.get("holding_days", 10))
-                    thr_raw = evo.get("score_threshold", [55, 70])
-                    if isinstance(thr_raw, (list, tuple)) and thr_raw:
-                        thr_default = int(thr_raw[0])
-                    elif isinstance(thr_raw, (int, float)):
-                        thr_default = int(thr_raw)
-                    thr_state = _v8_threshold_from_state()
-                    if thr_state is not None:
-                        thr_default, thr_source = int(thr_state), "策略中心"
-                elif "v5.0" in strategy_name:
-                    evo = _load_evolve_params("v5_best.json").get("params", {})
-                    hold_default = int(evo.get("holding_days", 8))
-                    thr_default = int(evo.get("score_threshold", 60))
-                    thr_state = _num_or_none(st.session_state.get("score_threshold_v5"))
-                    if thr_state is not None:
-                        thr_default, thr_source = int(thr_state), "策略中心"
-                elif "组合策略" in strategy_name:
-                    evo = _load_evolve_params("combo_best.json").get("params", {})
-                    hold_default = int(evo.get("holding_days", 10))
-                    thr_default = int(evo.get("combo_threshold", 68))
-                    sample_default = int(evo.get("candidate_count", 800))
-                    thr_state = _num_or_none(st.session_state.get("combo_threshold"))
-                    sample_state = _num_or_none(st.session_state.get("combo_candidate_count"))
-                    if thr_state is not None:
-                        thr_default, thr_source = int(thr_state), "策略中心"
-                    if sample_state is not None:
-                        sample_default, sample_source = int(sample_state), "策略中心"
-
-                hold_default = max(1, min(30, int(hold_default)))
-                thr_default = max(50, min(90, int(thr_default)))
-                sample_default = max(100, min(6000, int(sample_default)))
-                return {
-                    "holding_days": hold_default,
-                    "score_threshold": thr_default,
-                    "sample_size": sample_default,
-                    "holding_source": hold_source,
-                    "threshold_source": thr_source,
-                    "sample_source": sample_source,
-                }
-
-            col1, col2 = st.columns(2)
-            with col1:
-                selected_strategy = st.selectbox(
-                    "选择策略",
-                    strategy_options,
-                    key="single_backtest_strategy_select",
-                    help="与策略中心生产策略完全对齐：v9/v8/v5/combo。"
-                )
-
-            defaults = _single_backtest_defaults(selected_strategy)
-            prev_strategy = st.session_state.get("_single_backtest_prev_strategy")
-            if prev_strategy != selected_strategy:
-                st.session_state["single_backtest_holding_days"] = defaults["holding_days"]
-                st.session_state["single_backtest_threshold"] = defaults["score_threshold"]
-                st.session_state["single_backtest_sample_size"] = defaults["sample_size"]
-                st.session_state["_single_backtest_prev_strategy"] = selected_strategy
-            else:
-                st.session_state.setdefault("single_backtest_holding_days", defaults["holding_days"])
-                st.session_state.setdefault("single_backtest_threshold", defaults["score_threshold"])
-                st.session_state.setdefault("single_backtest_sample_size", defaults["sample_size"])
-
-            with col2:
-                holding_days = st.slider(
-                    "持仓天数",
-                    min_value=1,
-                    max_value=30,
-                    step=1,
-                    key="single_backtest_holding_days"
-                )
-
-            col3, col4 = st.columns(2)
-            strict_full_market_mode = bool(st.session_state.get("strict_full_market_mode", False))
-            st.session_state.setdefault("single_backtest_full_market_mode", strict_full_market_mode)
-            if strict_full_market_mode:
-                st.session_state["single_backtest_full_market_mode"] = True
-            with col3:
-                full_market_mode_single = st.checkbox(
-                    "全量模式（不抽样）",
-                    key="single_backtest_full_market_mode",
-                    help="开启后按当前历史数据中的全部股票回测。",
-                )
-                sample_size = st.slider(
-                    "回测样本数量",
-                    min_value=100,
-                    max_value=6000,
-                    step=100,
-                    key="single_backtest_sample_size",
-                    disabled=bool(full_market_mode_single),
-                )
-                if full_market_mode_single:
-                    st.caption("当前为全量模式：将按历史数据中的全部股票回测。")
-            with col4:
-                score_threshold = st.slider(
-                    "评分阈值",
-                    min_value=50,
-                    max_value=90,
-                    step=5,
-                    key="single_backtest_threshold",
-                    help="生产策略口径：v5建议60-70，v8建议60-75，v9建议60-70，组合策略建议65-75。"
-                )
-            async_single_backtest = st.checkbox("后台运行单策略回测（推荐）", value=True, key="single_backtest_async")
-            st.caption(
-                f"参数自动对齐：阈值来源={defaults['threshold_source']} | 持仓来源={defaults['holding_source']} | 样本来源={defaults['sample_source']}"
+            render_single_backtest_page(
+                vp_analyzer=vp_analyzer,
+                load_evolve_params=_load_evolve_params,
+                airivo_has_role=_airivo_has_role,
+                airivo_guard_action=_airivo_guard_action,
+                airivo_append_action_audit=_airivo_append_action_audit,
+                start_async_backtest_job=_start_async_backtest_job,
+                set_sim_meta=_set_sim_meta,
+                auto_backtest_scheduler_tick=_auto_backtest_scheduler_tick,
+                connect_permanent_db=_connect_permanent_db,
+                ensure_price_aliases=_ensure_price_aliases,
+                get_async_backtest_job=_get_async_backtest_job,
+                is_pid_alive=_is_pid_alive,
+                merge_async_backtest_job=_merge_async_backtest_job,
+                now_ts=_now_ts,
+                now_text=_now_text,
+                pick_tradable_segment_from_strength=_pick_tradable_segment_from_strength,
+                apply_tradable_segment_to_strategy_session=_apply_tradable_segment_to_strategy_session,
+                build_calibrated_strength_df=_build_calibrated_strength_df,
             )
-
-            st.markdown("#### 自动回测")
-            ab1, ab2, ab3, ab4 = st.columns(4)
-            with ab1:
-                st.toggle("启用每日自动回测", value=False, key="auto_backtest_enabled")
-            with ab2:
-                st.text_input("执行时间(HH:MM)", value="15:35", key="auto_backtest_time")
-            with ab3:
-                st.number_input("回测历史天数", min_value=120, max_value=720, step=10, value=240, key="auto_backtest_history_days")
-            with ab4:
-                st.toggle("回测后自动应用分段", value=False, key="auto_backtest_auto_apply_segment")
-
-            st.session_state["auto_backtest_strategy"] = str(selected_strategy)
-            st.session_state["auto_backtest_sample_size"] = int(sample_size)
-            st.session_state["auto_backtest_full_market_mode"] = bool(full_market_mode_single)
-            st.session_state["auto_backtest_holding_days"] = int(holding_days)
-            st.session_state["auto_backtest_score_threshold"] = float(score_threshold)
-
-            run_auto_col1, run_auto_col2 = st.columns([1, 2])
-            with run_auto_col1:
-                if st.button("立即执行自动回测", use_container_width=True, key="run_auto_backtest_now"):
-                    payload = {
-                        "strategy": str(selected_strategy),
-                        "sample_size": int(sample_size),
-                        "full_market_mode": bool(full_market_mode_single),
-                        "history_days": int(st.session_state.get("auto_backtest_history_days", 240)),
-                        "holding_days": int(holding_days),
-                        "score_threshold": float(score_threshold),
-                    }
-                    ok, msg, run_id = _start_async_backtest_job("single", payload)
-                    if ok:
-                        st.session_state["single_backtest_async_job_id"] = run_id
-                        _set_sim_meta("auto_backtest_last_job_id", run_id)
-                        st.success(msg)
-                    else:
-                        st.warning(msg)
-                    st.rerun()
-            with run_auto_col2:
-                tick_ret = _auto_backtest_scheduler_tick()
-                st.caption(f"自动回测调度状态：{tick_ret.get('status', 'N/A')}")
-            
-            if st.button("开始回测", type="primary", use_container_width=True, key="single_backtest"):
-                if async_single_backtest:
-                    payload = {
-                        "strategy": selected_strategy,
-                        "sample_size": int(sample_size),
-                        "full_market_mode": bool(full_market_mode_single),
-                        "history_days": 240,
-                        "holding_days": int(holding_days),
-                        "score_threshold": float(score_threshold),
-                    }
-                    ok, msg, run_id = _start_async_backtest_job("single", payload)
-                    if ok:
-                        st.session_state["single_backtest_async_job_id"] = run_id
-                        st.success(msg)
-                    else:
-                        st.error(msg)
-                    st.rerun()
-                with st.spinner(f"正在回测 {selected_strategy}..."):
-                    try:
-                        from data.dao import DataAccessError, detect_daily_table  # type: ignore
-
-                        conn = _connect_permanent_db()
-                        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-
-                        try:
-                            daily_table = detect_daily_table(conn)
-                        except DataAccessError:
-                            conn.close()
-                            st.error("无法识别日线数据表（daily_trading_data/daily_data）")
-                            st.stop()
-
-                        query = f"""
-                            SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
-                                   dtd.open_price, dtd.high_price, dtd.low_price, 
-                                   dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
-                            FROM {daily_table} dtd
-                            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-                            WHERE dtd.trade_date >= ?
-                            ORDER BY dtd.ts_code, dtd.trade_date
-                        """
-                        
-                        df = pd.read_sql_query(query, conn, params=(start_date,))
-                        conn.close()
-                        
-                        if df.empty:
-                            st.error("无法获取历史数据")
-                        else:
-                            df = _ensure_price_aliases(df)
-                            sample_size_for_run = (
-                                max(1, int(df["ts_code"].nunique()))
-                                if full_market_mode_single and "ts_code" in df.columns
-                                else int(sample_size)
-                            )
-                            
-                            def _run_single_backtest(input_df: pd.DataFrame) -> dict:
-                                if "v4.0" in selected_strategy:
-                                    return vp_analyzer.backtest_strategy_complete(
-                                        input_df, sample_size=sample_size_for_run, holding_days=holding_days
-                                    )
-                                if "v5.0" in selected_strategy:
-                                    return vp_analyzer.backtest_bottom_breakthrough(
-                                        input_df, sample_size=sample_size_for_run, holding_days=holding_days
-                                    )
-                                if "v8.0" in selected_strategy:
-                                    return vp_analyzer.backtest_v8_ultimate(
-                                        input_df, sample_size=sample_size_for_run, holding_days=holding_days,
-                                        score_threshold=score_threshold
-                                    )
-                                if "v9.0" in selected_strategy:
-                                    return vp_analyzer.backtest_v9_midterm(
-                                        input_df, sample_size=sample_size_for_run, holding_days=holding_days,
-                                        score_threshold=score_threshold
-                                    )
-                                if "组合策略" in selected_strategy:
-                                    return vp_analyzer.backtest_combo_production(
-                                        input_df, sample_size=sample_size_for_run, holding_days=holding_days,
-                                        combo_threshold=score_threshold, min_agree=2
-                                    )
-                                return vp_analyzer.backtest_v9_midterm(
-                                    input_df, sample_size=sample_size_for_run, holding_days=holding_days,
-                                    score_threshold=score_threshold
-                                )
-
-                            result = _run_single_backtest(df)
-                            err_text = str(result.get('error', '')) if isinstance(result, dict) else ""
-                            if (not result.get('success')) and ("close_price" in err_text):
-                                retry_df = _ensure_price_aliases(df)
-                                result = _run_single_backtest(retry_df)
-                            
-                            if result['success']:
-                                st.session_state['single_backtest_result'] = result
-                                st.success("回测完成！")
-                                st.rerun()
-                            else:
-                                st.error(f"回测失败：{result.get('error', '未知错误')}")
-                                if result.get('traceback'):
-                                    with st.expander("查看回测错误详情", expanded=False):
-                                        st.code(str(result.get('traceback')))
-                    
-                    except Exception as e:
-                        st.error(f"回测失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-
-            single_job_id = str(st.session_state.get("single_backtest_async_job_id", "") or "")
-            if single_job_id:
-                job = _get_async_backtest_job(single_job_id)
-                if job:
-                    st.info(f"后台单策略回测状态：{job.get('status')}（ID={single_job_id}）")
-                    sj1, sj2 = st.columns([1, 1])
-                    with sj1:
-                        if st.button("刷新单策略任务状态", key=f"refresh_single_job_{single_job_id}"):
-                            st.rerun()
-                    with sj2:
-                        if str(job.get("status")) == "running" and st.button("取消单策略任务", key=f"cancel_single_job_{single_job_id}"):
-                            pid = int(job.get("pid", 0) or 0)
-                            if pid > 0 and _is_pid_alive(pid):
-                                try:
-                                    os.killpg(pid, signal.SIGTERM)
-                                except Exception:
-                                    try:
-                                        os.kill(pid, signal.SIGTERM)
-                                    except Exception:
-                                        pass
-                            _merge_async_backtest_job(
-                                single_job_id,
-                                job,
-                                status="failed",
-                                error="任务已手动取消",
-                                ended_at=_now_ts(),
-                            )
-                            st.session_state["single_backtest_async_job_id"] = ""
-                            st.rerun()
-                    if str(job.get("status")) == "success":
-                        out = (job.get("result") or {})
-                        result = out.get("result") if isinstance(out, dict) else None
-                        if isinstance(result, dict) and result.get("success"):
-                            st.session_state['single_backtest_result'] = result
-                            _set_sim_meta("auto_backtest_last_ok", "1")
-                            _set_sim_meta("auto_backtest_last_finished_at", _now_text())
-                            _set_sim_meta("auto_backtest_last_strategy", str(selected_strategy))
-                            if bool(st.session_state.get("auto_backtest_auto_apply_segment", False)):
-                                stats_auto = result.get("stats", {}) if isinstance(result, dict) else {}
-                                strength_auto = stats_auto.get("strength_performance", {}) if isinstance(stats_auto, dict) else {}
-                                seg_auto = _pick_tradable_segment_from_strength(strength_auto) if isinstance(strength_auto, dict) else {}
-                                if seg_auto:
-                                    msg_apply = _apply_tradable_segment_to_strategy_session(str(selected_strategy), seg_auto, top_percent=3)
-                                    st.success(f"自动应用完成：{msg_apply}")
-                            st.success("后台单策略回测已完成，结果已更新。")
-                            st.session_state["single_backtest_async_job_id"] = ""
-                            st.rerun()
-                        else:
-                            st.error(f"后台单策略回测失败：{(result or {}).get('error', '未知错误') if isinstance(result, dict) else '未知错误'}")
-                            _set_sim_meta("auto_backtest_last_ok", "0")
-                            if isinstance(result, dict) and str(result.get("traceback", "")).strip():
-                                with st.expander("查看后台任务错误详情", expanded=False):
-                                    st.code(str(result.get("traceback", "")))
-                            st.session_state["single_backtest_async_job_id"] = ""
-                    elif str(job.get("status")) == "failed":
-                        st.error(f"后台单策略回测失败：{job.get('error', '未知错误')}")
-                        _set_sim_meta("auto_backtest_last_ok", "0")
-                        if str(job.get("traceback", "")).strip():
-                            with st.expander("查看后台任务错误详情", expanded=False):
-                                st.code(str(job.get("traceback", "")))
-                        st.session_state["single_backtest_async_job_id"] = ""
-            
-            # 显示回测结果
-            if 'single_backtest_result' in st.session_state:
-                result = st.session_state['single_backtest_result']
-                stats = result.get('stats', {})
-                
-                st.markdown("---")
-                st.subheader("回测结果详情")
-                
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric("胜率", f"{stats.get('win_rate', 0):.1f}%")
-                with col2:
-                    st.metric("平均收益", f"{stats.get('avg_return', 0):.2f}%")
-                with col3:
-                    st.metric("夏普比率", f"{stats.get('sharpe_ratio', 0):.2f}")
-                with col4:
-                    st.metric("信号数量", stats.get('total_signals', 0))
-                
-                st.markdown("---")
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric("最大收益", f"{stats.get('max_return', 0):.2f}%")
-                with col2:
-                    st.metric("最大亏损", f"{stats.get('max_loss', 0):.2f}%")
-                with col3:
-                    st.metric("盈亏比", f"{stats.get('profit_loss_ratio', 0):.2f}")
-                
-                # ==================== 单策略回测+ 增强功能 ====================
-                st.markdown("---")
-                st.subheader("深度分析")
-                
-                _single_tabs = [" 分强度统计", " 交易记录", " 导出数据"]
-                single_analysis_tab1, single_analysis_tab2, single_analysis_tab3 = st.tabs([t.strip() for t in _single_tabs])
-                
-                with single_analysis_tab1:
-                    if 'strength_performance' in stats:
-                        st.markdown("###  信号强度表现分析")
-                        
-                        strength_perf = stats['strength_performance']
-                        
-                        # 创建表格
-                        strength_table_data = []
-                        for strength_range, perf in strength_perf.items():
-                            strength_table_data.append({
-                                '信号强度': strength_range + '分',
-                                '信号数量': perf['count'],
-                                '平均收益': f"{perf['avg_return']:.2f}%",
-                                '胜率': f"{perf['win_rate']:.1f}%"
-                            })
-                        
-                        strength_table_df = pd.DataFrame(strength_table_data)
-                        st.dataframe(strength_table_df, use_container_width=True, hide_index=True)
-                        cal_df = _build_calibrated_strength_df(strength_perf)
-                        if not cal_df.empty:
-                            st.markdown("###  校准后曲线（单调）")
-                            cal_show = cal_df[["区间", "样本数", "原始胜率%", "校准胜率%", "原始收益%", "校准收益%"]].copy()
-                            for c in ["原始胜率%", "校准胜率%", "原始收益%", "校准收益%"]:
-                                cal_show[c] = pd.to_numeric(cal_show[c], errors="coerce").round(1)
-                            st.dataframe(cal_show, use_container_width=True, hide_index=True)
-
-                            fig_cal = go.Figure()
-                            fig_cal.add_trace(go.Scatter(x=cal_df["区间"], y=cal_df["原始胜率%"], mode="lines+markers", name="原始胜率%"))
-                            fig_cal.add_trace(go.Scatter(x=cal_df["区间"], y=cal_df["校准胜率%"], mode="lines+markers", name="校准胜率%"))
-                            fig_cal.add_trace(go.Scatter(x=cal_df["区间"], y=cal_df["原始收益%"], mode="lines+markers", name="原始收益%"))
-                            fig_cal.add_trace(go.Scatter(x=cal_df["区间"], y=cal_df["校准收益%"], mode="lines+markers", name="校准收益%"))
-                            fig_cal.update_layout(height=340, title="分数分段：原始 vs 校准")
-                            st.plotly_chart(fig_cal, use_container_width=True)
-
-                            tradable = cal_df[(cal_df["样本数"] >= 20) & (cal_df["校准收益%"] > 0)].copy()
-                            if not tradable.empty:
-                                tradable = tradable.sort_values(["校准综合分", "样本数"], ascending=[False, False]).head(3)
-                                seg_text = " / ".join(tradable["区间"].astype(str).tolist())
-                                st.success(f"可交易优先分段（样本>=20）：{seg_text}")
-                            else:
-                                st.warning("当前没有满足样本与收益条件的稳健分段，建议继续累积样本或降低阈值。")
-                            best_seg = _pick_tradable_segment_from_strength(strength_perf)
-                            if best_seg:
-                                st.caption(
-                                    f"建议分段：{best_seg.get('segment')} | 样本={best_seg.get('samples')} | "
-                                    f"校准胜率={best_seg.get('cal_win', 0.0):.1f}% | 校准收益={best_seg.get('cal_ret', 0.0):.2f}%"
-                                )
-                                col_apply1, col_apply2 = st.columns([1, 1])
-                                with col_apply1:
-                                    if st.button("应用该分段到策略参数", key="apply_tradable_segment_now", use_container_width=True):
-                                        msg_apply = _apply_tradable_segment_to_strategy_session(str(selected_strategy), best_seg, top_percent=3)
-                                        st.success(msg_apply)
-                                        st.rerun()
-                                with col_apply2:
-                                    st.caption("应用后会自动切换为“分位数筛选(Top%)”。")
-                        
-                        # 可视化
-                        st.markdown("###  信号强度可视化")
-                        
-                        labels = list(strength_perf.keys())
-                        counts = [perf['count'] for perf in strength_perf.values()]
-                        returns = [perf['avg_return'] for perf in strength_perf.values()]
-                        win_rates = [perf['win_rate'] for perf in strength_perf.values()]
-                        
-                        # 创建子图
-                        fig = make_subplots(
-                            rows=1, cols=2,
-                            subplot_titles=('信号强度分布', '信号强度 vs 胜率&收益'),
-                            specs=[[{'type': 'bar'}, {'type': 'scatter'}]]
-                        )
-                        
-                        # 左图：信号数量分布
-                        fig.add_trace(
-                            go.Bar(x=labels, y=counts, name='信号数量', marker_color='lightblue'),
-                            row=1, col=1
-                        )
-                        
-                        # 右图：胜率和收益
-                        fig.add_trace(
-                            go.Scatter(x=labels, y=win_rates, name='胜率 (%)', 
-                                     mode='lines+markers', marker=dict(size=10)),
-                            row=1, col=2
-                        )
-                        
-                        fig.add_trace(
-                            go.Scatter(x=labels, y=returns, name='平均收益 (%)', 
-                                     mode='lines+markers', marker=dict(size=10), yaxis='y2'),
-                            row=1, col=2
-                        )
-                        
-                        fig.update_xaxes(title_text="信号强度", row=1, col=1)
-                        fig.update_xaxes(title_text="信号强度", row=1, col=2)
-                        fig.update_yaxes(title_text="信号数量", row=1, col=1)
-                        fig.update_yaxes(title_text="百分比", row=1, col=2)
-                        
-                        fig.update_layout(height=400, showlegend=True)
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # 结论分析
-                        st.markdown("###  策略分析结论")
-                        
-                        # 找出表现最好的强度区间（优先使用校准后的单调分段）
-                        best_strength = None
-                        if 'cal_df' in locals() and isinstance(cal_df, pd.DataFrame) and not cal_df.empty:
-                            cal_pick = cal_df.sort_values(["校准综合分", "样本数"], ascending=[False, False]).iloc[0]
-                            best_strength = (
-                                str(cal_pick.get("区间", "")),
-                                {
-                                    "avg_return": float(cal_pick.get("校准收益%", 0.0)),
-                                    "win_rate": float(cal_pick.get("校准胜率%", 0.0)),
-                                    "count": int(cal_pick.get("样本数", 0)),
-                                },
-                            )
-                        if best_strength is None:
-                            best_strength = max(strength_perf.items(), key=lambda x: x[1]['avg_return'] * x[1]['win_rate'] / 100)
-                        
-                        st.success(f"""
-                        **最佳信号强度区间**: {best_strength[0]}分
-                        - 平均收益: {best_strength[1]['avg_return']:.2f}%
-                        - 胜率: {best_strength[1]['win_rate']:.1f}%
-                        - 信号数量: {best_strength[1]['count']}
-                        
-                         建议：重点关注 {best_strength[0]}分 区间的信号，该区间风险收益比最佳。
-                        """)
-                    else:
-                        st.info("暂无分强度统计数据")
-                
-                with single_analysis_tab2:
-                    if 'details' in result and len(result.get('details', [])) > 0:
-                        st.markdown("###  详细交易记录（前50条）")
-                        
-                        details_df = result['details'][:50] if isinstance(result['details'], pd.DataFrame) else pd.DataFrame(result['details'][:50])
-                        st.dataframe(details_df, use_container_width=True, hide_index=True)
-                        
-                        # 交易记录统计
-                        st.markdown("###  交易统计")
-                        col1, col2, col3, col4 = st.columns(4)
-                        
-                        with col1:
-                            st.metric("总交易数", len(result['details']))
-                        with col2:
-                            profitable = sum(1 for d in result['details'] 
-                                           if float(d.get(f"{stats.get('avg_holding_days', 5)}天收益", "0%").rstrip('%')) > 0)
-                            st.metric("盈利交易", profitable)
-                        with col3:
-                            loss = len(result['details']) - profitable
-                            st.metric("亏损交易", loss)
-                        with col4:
-                            if loss > 0:
-                                st.metric("盈亏比", f"{profitable/loss:.2f}")
-                            else:
-                                st.metric("盈亏比", "∞")
-                    else:
-                        st.info("暂无详细交易记录")
-                
-                with single_analysis_tab3:
-                    st.markdown("###  导出回测数据")
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        if st.button("生成回测报告", use_container_width=True, key="single_report"):
-                            strategy_name = result.get('strategy', '未知策略')
-                            
-                            report_md = f"""#  {strategy_name} 深度回测报告
-                            
-##  回测概况
-
-**回测时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-**回测策略**: {strategy_name}
-**持仓天数**: {stats.get('avg_holding_days', 'N/A')}天
-**样本数量**: {stats.get('analyzed_stocks', 'N/A')}只
-
----
-
-##  核心指标
-
-| 指标 | 数值 |
-|------|------|
-| 总信号数 | {stats.get('total_signals', 0)} |
-| 胜率 | {stats.get('win_rate', 0):.1f}% |
-| 平均收益 | {stats.get('avg_return', 0):.2f}% |
-| 中位数收益 | {stats.get('median_return', 0):.2f}% |
-| 最大收益 | {stats.get('max_return', 0):.2f}% |
-| 最大亏损 | {stats.get('min_return', 0):.2f}% |
-| 夏普比率 | {stats.get('sharpe_ratio', 0):.2f} |
-| 盈亏比 | {stats.get('profit_loss_ratio', 0):.2f} |
-
----
-
-##  分强度表现
-"""
-                            if 'strength_performance' in stats:
-                                for strength_range, perf in stats['strength_performance'].items():
-                                    report_md += f"""
-### {strength_range}分
-
-- 信号数量: {perf['count']}
-- 平均收益: {perf['avg_return']:.2f}%
-- 胜率: {perf['win_rate']:.1f}%
-"""
-                            
-                            report_md += f"""
----
-
-##  使用建议
-
-1. **最佳信号强度**: 关注70分以上的信号
-2. **止损建议**: 建议设置-5%止损位
-3. **止盈建议**: 分批止盈，首次+10%，第二次+15%
-4. **仓位控制**: 单只股票不超过总资金的8%
-
----
-
-*报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
-"""
-                            
-                            # 生成文件名
-                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                            
-                            st.download_button(
-                                label=" 下载报告",
-                                data=report_md,
-                                file_name=f"single_backtest_report_{timestamp}.md",
-                                mime="text/markdown",
-                                key="download_single_report"
-                            )
-                            
-                            st.success("报告已生成！")
-                    
-                    with col2:
-                        if st.button("导出交易记录", use_container_width=True, key="single_export"):
-                            if 'details' in result and len(result.get('details', [])) > 0:
-                                details_df = result['details'] if isinstance(result['details'], pd.DataFrame) else pd.DataFrame(result['details'])
-                                csv_string = details_df.to_csv(index=False, encoding='utf-8-sig')
-                                
-                                # 生成文件名
-                                timestamp2 = datetime.now().strftime('%Y%m%d_%H%M%S')
-                                
-                                st.download_button(
-                                    label=" 下载CSV",
-                                    data=csv_string,
-                                    file_name=f"trade_records_{timestamp2}.csv",
-                                    mime="text/csv",
-                                    key="download_single_csv"
-                                )
-                                
-                                st.success("交易记录已准备好！")
-                            else:
-                                st.warning("暂无交易记录可导出")
         
         else:  # 参数优化
-            st.subheader("参数优化")
-            st.caption("生产策略专用优化（v9 / v8 / v5 / combo）。晋升门槛：样本>=50，胜率>=52%，最大回撤<=25%。")
-
-            optimize_strategy = st.selectbox(
-                "优化目标策略",
-                ["v9", "v8", "v5", "combo"],
-                index=0,
-                key="prod_opt_strategy",
+            render_parameter_optimization_page(
+                vp_analyzer=vp_analyzer,
+                connect_permanent_db=_connect_permanent_db,
+                ensure_price_aliases=_ensure_price_aliases,
+                airivo_has_role=_airivo_has_role,
+                airivo_guard_action=_airivo_guard_action,
+                airivo_append_action_audit=_airivo_append_action_audit,
+                production_baseline_params=_production_baseline_params,
+                get_production_compare_params=_get_production_compare_params,
+                apply_production_baseline_to_session=_apply_production_baseline_to_session,
+                save_production_unified_profile=_save_production_unified_profile,
             )
-            optimize_profile = st.selectbox(
-                "优化空间模板",
-                ["稳健收敛（推荐）", "进攻试探"],
-                index=0,
-                key="prod_opt_profile",
-            )
-
-            profile_defaults: Dict[str, Dict[str, Any]] = {
-                "稳健收敛（推荐）": {
-                    "v5": {"thresholds": [60, 65, 70], "holds": [3, 5, 8], "sample": 1200},
-                    "v8": {"thresholds": [55, 60, 65, 70], "holds": [3, 5, 8], "sample": 1200},
-                    "v9": {"thresholds": [60, 65, 70], "holds": [3, 5, 8, 10], "sample": 1500},
-                    "combo": {"thresholds": [60, 65, 70], "holds": [6, 8, 10], "sample": 1500},
-                },
-                "进攻试探": {
-                    "v5": {"thresholds": [55, 60, 65], "holds": [3, 5, 8], "sample": 800},
-                    "v8": {"thresholds": [50, 55, 60, 65], "holds": [3, 5, 8], "sample": 800},
-                    "v9": {"thresholds": [55, 60, 65], "holds": [3, 5, 8], "sample": 1000},
-                    "combo": {"thresholds": [58, 60, 65], "holds": [6, 8], "sample": 1000},
-                },
-            }
-            preset = profile_defaults.get(optimize_profile, profile_defaults["稳健收敛（推荐）"]).get(optimize_strategy, {})
-            default_thresholds = [int(x) for x in preset.get("thresholds", [60, 65])]
-            default_holds = [int(x) for x in preset.get("holds", [5, 8])]
-            default_sample = int(preset.get("sample", 1200))
-
-            if st.button("一键应用推荐优化空间", key="apply_prod_opt_profile"):
-                st.session_state["prod_opt_thresholds"] = list(default_thresholds)
-                st.session_state["prod_opt_holds"] = list(default_holds)
-                st.session_state["prod_opt_sample"] = int(default_sample)
-                st.rerun()
-
-            oc1, oc2, oc3 = st.columns(3)
-            with oc1:
-                sample_size = st.slider("优化样本数量", 100, 6000, int(st.session_state.get("prod_opt_sample", default_sample)), 100)
-            with oc2:
-                threshold_grid = st.multiselect(
-                    "阈值候选",
-                    options=[45, 50, 55, 60, 65, 70, 75, 80],
-                    default=[int(x) for x in st.session_state.get("prod_opt_thresholds", default_thresholds)],
-                )
-            with oc3:
-                hold_grid = st.multiselect(
-                    "持仓候选(天)",
-                    options=[3, 5, 6, 8, 10, 12, 15],
-                    default=[int(x) for x in st.session_state.get("prod_opt_holds", default_holds)],
-                )
-            st.session_state["prod_opt_sample"] = int(sample_size)
-            st.session_state["prod_opt_thresholds"] = [int(x) for x in threshold_grid]
-            st.session_state["prod_opt_holds"] = [int(x) for x in hold_grid]
-
-            if not threshold_grid:
-                st.warning("请至少选择一个阈值候选。")
-            if not hold_grid:
-                st.warning("请至少选择一个持仓候选。")
-
-            if st.button("开始优化", type="primary", use_container_width=True, key="start_optimization"):
-                if not threshold_grid or not hold_grid:
-                    st.stop()
-                with st.spinner(f"正在优化 {optimize_strategy} 参数空间..."):
-                    try:
-                        from data.dao import DataAccessError, detect_daily_table  # type: ignore
-
-                        conn = _connect_permanent_db()
-                        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-                        try:
-                            daily_table = detect_daily_table(conn)
-                        except DataAccessError:
-                            conn.close()
-                            st.error("无法识别日线数据表（daily_trading_data/daily_data）")
-                            st.stop()
-
-                        query = f"""
-                            SELECT dtd.ts_code, sb.name, sb.industry, dtd.trade_date,
-                                   dtd.open_price, dtd.high_price, dtd.low_price,
-                                   dtd.close_price, dtd.vol, dtd.pct_chg, dtd.amount
-                            FROM {daily_table} dtd
-                            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-                            WHERE dtd.trade_date >= ?
-                            ORDER BY dtd.ts_code, dtd.trade_date
-                        """
-                        df = pd.read_sql_query(query, conn, params=(start_date,))
-                        conn.close()
-                        if df.empty:
-                            st.error("无法获取历史数据")
-                            st.stop()
-                        df = _ensure_price_aliases(df)
-
-                        all_rows: List[Dict[str, Any]] = []
-                        total_cases = len(threshold_grid) * len(hold_grid)
-                        progress = st.progress(0.0)
-                        case_idx = 0
-
-                        for thr in sorted(set(int(x) for x in threshold_grid)):
-                            for hold in sorted(set(int(x) for x in hold_grid)):
-                                case_idx += 1
-                                if optimize_strategy == "v5":
-                                    out = vp_analyzer.backtest_bottom_breakthrough(df, sample_size=int(sample_size), holding_days=int(hold))
-                                elif optimize_strategy == "v8":
-                                    out = vp_analyzer.backtest_v8_ultimate(df, sample_size=int(sample_size), holding_days=int(hold), score_threshold=float(thr))
-                                elif optimize_strategy == "combo":
-                                    out = vp_analyzer.backtest_combo_production(df, sample_size=int(sample_size), holding_days=int(hold), combo_threshold=float(thr), min_agree=2)
-                                else:
-                                    out = vp_analyzer.backtest_v9_midterm(df, sample_size=int(sample_size), holding_days=int(hold), score_threshold=float(thr))
-                                stats = (out or {}).get("stats", {}) if isinstance(out, dict) else {}
-                                ok = bool((out or {}).get("success", False))
-                                win_rate = float(stats.get("win_rate", 0.0) or 0.0)
-                                if abs(win_rate) <= 1.0:
-                                    win_rate = win_rate * 100.0
-                                max_dd = float(stats.get("max_drawdown", 0.0) or 0.0)
-                                if abs(max_dd) <= 1.0:
-                                    max_dd = max_dd * 100.0
-                                signals = int(stats.get("total_signals", 0) or 0)
-                                avg_ret = float(stats.get("avg_return", 0.0) or 0.0)
-                                sharpe = float(stats.get("sharpe_ratio", 0.0) or 0.0)
-                                objective = (0.45 * win_rate) + (0.35 * avg_ret) + (0.15 * sharpe * 10.0) - (0.25 * max_dd)
-                                gate_pass = bool(signals >= 50 and win_rate >= 52.0 and max_dd <= 25.0)
-                                all_rows.append(
-                                    {
-                                        "strategy": optimize_strategy,
-                                        "threshold": int(thr),
-                                        "holding_days": int(hold),
-                                        "success": ok,
-                                        "signals": signals,
-                                        "win_rate_pct": win_rate,
-                                        "avg_return_pct": avg_ret,
-                                        "max_drawdown_pct": max_dd,
-                                        "sharpe_ratio": sharpe,
-                                        "objective": objective,
-                                        "gate_pass": gate_pass,
-                                    }
-                                )
-                                progress.progress(case_idx / max(1, total_cases))
-
-                        result_df = pd.DataFrame(all_rows)
-                        if result_df.empty:
-                            st.error("优化没有产出有效结果。")
-                            st.stop()
-                        result_df = result_df.sort_values(["objective", "win_rate_pct"], ascending=[False, False]).reset_index(drop=True)
-                        best_row = result_df.iloc[0].to_dict()
-                        st.session_state["prod_optimization_result"] = {
-                            "strategy": optimize_strategy,
-                            "sample_size": int(sample_size),
-                            "threshold_grid": sorted(set(int(x) for x in threshold_grid)),
-                            "hold_grid": sorted(set(int(x) for x in hold_grid)),
-                            "result_df": result_df.to_dict("records"),
-                            "best": best_row,
-                        }
-                        st.success(f"{optimize_strategy} 参数优化完成，共评估 {len(result_df)} 组。")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"优化失败: {e}")
-                        st.code(traceback.format_exc())
-
-            if "prod_optimization_result" in st.session_state:
-                opt = st.session_state["prod_optimization_result"] or {}
-                result_df = pd.DataFrame(opt.get("result_df", []))
-                best = opt.get("best", {}) if isinstance(opt.get("best", {}), dict) else {}
-                if not result_df.empty:
-                    st.markdown("---")
-                    pass_count = int(result_df["gate_pass"].fillna(False).astype(bool).sum())
-                    fail_count = int(len(result_df) - pass_count)
-                    r1, r2, r3, r4 = st.columns(4)
-                    r1.metric("优化策略", str(opt.get("strategy", "N/A")))
-                    r2.metric("总组合", int(len(result_df)))
-                    r3.metric("满足晋升门槛", pass_count)
-                    r4.metric("未达标", fail_count)
-
-                    st.success(
-                        f"最佳参数：阈值 {int(best.get('threshold', 0))} / 持仓 {int(best.get('holding_days', 0))}天 | "
-                        f"胜率 {float(best.get('win_rate_pct', 0.0)):.1f}% | 回撤 {float(best.get('max_drawdown_pct', 0.0)):.1f}% | "
-                        f"样本 {int(best.get('signals', 0))} | 晋升建议 {'YES' if bool(best.get('gate_pass', False)) else 'NO'}"
-                    )
-                    c_apply1, c_apply2 = st.columns([1, 2])
-                    with c_apply1:
-                        apply_best = st.button("一键回写最佳参数到策略中心", type="primary", key="apply_best_opt_to_center")
-                    with c_apply2:
-                        st.caption("回写后会同步当前会话参数，并写入统一口径文件（重启后保持）。")
-                    if apply_best:
-                        try:
-                            strict_mode = bool(st.session_state.get("strict_full_market_mode", False))
-                            unified_cap_min = float(st.session_state.get("unified_cap_min", 100.0) or 100.0)
-                            unified_cap_max = float(st.session_state.get("unified_cap_max", 15000.0) or 15000.0)
-                            params = _production_baseline_params("稳健标准", strict_full_market=strict_mode)
-
-                            # 先用当前策略中心参数覆盖一遍，避免回写时误覆盖其他策略。
-                            current = _get_production_compare_params()
-                            for sk in ("v5", "v8", "v9", "combo"):
-                                params.setdefault(sk, {})
-                                params[sk]["score_threshold"] = int((current.get(sk) or {}).get("score_threshold", params[sk].get("score_threshold", 60)))
-                                params[sk]["holding_days"] = int((current.get(sk) or {}).get("holding_days", params[sk].get("holding_days", 8)))
-                                params[sk]["cap_min"] = float(unified_cap_min)
-                                params[sk]["cap_max"] = float(unified_cap_max)
-
-                            target_sk = str(opt.get("strategy", "")).strip().lower()
-                            if target_sk in {"v5", "v8", "v9", "combo"}:
-                                params[target_sk]["score_threshold"] = int(best.get("threshold", params[target_sk].get("score_threshold", 60)))
-                                params[target_sk]["holding_days"] = int(best.get("holding_days", params[target_sk].get("holding_days", 8)))
-
-                            _apply_production_baseline_to_session(params)
-                            ok_save, save_msg = _save_production_unified_profile("优化回写", strict_mode, params)
-                            if ok_save:
-                                st.success("已回写最佳参数到策略中心，并保存到统一口径文件。")
-                                st.caption(f"统一口径文件：{save_msg}")
-                            else:
-                                st.warning(f"已回写到会话参数，但保存统一口径文件失败：{save_msg}")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"回写失败：{e}")
-                    show_df = result_df.rename(
-                        columns={
-                            "strategy": "策略",
-                            "threshold": "阈值",
-                            "holding_days": "持仓天数",
-                            "signals": "样本数",
-                            "win_rate_pct": "胜率(%)",
-                            "avg_return_pct": "平均收益(%)",
-                            "max_drawdown_pct": "最大回撤(%)",
-                            "sharpe_ratio": "夏普比率",
-                            "objective": "综合评分",
-                            "gate_pass": "晋升门槛通过",
-                        }
-                    )
-                    show_df = show_df.sort_values(["综合评分", "胜率(%)"], ascending=[False, False])
-                    st.dataframe(show_df, use_container_width=True, hide_index=True)
 
     # ==================== Tab 4:  AI智能选股 ====================
     with tab_ai:
-        if show_ai_signal_panel:
-            st.markdown("---")
-            _render_page_header(
-                " AI 智能选股",
-                "共识与量化结合 · 高效选股 · 稳健风控",
-                tag="AI Signal",
-            )
-
-            evolve_v5 = _load_evolve_params("ai_v5_best.json")
-            evolve_v2 = _load_evolve_params("ai_v2_best.json")
-        
-            # 策略版本选择
-            strategy_version = st.radio(
-                "选择策略版本",
-                ["V5.0 稳健月度目标版（推荐）", "V2.0 追涨版"],
-                horizontal=True,
-                help="V5.0 稳健 / V2.0 动量"
-            )
-        
-            use_v3 = "V5.0" in strategy_version
-
-            if use_v3 and evolve_v5.get("params"):
-                st.success(f"已应用自动进化参数（V5.0，{evolve_v5.get('run_at', 'unknown')}）")
-            elif (not use_v3) and evolve_v2.get("params"):
-                st.success(f"已应用自动进化参数（V2.0，{evolve_v2.get('run_at', 'unknown')}）")
-        
-            if use_v3:
-                st.caption("V5.0：偏稳健，强调回撤控制。")
-            else:
-                st.caption("V2.0：偏动量，信号更激进。")
-        
-            st.divider()
-        
-            st.markdown("###  策略参数设置")
-            col1, col2, col3, col4 = st.columns(4)
-        
-            with col1:
-                if use_v3:
-                    evo_target = evolve_v5.get("params", {}).get("target_return")
-                    target_default = int(round(evo_target * 100)) if isinstance(evo_target, (int, float)) else 18
-                    target_return = st.slider(
-                        "目标月收益阈值（%）",
-                        min_value=10, max_value=50, value=target_default, step=1,
-                        help="预测未来20天可能达到的收益目标"
-                    )
-                else:
-                    evo_target = evolve_v2.get("params", {}).get("target_return")
-                    target_default = int(round(evo_target * 100)) if isinstance(evo_target, (int, float)) else 20
-                    target_return = st.slider(
-                        "目标月收益阈值（%）",
-                        min_value=10, max_value=50, value=target_default, step=1,
-                        help="筛选近 20 个交易日涨幅达标的标的"
-                    )
-            with col2:
-                evo_min_amount = (evolve_v5 if use_v3 else evolve_v2).get("params", {}).get("min_amount")
-                min_amount_default = float(evo_min_amount) if isinstance(evo_min_amount, (int, float)) else (2.5 if use_v3 else 2.0)
-                min_amount = st.slider(
-                    "最低成交活跃度（亿元）",
-                    min_value=0.5, max_value=15.0, value=min_amount_default, step=0.5,
-                    help="过滤'僵尸股'，确保进出容易"
-                )
-            with col3:
-                evo_vol = (evolve_v5 if use_v3 else evolve_v2).get("params", {}).get("max_volatility")
-                max_volatility_default = (float(evo_vol) * 100) if isinstance(evo_vol, (int, float)) else (14.0 if use_v3 else 12.0)
-                max_volatility = st.slider(
-                    "最大波动容忍度（%）",
-                    min_value=5.0, max_value=25.0, value=max_volatility_default, step=0.5,
-                    help="过滤极端异常波动的'电梯股'"
-                )
-            with col4:
-                top_n_default = 25 if use_v3 else 30
-                top_n = st.slider("优选推荐数量", 5, 100, top_n_default, 5, key="ai_top_n_v3")
-
-            filter_ai_col1, filter_ai_col2, filter_ai_col3 = st.columns(3)
-            with filter_ai_col1:
-                select_mode_ai = st.selectbox(
-                    "筛选模式",
-                    ["双重筛选(阈值+Top%)", "分位数筛选(Top%)", "阈值筛选"],
-                    index=0,
-                    key="ai_select_mode"
-                )
-            with filter_ai_col2:
-                score_threshold_ai = st.slider("评分阈值", 30, 90, 60, 5, key="ai_score_threshold")
-            with filter_ai_col3:
-                top_percent_ai = st.slider("Top百分比", 1, 10, 2, 1, key="ai_top_percent")
-
-            adj_ai_col1, adj_ai_col2 = st.columns(2)
-            with adj_ai_col1:
-                market_adjust_strength_ai = st.slider("市场状态调节强度", 0.0, 1.0, 0.5, 0.05, key="ai_market_strength")
-            with adj_ai_col2:
-                disagree_std_weight_ai = st.slider("分歧惩罚强度", 0.0, 1.5, 0.35, 0.05, key="ai_disagree_weight")
-
-            adj_ai_col3, adj_ai_col4 = st.columns(2)
-            with adj_ai_col3:
-                enable_consistency_ai = st.checkbox("启用多周期一致性过滤", value=True, key="ai_consistency")
-            with adj_ai_col4:
-                min_align_ai = st.slider("一致性要求（2/3或3/3）", 2, 3, 2, 1, key="ai_consistency_min")
-
-            with st.expander("市值筛选（可选）", expanded=False):
-                if use_v3:
-                    evo_min_mc = evolve_v5.get("params", {}).get("min_market_cap")
-                    evo_max_mc = evolve_v5.get("params", {}).get("max_market_cap")
-                    if isinstance(evo_min_mc, (int, float)) and isinstance(evo_max_mc, (int, float)):
-                        default_mcap = (int(evo_min_mc), int(evo_max_mc))
-                    else:
-                        default_mcap = (100, 5000)
-                else:
-                    default_mcap = (0, 5000)
-                market_cap_range = st.slider(
-                    "流通市值范围（亿）",
-                    min_value=0,
-                    max_value=5000,
-                    value=default_mcap,
-                    step=10,
-                    help="用于过滤过小/过大的流通市值标的"
-                )
-                min_market_cap, max_market_cap = market_cap_range
-        
-            button_text = " 开启 AI 稳健月度目标 (V5.0)" if use_v3 else " 开启 AI 高效选股 (V2.0)"
-            if st.button(button_text, type="primary", use_container_width=True):
-                with st.spinner(f"AI 正在全市场扫描 {'V5.0 稳健月度目标' if use_v3 else 'V2.0 高收益标的'}..."):
-                    try:
-                        from data.dao import DataAccessError, detect_daily_table  # type: ignore
-
-                        conn = _connect_permanent_db()
-                        start_date = (datetime.now() - timedelta(days=150)).strftime('%Y%m%d')
-
-                        try:
-                            daily_table = detect_daily_table(conn)
-                        except DataAccessError:
-                            conn.close()
-                            st.error("无法识别日线数据表（daily_trading_data/daily_data）")
-                            st.stop()
-
-                        query = f"""
-                            SELECT dtd.ts_code, sb.name, sb.industry, sb.circ_mv,
-                                   dtd.trade_date, dtd.close_price, dtd.vol, dtd.amount, dtd.pct_chg
-                            FROM {daily_table} dtd
-                            INNER JOIN stock_basic sb ON dtd.ts_code = sb.ts_code
-                            WHERE dtd.trade_date >= ?
-                            ORDER BY dtd.ts_code, dtd.trade_date
-                        """
-                        df = pd.read_sql_query(query, conn, params=(start_date,))
-                        conn.close()
-                    
-                        if df.empty:
-                            st.error("数据库为空，请先在'数据中心'更新数据")
-                        else:
-                            if use_v3:
-                                stocks = vp_analyzer.select_monthly_target_stocks_v3(
-                                    df,
-                                    target_return=target_return / 100,
-                                    min_amount=min_amount,
-                                    max_volatility=max_volatility / 100,
-                                    min_market_cap=min_market_cap,
-                                    max_market_cap=max_market_cap
-                                )
-                                session_key = 'ai_monthly_stocks_v3'
-                                version_name = "V5.0"
-                            else:
-                                stocks = vp_analyzer.select_monthly_target_stocks(
-                                    df,
-                                    target_return=target_return / 100,
-                                    min_amount=min_amount,
-                                    max_volatility=max_volatility / 100
-                                )
-                                session_key = 'ai_monthly_stocks_v2'
-                                version_name = "V2.0"
-                        
-                            if not stocks.empty:
-                                candidate_count = len(stocks)
-                                stocks = stocks.copy()
-                                if "评分" in stocks.columns:
-                                    stocks["评分"] = pd.to_numeric(stocks["评分"], errors="coerce")
-                                stocks = stocks.dropna(subset=["评分"]) if "评分" in stocks.columns else stocks
-
-                                market_env_ai = "oscillation"
-                                try:
-                                    market_env_ai = vp_analyzer.get_market_environment()
-                                except Exception:
-                                    market_env_ai = "oscillation"
-                                env_multiplier = 1.0
-                                if market_env_ai == "bull":
-                                    env_multiplier = 1.02
-                                elif market_env_ai == "bear":
-                                    env_multiplier = 0.95
-                                else:
-                                    env_multiplier = 0.98
-                                adj_factor = 1.0 - market_adjust_strength_ai + (market_adjust_strength_ai * env_multiplier)
-                                if "评分" in stocks.columns:
-                                    stocks["评分"] = stocks["评分"] * adj_factor
-
-                                penalty_cols = ["20日涨幅%", "5日涨幅%", "回撤%", "波动率%", "放量倍数"]
-                                present_cols = [c for c in penalty_cols if c in stocks.columns]
-                                if present_cols:
-                                    numeric_block = stocks[present_cols].apply(pd.to_numeric, errors="coerce")
-                                    penalty = numeric_block.std(axis=1, ddof=0).fillna(0)
-                                    stocks["分歧惩罚"] = (penalty * disagree_std_weight_ai).round(2)
-                                else:
-                                    stocks["分歧惩罚"] = 0.0
-                                stocks["市场因子"] = round(adj_factor, 2)
-                                if "评分" in stocks.columns:
-                                    stocks["评分"] = (stocks["评分"] - stocks["分歧惩罚"]).round(2)
-
-                                if "评分" in stocks.columns:
-                                    stocks = _apply_filter_mode(
-                                        stocks,
-                                        score_col="评分",
-                                        mode=select_mode_ai,
-                                        threshold=score_threshold_ai,
-                                        top_percent=top_percent_ai
-                                    )
-                                if enable_consistency_ai and not stocks.empty:
-                                    stocks = _apply_multi_period_filter(
-                                        stocks,
-                                        PERMANENT_DB_PATH,
-                                        min_align=min_align_ai
-                                    )
-                                stocks = _add_reason_summary(stocks, score_col="评分")
-                                if stocks.empty:
-                                    st.error("AI 未找到符合筛选条件的标的，请放宽阈值或筛选比例")
-                                    st.stop()
-
-                                st.session_state[session_key] = stocks
-                                st.session_state['ai_candidate_count'] = candidate_count
-                                st.session_state['ai_strategy_version'] = version_name
-                                st.success(f"{version_name} 扫描完成：找到 {len(stocks)} 只{'综合潜力' if use_v3 else '高收益潜力'}标的")
-                                sim_account = _get_sim_account()
-                                buy_count, buy_status = _auto_buy_ai_stocks(
-                                    stocks,
-                                    sim_account['per_buy_amount'],
-                                    sim_account['auto_buy_top_n']
-                                )
-                                st.session_state['last_ai_auto_buy'] = {
-                                    'count': buy_count,
-                                    'status': buy_status,
-                                    'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                                }
-                                st.rerun()
-                            else:
-                                if use_v3:
-                                    st.error("V5.0 未找到股票，可能的原因：\n1. 数据库数据不足（请先到「数据中心」更新数据）\n2. 数据查询出错（请查看系统日志）\n3. 当前市场偏弱或稳健过滤过严")
-                                    st.info("提示：V5.0已自动从“严格稳健”→“稳健放宽”→“救援筛选”仍未命中。\n可尝试：降低目标收益阈值、提高最大波动容忍度、或暂时放宽回撤/新股过滤。")
-                                    debug_runs = getattr(vp_analyzer, 'last_v5_debug', None)
-                                    if debug_runs:
-                                        lines = []
-                                        for s in debug_runs:
-                                            lines.append(
-                                                f"[{s['stage']}] total={s['total_stocks']} cand={s['candidates']} res={s['results']} | "
-                                                f"history={s['skip_history']} st={s['skip_st']} data={s['skip_len_data']} "
-                                                f"limitup={s['skip_limitup']} amount={s['skip_amount']} mcap={s['skip_mcap']} turnover={s['skip_turnover']} ret20={s['skip_ret20_gate']} "
-                                                f"ind_weak={s['skip_industry_weak']} vol_pct={s['skip_vol_percentile']} dd={s['skip_drawdown']} vol={s['skip_volatility']} "
-                                                f"pull={s['skip_pullback']} bias={s['skip_bias']} score={s['skip_score']}"
-                                            )
-                                        st.code("\n".join(lines))
-                                else:
-                                    st.warning("当前市场环境下未发现符合 V2.0 标准的标的，建议：\n1. 切换到V5.0稳健月度目标版（推荐）\n2. 降低门槛或等待大盘企稳")
-                
-                    except Exception as e:
-                        st.error(f"运行失败: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-        
-            # 显示结果
-            result_key = 'ai_monthly_stocks_v3' if use_v3 else 'ai_monthly_stocks_v2'
-            if result_key in st.session_state:
-                stocks = st.session_state[result_key].head(top_n)
-                version_name = st.session_state.get('ai_strategy_version', 'V5.0' if use_v3 else 'V2.0')
-                st.divider()
-                st.subheader(f"AI 优选名单 ({version_name} {'稳健月度目标版' if use_v3 else '追涨版'})")
-                _render_result_overview(stocks, score_col="评分", title="AI 结果概览")
-                candidate_count = st.session_state.get('ai_candidate_count', len(stocks))
-                msg, level = _signal_density_hint(len(stocks), candidate_count)
-                getattr(st, level)(msg)
-                auto_buy_info = st.session_state.get('last_ai_auto_buy')
-                if auto_buy_info:
-                    if auto_buy_info.get('status') == 'duplicate':
-                        st.info("本次 AI 优选名单已自动买入过，无需重复买入。")
-                    elif auto_buy_info.get('status') == 'disabled':
-                        st.warning("自动买入已关闭，本次未执行买入。")
-                    elif auto_buy_info.get('status') in ("empty", "skipped"):
-                        st.info("本次无可买标的，未执行买入。")
-                    else:
-                        st.info(f"已自动买入 {auto_buy_info.get('count', 0)} 只标的（{auto_buy_info.get('time', '')}）")
-            
-                # 统计汇总
-                col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-                with col_m1:
-                    st.metric("标的数量", f"{len(stocks)} 只")
-                with col_m2:
-                    avg_ret20 = pd.to_numeric(stocks['20日涨幅%'], errors='coerce').mean()
-                    avg_ret5 = pd.to_numeric(stocks['5日涨幅%'], errors='coerce').mean() if '5日涨幅%' in stocks.columns else 0
-                    st.metric("平均20日涨幅", f"{avg_ret20:.1f}%", delta=f"5日: {avg_ret5:.1f}%")
-                with col_m3:
-                    if '放量倍数' in stocks.columns:
-                        avg_vol_ratio = pd.to_numeric(stocks['放量倍数'], errors='coerce').mean()
-                        st.metric("平均放量倍数", f"{avg_vol_ratio:.2f}x")
-                    else:
-                        st.metric("平均放量倍数", "—")
-                with col_m4:
-                    if '近20日成交额(亿)' in stocks.columns:
-                        avg_amt = pd.to_numeric(stocks['近20日成交额(亿)'], errors='coerce').mean()
-                        st.metric("平均活跃度", f"{avg_amt:.1f} 亿")
-                    else:
-                        st.metric("平均活跃度", "—")
-            
-                # 数据表格展示
-                display_ai = _standardize_result_df(stocks, score_col="评分")
-                st.dataframe(
-                    display_ai, 
-                    use_container_width=True, 
-                    hide_index=True,
-                    column_config={
-                        "评分": st.column_config.NumberColumn(format="%.1f "),
-                        "筛选理由": st.column_config.TextColumn(width="large"),
-                        "核心理由": st.column_config.TextColumn(width="large")
-                    }
-                )
-            
-                st.markdown("---")
-                csv = _df_to_csv_bytes(stocks)
-                st.download_button(
-                    label=f" 导出 {version_name} 结果 (Excel 兼容)",
-                    data=csv,
-                    file_name=f"AI_稳健月度目标{version_name}_结果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv; charset=utf-8"
-                )
-        else:
-            st.caption("AI智能选股已并入实验策略入口：请在上方“实验策略入口（手动启用）”中选择「AI 辅助选股（实验）」。")
+        render_ai_signal_page(
+            show_ai_signal_panel=show_ai_signal_panel,
+            render_page_header=_render_page_header,
+            load_evolve_params=_load_evolve_params,
+            vp_analyzer=vp_analyzer,
+            connect_permanent_db=_connect_permanent_db,
+            apply_filter_mode=_apply_filter_mode,
+            apply_multi_period_filter=_apply_multi_period_filter,
+            permanent_db_path=PERMANENT_DB_PATH,
+            add_reason_summary=_add_reason_summary,
+            get_sim_account=_get_sim_account,
+            auto_buy_ai_stocks=_auto_buy_ai_stocks,
+            render_result_overview=_render_result_overview,
+            signal_density_hint=_signal_density_hint,
+            standardize_result_df=_standardize_result_df,
+            df_to_csv_bytes=_df_to_csv_bytes,
+        )
 
     # ==================== Tab 5:  数据与参数管理 ====================
+    with tab_evolution:
+        _render_airivo_strategy_evolution(PERMANENT_DB_PATH, airivo_snapshot if isinstance(airivo_snapshot, dict) else {})
+
     with tab_data:
-        _render_page_header(
-            " 数据与系统",
-            "数据更新 · 系统健康 · 运维动作",
-            tag="Data Ops",
+        render_data_ops_core_page(
+            render_page_header=_render_page_header,
+            get_auto_evolve_status=_get_auto_evolve_status,
+            load_production_report_by_strategy=_load_production_report_by_strategy,
+            safe_parse_dt=_safe_parse_dt,
+            airivo_has_role=_airivo_has_role,
+            airivo_guard_action=_airivo_guard_action,
+            airivo_append_action_audit=_airivo_append_action_audit,
+            trigger_auto_evolve_optimize=_trigger_auto_evolve_optimize,
+            load_portfolio_risk_budget=_load_portfolio_risk_budget,
+            evaluate_production_rollback_trigger=_evaluate_production_rollback_trigger,
+            load_production_rollback_state=_load_production_rollback_state,
+            execute_production_auto_rollback=_execute_production_auto_rollback,
+            compute_production_allocation_plan=_compute_production_allocation_plan,
+            write_production_allocation_report=_write_production_allocation_report,
+            build_production_rebalance_orders=_build_production_rebalance_orders,
+            write_production_rebalance_report=_write_production_rebalance_report,
+            precheck_production_rebalance_orders=_precheck_production_rebalance_orders,
+            execute_production_rebalance_orders=_execute_production_rebalance_orders,
+            load_latest_production_rebalance_audit=_load_latest_production_rebalance_audit,
+            build_weekly_rebalance_quality_dashboard=_build_weekly_rebalance_quality_dashboard,
+            load_latest_auto_rebalance_log=_load_latest_auto_rebalance_log,
+            db_manager=db_manager,
         )
-        st.caption("仅保留关键运维动作。")
 
-        with st.expander("运行与回测摘要", expanded=True):
-            evolve_status = _get_auto_evolve_status()
-            source_options = ["自动(最新)", "V9", "V8", "V5", "COMBO"]
-            selected_source = st.selectbox(
-                "摘要来源",
-                source_options,
-                index=0,
-                key="summary_source_selector_data",
-            )
-            evolve_latest = evolve_status.get("data", {}) or {}
-            display_run_source = str(evolve_status.get("run_source", "N/A"))
-            display_run_at = str(evolve_status.get("run_at", "") or "")
-            display_mtime = str(evolve_status.get("last_run_mtime", "") or "")
-            if selected_source != "自动(最新)":
-                display_run_source = selected_source
-                picked, picked_mtime, picked_type = _load_production_report_by_strategy(selected_source)
-                if picked:
-                    evolve_latest = picked
-                    display_run_at = str(picked.get("run_at", "") or "")
-                    display_mtime = picked_mtime
-                    if picked_type and picked_type != "best":
-                        display_run_source = f"{selected_source}({picked_type})"
-                else:
-                    evolve_latest = {}
-                    display_run_at = ""
-                    display_mtime = ""
-                    evo_dir = os.path.join(os.path.dirname(__file__), "evolution")
-                    file_map = {
-                        "V9": "v9_best.json",
-                        "V8": "v8_best.json",
-                        "V5": "v5_best.json",
-                        "COMBO": "combo_best.json",
-                    }
-                    target_file = file_map.get(str(selected_source).upper(), "")
-                    target_path = os.path.join(evo_dir, target_file) if target_file else ""
-                    if target_path and (not os.path.exists(target_path)):
-                        st.warning(f"未找到 {target_file}；该策略最近可能未通过晋升。请检查 {selected_source.lower()}_last_attempt.json。")
-                    else:
-                        st.warning(f"{selected_source} 摘要文件读取失败，当前无法显示该策略摘要。")
-
-            run_dt = _safe_parse_dt(display_run_at)
-            run_age_mins = int(max(0.0, (datetime.now() - run_dt).total_seconds() // 60)) if run_dt else None
-            rs1, rs2, rs3, rs4 = st.columns(4)
-            with rs1:
-                st.metric("自动进化状态", str(evolve_status.get("runtime_state", "未知")))
-            with rs2:
-                st.metric("最近回测时间", display_run_at or "N/A")
-            with rs3:
-                st.metric("结果文件更新时间", display_mtime or "N/A")
-            with rs4:
-                risk_raw = str(evolve_status.get("risk_level", "unknown")).lower()
-                risk_effective = str(evolve_status.get("risk_level_effective", risk_raw)).lower()
-                risk_stale = bool(evolve_status.get("risk_stale", False))
-                risk_metric_text = str(risk_effective).upper() if not risk_stale else f"HISTORY-{str(risk_raw).upper()}"
-                st.metric("风险等级", risk_metric_text)
-
-            st.caption(
-                f"数据口径：摘要来源 {display_run_source} | 回测时间 {display_run_at or 'N/A'} | "
-                f"日志时间 {str(evolve_status.get('log_mtime', '') or 'N/A')}"
-            )
-
-            c1, c2 = st.columns([1, 3])
-            with c1:
-                trigger_disabled = str(evolve_status.get("runtime_state", "")).startswith("运行中")
-                if st.button("更新摘要", key="trigger_auto_evolve_optimize_data", disabled=trigger_disabled):
-                    ok, msg = _trigger_auto_evolve_optimize(force_now=True)
-                    if ok:
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.error(msg)
-            with c2:
-                if isinstance(run_age_mins, int):
-                    st.caption(f"数据新鲜度：{run_age_mins} 分钟")
-
-            if isinstance(evolve_latest, dict) and evolve_latest.get("stats"):
-                stats = evolve_latest.get("stats", {})
-                win_rate = stats.get("win_rate")
-                avg_return = stats.get("avg_return")
-                avg_hold = stats.get("avg_holding_days")
-                summary_parts = []
-                if isinstance(win_rate, (int, float)):
-                    summary_parts.append(f"胜率{win_rate:.1f}%")
-                if isinstance(avg_hold, (int, float)):
-                    summary_parts.append(f"平均持仓{avg_hold:.1f}天")
-                if isinstance(avg_return, (int, float)):
-                    summary_parts.append(f"平均收益{avg_return:.2f}%")
-                if summary_parts:
-                    st.markdown("**摘要：" + " · ".join(summary_parts) + "**")
-
-            st.markdown("---")
-            st.markdown("**组合级风险预算（扫描+回测同口径）**")
-            rb_defaults = _load_portfolio_risk_budget()
-            rb_cfg1, rb_cfg2, rb_cfg3 = st.columns(3)
-            with rb_cfg1:
-                st.toggle(
-                    "启用风险预算",
-                    value=bool(rb_defaults.get("enabled", True)),
-                    key="prod_rb_enable",
-                )
-            with rb_cfg2:
-                st.slider(
-                    "最大持仓数",
-                    min_value=5,
-                    max_value=80,
-                    value=int(rb_defaults.get("max_positions", 20)),
-                    step=1,
-                    key="prod_rb_max_positions",
-                )
-            with rb_cfg3:
-                st.slider(
-                    "行业集中度上限",
-                    min_value=0.10,
-                    max_value=0.80,
-                    value=float(rb_defaults.get("max_industry_ratio", 0.35)),
-                    step=0.01,
-                    key="prod_rb_max_ind_ratio",
-                )
-            st.caption("说明：按共识评分从高到低选股，超出行业上限后跳过该行业信号。")
-
-            st.markdown("---")
-            st.markdown("**生产安全回滚触发器**")
-            rb_eval = _evaluate_production_rollback_trigger()
-            rb_targets = list(rb_eval.get("targets") or [])
-            rb_state = _load_production_rollback_state()
-            rc1, rc2, rc3, rc4 = st.columns(4)
-            with rc1:
-                st.metric("触发状态", "TRIGGERED" if bool(rb_eval.get("triggered", False)) else "NORMAL")
-            with rc2:
-                st.metric("RED策略数", int(rb_eval.get("red_count", 0)))
-            with rc3:
-                st.metric("未晋升策略数", int(rb_eval.get("no_count", 0)))
-            with rc4:
-                st.metric("回滚目标数", len(rb_targets))
-            st.caption(
-                f"触发原因：{rb_eval.get('reason', 'N/A')} | 目标：{','.join(rb_targets) if rb_targets else '无'} | "
-                f"签名：{rb_eval.get('signature', '')}"
-            )
-            if rb_state:
-                st.caption(
-                    f"上次执行：{rb_state.get('last_run_at', 'N/A')} | "
-                    f"目标：{','.join(rb_state.get('last_targets', []) or []) or '无'} | "
-                    f"成功：{','.join(rb_state.get('last_done', []) or []) or '无'}"
-                )
-            auto_rb_enabled = st.toggle("启用自动回滚（有触发才执行）", value=False, key="enable_prod_auto_rollback")
-            st.toggle("回滚后自动触发重训", value=False, key="prod_retrain_after_rollback")
-            rb_col1, rb_col2 = st.columns([1, 3])
-            with rb_col1:
-                if st.button("手动执行一次回滚", key="run_prod_rollback_once", use_container_width=True):
-                    ok_rb, msg_rb, _ = _execute_production_auto_rollback(force=True)
-                    if ok_rb:
-                        st.success(msg_rb)
-                    else:
-                        st.warning(msg_rb)
-                    st.rerun()
-            with rb_col2:
-                if auto_rb_enabled:
-                    ok_rb, msg_rb, _ = _execute_production_auto_rollback(force=False)
-                    if ok_rb:
-                        st.warning(f"自动回滚已执行：{msg_rb}")
-                    else:
-                        st.caption(f"自动回滚检查：{msg_rb}")
-
-            st.markdown("---")
-            st.markdown("**策略级仓位分配建议（v5/v8/v9/combo）**")
-            alloc_col1, alloc_col2, alloc_col3 = st.columns(3)
-            with alloc_col1:
-                alloc_capital = st.number_input(
-                    "组合总资金",
-                    min_value=10000.0,
-                    max_value=1_000_000_000.0,
-                    value=float(st.session_state.get("prod_alloc_total_capital", 1_000_000.0)),
-                    step=10000.0,
-                    key="prod_alloc_total_capital",
-                )
-            with alloc_col2:
-                alloc_regime = st.selectbox(
-                    "市场状态口径",
-                    ["auto", "bull", "oscillation", "bear"],
-                    index=0,
-                    key="prod_alloc_regime_choice",
-                )
-            with alloc_col3:
-                if st.button("生成仓位建议", key="run_prod_allocation_plan", use_container_width=True):
-                    alloc_plan = _compute_production_allocation_plan(
-                        capital_total=float(alloc_capital),
-                        regime_choice=str(alloc_regime),
-                    )
-                    st.session_state["prod_allocation_plan"] = alloc_plan
-                    st.rerun()
-
-            alloc_plan_show = st.session_state.get("prod_allocation_plan")
-            if isinstance(alloc_plan_show, dict) and alloc_plan_show.get("ok"):
-                plan_df = pd.DataFrame(alloc_plan_show.get("plan_df", []))
-                if not plan_df.empty:
-                    m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("市场状态", str(alloc_plan_show.get("regime", "N/A")))
-                    m2.metric("策略数", int(len(plan_df)))
-                    m3.metric("最大策略权重", f"{float(plan_df['target_weight'].max())*100:.1f}%")
-                    m4.metric("平均单票上限", f"{float(plan_df['single_ticket_cap'].mean()):.0f}")
-                    show_df = plan_df.rename(
-                        columns={
-                            "strategy": "策略",
-                            "win_rate_pct": "胜率(%)",
-                            "max_drawdown_pct": "最大回撤(%)",
-                            "risk": "风险级别",
-                            "promo": "晋升通过",
-                            "target_weight": "目标权重",
-                            "capital_alloc": "分配资金",
-                            "slot_count": "建议仓位数",
-                            "single_ticket_cap": "单票上限",
-                        }
-                    )
-                    show_df["目标权重"] = show_df["目标权重"].apply(lambda x: round(float(x) * 100.0, 2))
-                    st.dataframe(show_df, use_container_width=True, hide_index=True)
-                    if st.button("生成今日生产简报（md+csv）", key="gen_prod_alloc_report"):
-                        ok_rp, md_path, csv_path = _write_production_allocation_report(alloc_plan_show)
-                        if ok_rp:
-                            st.success("生产简报已生成。")
-                            st.caption(f"Markdown: {md_path}")
-                            st.caption(f"CSV: {csv_path}")
-                        else:
-                            st.warning("生产简报生成失败。")
-
-                    reb_col1, reb_col2 = st.columns([1, 1])
-                    with reb_col1:
-                        if st.button("生成调仓指令清单", key="gen_prod_rebalance_orders", use_container_width=True):
-                            reb = _build_production_rebalance_orders(alloc_plan_show)
-                            st.session_state["prod_rebalance_orders"] = reb
-                            st.rerun()
-                    with reb_col2:
-                        if st.button("导出调仓简报（md+csv）", key="export_prod_rebalance_report", use_container_width=True):
-                            reb = st.session_state.get("prod_rebalance_orders", {})
-                            ok_rb, md_rb, csv_rb = _write_production_rebalance_report(alloc_plan_show, reb if isinstance(reb, dict) else {})
-                            if ok_rb:
-                                st.success("调仓简报已生成。")
-                                st.caption(f"Markdown: {md_rb}")
-                                st.caption(f"CSV: {csv_rb}")
-                            else:
-                                st.warning("调仓简报生成失败，请先生成调仓指令清单。")
-
-                    reb_show = st.session_state.get("prod_rebalance_orders", {})
-                    if isinstance(reb_show, dict) and reb_show.get("ok"):
-                        odf = pd.DataFrame(reb_show.get("orders_df", []))
-                        sm = reb_show.get("summary", {}) or {}
-                        rr1, rr2, rr3, rr4 = st.columns(4)
-                        rr1.metric("总指令", int(sm.get("total_orders", 0)))
-                        rr2.metric("BUY", int(sm.get("buy_count", 0)))
-                        rr3.metric("HOLD", int(sm.get("hold_count", 0)))
-                        rr4.metric("REDUCE", int(sm.get("reduce_count", 0)))
-                        if not odf.empty:
-                            show_cols = [c for c in ["action", "strategy", "ts_code", "name", "industry", "score", "target_amount", "reason"] if c in odf.columns]
-                            st.dataframe(odf[show_cols], use_container_width=True, hide_index=True)
-                        ex1, ex2 = st.columns([1, 3])
-                        with ex1:
-                            execute_reduce = st.toggle("执行REDUCE卖出", value=False, key="prod_exec_reduce_toggle")
-                            precheck = _precheck_production_rebalance_orders(reb_show, execute_reduce=bool(execute_reduce))
-                            can_execute = bool(precheck.get("ok")) and str(precheck.get("status", "RED")).upper() != "RED"
-                            if st.button("执行到模拟账户", key="exec_prod_rebalance_to_sim", use_container_width=True, disabled=(not can_execute)):
-                                exec_ret = _execute_production_rebalance_orders(reb_show, execute_reduce=bool(execute_reduce))
-                                st.session_state["prod_rebalance_exec_result"] = exec_ret
-                                st.rerun()
-                        with ex2:
-                            st.caption("说明：执行 BUY 到模拟账户；REDUCE 默认不执行，开启后才会按最新价卖出。")
-                            if precheck.get("ok"):
-                                p1, p2, p3, p4 = st.columns(4)
-                                p1.metric("预检状态", str(precheck.get("status", "N/A")))
-                                p2.metric("可执行BUY", int(precheck.get("buy_ready", 0)))
-                                p3.metric("资金需求", f"{float(precheck.get('need_cash', 0.0)):.0f}")
-                                p4.metric("可用现金", f"{float(precheck.get('cash', 0.0)):.0f}")
-                                issues = precheck.get("issues", []) or []
-                                if issues:
-                                    st.caption("预检提示：" + " | ".join([str(x) for x in issues]))
-                                if str(precheck.get("status", "RED")).upper() == "RED":
-                                    st.error("预检为 RED，已阻断执行。请先处理资金或数据问题。")
-                    elif isinstance(reb_show, dict) and reb_show.get("error"):
-                        st.info(f"调仓指令暂不可用：{reb_show.get('error')}")
-
-                    exec_show = st.session_state.get("prod_rebalance_exec_result", {})
-                    if isinstance(exec_show, dict) and exec_show.get("ok"):
-                        esm = exec_show.get("summary", {}) or {}
-                        st.success(
-                            f"模拟执行完成（batch={exec_show.get('batch_id','N/A')}）："
-                            f"BUY={int(esm.get('buy_done', 0))} | REDUCE={int(esm.get('reduce_done', 0))} | "
-                            f"SKIP={int(esm.get('skipped', 0))} | 现金余额={float(esm.get('cash_after', 0.0)):.2f}"
-                        )
-                        edf = pd.DataFrame(exec_show.get("executed_df", []))
-                        if not edf.empty:
-                            st.dataframe(edf, use_container_width=True, hide_index=True)
-                    elif isinstance(exec_show, dict) and exec_show.get("error"):
-                        st.warning(f"模拟执行失败：{exec_show.get('error')}")
-
-                    latest_audit = _load_latest_production_rebalance_audit()
-                    if latest_audit:
-                        q = latest_audit.get("quality", {}) or {}
-                        st.caption(
-                            f"最近执行审计：{latest_audit.get('run_at', 'N/A')} | "
-                            f"batch={latest_audit.get('batch_id', 'N/A')}"
-                        )
-                        qa1, qa2, qa3, qa4 = st.columns(4)
-                        qa1.metric("执行质量分", f"{float(q.get('score', 0.0)):.2f}")
-                        qa2.metric("质量等级", str(q.get("level", "N/A")))
-                        qa3.metric("执行成功率", f"{float(q.get('success_rate_pct', 0.0)):.1f}%")
-                        qa4.metric("执行换手额", f"{float(q.get('turnover', 0.0)):.0f}")
-                    weekly = _build_weekly_rebalance_quality_dashboard(days=7)
-                    if weekly.get("ok"):
-                        st.markdown("**周度执行质量看板（近7天）**")
-                        w1, w2, w3, w4 = st.columns(4)
-                        w1.metric("执行批次", int(weekly.get("runs", 0)))
-                        w2.metric("平均质量分", f"{float(weekly.get('avg_score', 0.0)):.2f}")
-                        w3.metric("平均成功率", f"{float(weekly.get('avg_success_rate', 0.0)):.1f}%")
-                        w4.metric("累计换手额", f"{float(weekly.get('turnover_total', 0.0)):.0f}")
-                        daily_df = pd.DataFrame(weekly.get("daily_df", []))
-                        if not daily_df.empty:
-                            chart_df = daily_df.set_index("trade_date")[["score", "success_rate_pct"]]
-                            st.line_chart(chart_df, height=220)
-                            bar_df = daily_df.set_index("trade_date")[["turnover"]]
-                            st.bar_chart(bar_df, height=180)
-                        skip_top = weekly.get("skip_top", []) or []
-                        if skip_top:
-                            skip_df = pd.DataFrame(skip_top, columns=["跳过原因", "次数"])
-                            st.dataframe(skip_df, use_container_width=True, hide_index=True)
-
-                    st.markdown("---")
-                    st.markdown("**自动调仓任务调度（每日）**")
-                    sch1, sch2, sch3 = st.columns(3)
-                    with sch1:
-                        st.toggle("启用自动调仓", value=False, key="prod_auto_rebalance_enabled")
-                    with sch2:
-                        st.text_input("执行时间(HH:MM)", value="14:50", key="prod_auto_rebalance_time")
-                    with sch3:
-                        st.toggle("自动执行REDUCE卖出", value=False, key="prod_auto_rebalance_execute_reduce")
-
-                    run_auto_col1, run_auto_col2 = st.columns([1, 2])
-                    with run_auto_col1:
-                        if st.button("立即执行自动调仓流水", key="run_auto_rebalance_now", use_container_width=True):
-                            immediate = _run_auto_rebalance_pipeline(
-                                capital_total=float(st.session_state.get("prod_alloc_total_capital", 1_000_000.0) or 1_000_000.0),
-                                regime_choice=str(st.session_state.get("prod_alloc_regime_choice", "auto") or "auto"),
-                                execute_reduce=bool(st.session_state.get("prod_auto_rebalance_execute_reduce", False)),
-                            )
-                            st.session_state["prod_auto_rebalance_last_result"] = immediate
-                            st.rerun()
-                    with run_auto_col2:
-                        tick_ret = _auto_rebalance_scheduler_tick()
-                        if tick_ret.get("status") == "ran":
-                            st.warning("自动调仓任务已执行（本日首次）。")
-                            st.session_state["prod_auto_rebalance_last_result"] = tick_ret.get("result", {})
-                        else:
-                            st.caption(f"调度状态：{tick_ret.get('status', 'N/A')}")
-
-                    auto_last = st.session_state.get("prod_auto_rebalance_last_result", {})
-                    if isinstance(auto_last, dict) and auto_last:
-                        if auto_last.get("ok"):
-                            q = ((auto_last.get("execute", {}) or {}).get("quality", {}) or {})
-                            st.success(
-                                f"最近自动调仓成功：{auto_last.get('run_at', 'N/A')} | "
-                                f"批次={((auto_last.get('execute', {}) or {}).get('batch_id', 'N/A'))} | "
-                                f"质量={q.get('score', 'N/A')}"
-                            )
-                        else:
-                            st.warning(
-                                f"最近自动调仓未执行成功：stage={auto_last.get('stage', 'N/A')} | "
-                                f"error={auto_last.get('error', 'N/A')}"
-                            )
-                    auto_log = _load_latest_auto_rebalance_log()
-                    if auto_log:
-                        st.caption(
-                            f"最近自动调仓日志：{auto_log.get('run_at', 'N/A')} | "
-                            f"ok={auto_log.get('ok', False)} | stage={auto_log.get('stage', 'N/A')}"
-                        )
-            elif isinstance(alloc_plan_show, dict) and not alloc_plan_show.get("ok"):
-                st.info(f"仓位建议暂不可用：{alloc_plan_show.get('error', 'unknown')}")
-
-        with st.expander("策略真实绩效（股票池信号）", expanded=True):
-            st.caption("仅基于每日股票池信号结算结果，不包含人工模拟成交口径。")
-            snap_df = _load_latest_stock_pool_snapshot(max_files=300)
-            if not snap_df.empty:
-                st.markdown("**最新股票池快照（生产策略）**")
-                st.dataframe(snap_df[["策略", "最近池子时间", "池子行数", "持有天数"]], use_container_width=True, hide_index=True)
-            perf_df, perf_detail_df, perf_source_meta = _load_stock_pool_performance_detail(max_files=300)
-            perf_csv_file = ""
-            if perf_df.empty:
-                perf_df, perf_exec_file, perf_csv_file = _load_latest_tracking_scoreboard(max_files=80)
-                perf_detail_df = pd.DataFrame()
-            else:
-                perf_exec_file = ""
-            if perf_df.empty:
-                st.info("暂未读取到可用的股票池信号绩效看板。请先运行一次策略扫描/回测。")
-            else:
-                for col in ["horizon_days", "samples", "win_rate_pct", "avg_ret_pct", "avg_excess_ret_pct", "median_ret_pct"]:
-                    if col in perf_df.columns:
-                        perf_df[col] = pd.to_numeric(perf_df[col], errors="coerce")
-                perf_df = perf_df.dropna(subset=["strategy"]).copy()
-                perf_df["strategy"] = perf_df["strategy"].astype(str).str.strip()
-                perf_df["strategy_norm"] = perf_df["strategy"].str.lower()
-                production_only = st.toggle("仅看生产策略（v9 / v8 / v5 / combo）", value=True, key="real_perf_prod_only")
-                if production_only:
-                    perf_df = perf_df[perf_df["strategy_norm"].isin({"v9", "v8", "v5", "combo"})].copy()
-                if perf_df.empty:
-                    st.warning("当前数据源未包含生产策略（v9/v8/v5/combo）的可用绩效数据。")
-                    if perf_source_meta:
-                        st.caption(f"来源股票池meta：{perf_source_meta}")
-                    elif perf_exec_file:
-                        st.caption(f"来源执行文件：{perf_exec_file}")
-                        st.caption(f"来源看板文件：{perf_csv_file}")
-                else:
-                    horizon_candidates = sorted(
-                        [int(x) for x in perf_df.get("horizon_days", pd.Series([], dtype=float)).dropna().unique().tolist()]
-                    )
-                    if not horizon_candidates:
-                        horizon_candidates = [5]
-                        perf_df["horizon_days"] = 5
-
-                    f0, f1, f2 = st.columns(3)
-                    with f0:
-                        perf_mode = st.selectbox(
-                            "统计口径",
-                            ["全部期限（推荐）", "指定期限"],
-                            index=0,
-                            key="real_perf_mode",
-                        )
-                    with f1:
-                        selected_horizon = st.selectbox(
-                            "评估期限(天)",
-                            options=horizon_candidates,
-                            index=max(0, len(horizon_candidates) - 1),
-                            key="real_perf_horizon_days",
-                            disabled=(perf_mode != "指定期限"),
-                        )
-                    with f2:
-                        min_samples = st.slider(
-                            "最小样本数",
-                            min_value=1,
-                            max_value=200,
-                            value=1,
-                            step=1,
-                            key="real_perf_min_samples",
-                        )
-
-                    if perf_mode == "指定期限":
-                        df_h = perf_df[perf_df["horizon_days"] == int(selected_horizon)].copy()
-                    else:
-                        df_h = perf_df.copy()
-                    if "samples" in df_h.columns:
-                        df_h = df_h[df_h["samples"].fillna(0) >= int(min_samples)]
-
-                    if df_h.empty:
-                        st.warning("当前筛选条件下没有可展示的绩效记录。")
-                    else:
-                        total_samples = int(df_h["samples"].fillna(0).sum()) if "samples" in df_h.columns else len(df_h)
-                        if total_samples > 0 and "samples" in df_h.columns:
-                            weighted_win = float((df_h["win_rate_pct"].fillna(0) * df_h["samples"].fillna(0)).sum() / total_samples)
-                            weighted_ret = float((df_h["avg_ret_pct"].fillna(0) * df_h["samples"].fillna(0)).sum() / total_samples)
-                            weighted_excess = float((df_h["avg_excess_ret_pct"].fillna(0) * df_h["samples"].fillna(0)).sum() / total_samples)
-                        else:
-                            weighted_win = float(df_h["win_rate_pct"].fillna(0).mean()) if "win_rate_pct" in df_h.columns else 0.0
-                            weighted_ret = float(df_h["avg_ret_pct"].fillna(0).mean()) if "avg_ret_pct" in df_h.columns else 0.0
-                            weighted_excess = float(df_h["avg_excess_ret_pct"].fillna(0).mean()) if "avg_excess_ret_pct" in df_h.columns else 0.0
-
-                        best_row = df_h.sort_values(
-                            by=["avg_excess_ret_pct", "win_rate_pct", "samples"],
-                            ascending=[False, False, False],
-                        ).iloc[0]
-                        k1, k2, k3, k4 = st.columns(4)
-                        with k1:
-                            st.metric("总样本", f"{total_samples}")
-                        with k2:
-                            st.metric("加权胜率", f"{weighted_win:.1f}%")
-                        with k3:
-                            st.metric("加权平均收益", f"{weighted_ret:.2f}%")
-                        with k4:
-                            st.metric("最佳策略", str(best_row.get("strategy", "N/A")))
-
-                        show_cols = [c for c in ["strategy", "samples", "settled_ratio_pct", "win_rate_pct", "avg_ret_pct", "median_ret_pct", "avg_excess_ret_pct"] if c in df_h.columns]
-                        rename_cols = {
-                            "strategy": "策略",
-                            "samples": "样本数",
-                            "settled_ratio_pct": "结算完成率(%)",
-                            "win_rate_pct": "胜率(%)",
-                            "avg_ret_pct": "平均收益(%)",
-                            "median_ret_pct": "中位收益(%)",
-                            "avg_excess_ret_pct": "平均超额收益(%)",
-                        }
-                        show_df = df_h[show_cols].rename(columns=rename_cols)
-                        sort_cols = [c for c in ["平均超额收益(%)", "胜率(%)", "样本数"] if c in show_df.columns]
-                        if sort_cols:
-                            show_df = show_df.sort_values(
-                                by=sort_cols,
-                                ascending=[False] * len(sort_cols),
-                            )
-                        st.dataframe(show_df, use_container_width=True, hide_index=True)
-
-                        detail_ready = isinstance(perf_detail_df, pd.DataFrame) and not perf_detail_df.empty
-                        if detail_ready:
-                            detail_work = perf_detail_df.copy()
-                            for c in ["horizon_days", "ret_pct", "excess_ret_pct", "max_dd_pct", "score", "market_cap_yi"]:
-                                if c in detail_work.columns:
-                                    detail_work[c] = pd.to_numeric(detail_work[c], errors="coerce")
-                            detail_work["strategy"] = detail_work["strategy"].astype(str).str.strip()
-                            detail_work["strategy_norm"] = detail_work["strategy"].str.lower()
-                            if production_only:
-                                detail_work = detail_work[detail_work["strategy_norm"].isin({"v9", "v8", "v5", "combo"})].copy()
-                            if perf_mode == "指定期限":
-                                detail_work = detail_work[detail_work["horizon_days"] == int(selected_horizon)].copy()
-
-                            if not detail_work.empty:
-                                tab_a, tab_b, tab_c = st.tabs(["收益分布", "暴露分析", "信号明细"])
-                                with tab_a:
-                                    dist_col1, dist_col2 = st.columns(2)
-                                    with dist_col1:
-                                        if "ret_pct" in detail_work.columns:
-                                            fig_hist = go.Figure()
-                                            fig_hist.add_trace(
-                                                go.Histogram(
-                                                    x=detail_work["ret_pct"].dropna(),
-                                                    nbinsx=40,
-                                                    marker_color="#3B82F6",
-                                                    opacity=0.85,
-                                                    name="收益分布",
-                                                )
-                                            )
-                                            fig_hist.add_vline(x=0, line_dash="dash", line_color="#EF4444")
-                                            fig_hist.update_layout(
-                                                height=280,
-                                                margin=dict(l=10, r=10, t=30, b=10),
-                                                title="信号收益分布（%）",
-                                            )
-                                            st.plotly_chart(fig_hist, use_container_width=True)
-                                    with dist_col2:
-                                        if "signal_date" in detail_work.columns and "ret_pct" in detail_work.columns:
-                                            by_day = (
-                                                detail_work.groupby("signal_date", as_index=False)
-                                                .agg(
-                                                    样本数=("ret_pct", "count"),
-                                                    平均收益=("ret_pct", "mean"),
-                                                    胜率=("ret_pct", lambda x: float((pd.to_numeric(x, errors="coerce") > 0).mean() * 100.0)),
-                                                )
-                                                .sort_values("signal_date")
-                                            )
-                                            if not by_day.empty:
-                                                fig_day = go.Figure()
-                                                fig_day.add_trace(go.Scatter(x=by_day["signal_date"], y=by_day["平均收益"], mode="lines+markers", name="日均收益%"))
-                                                fig_day.add_trace(go.Scatter(x=by_day["signal_date"], y=by_day["胜率"], mode="lines+markers", name="胜率%"))
-                                                fig_day.update_layout(
-                                                    height=280,
-                                                    margin=dict(l=10, r=10, t=30, b=10),
-                                                    title="按信号日稳定性",
-                                                )
-                                                st.plotly_chart(fig_day, use_container_width=True)
-
-                                with tab_b:
-                                    expo_col1, expo_col2 = st.columns(2)
-                                    with expo_col1:
-                                        if "industry" in detail_work.columns:
-                                            ind = detail_work.copy()
-                                            ind["industry"] = ind["industry"].fillna("").astype(str).str.strip()
-                                            ind = ind[ind["industry"] != ""]
-                                            if not ind.empty:
-                                                ind_tbl = (
-                                                    ind.groupby("industry", as_index=False)
-                                                    .agg(
-                                                        样本数=("ret_pct", "count"),
-                                                        胜率=("ret_pct", lambda x: float((pd.to_numeric(x, errors="coerce") > 0).mean() * 100.0)),
-                                                        平均收益=("ret_pct", "mean"),
-                                                        平均超额=("excess_ret_pct", "mean"),
-                                                    )
-                                                    .sort_values(["样本数", "平均超额"], ascending=[False, False])
-                                                    .head(15)
-                                                )
-                                                st.dataframe(ind_tbl, use_container_width=True, hide_index=True)
-                                    with expo_col2:
-                                        if "market_cap_yi" in detail_work.columns:
-                                            cap = detail_work.copy()
-                                            cap = cap[pd.to_numeric(cap["market_cap_yi"], errors="coerce").notna()].copy()
-                                            if not cap.empty:
-                                                bins = [0, 100, 300, 1000, 3000, 10000, 1000000]
-                                                labels = ["<100", "100-300", "300-1000", "1000-3000", "3000-10000", "10000+"]
-                                                cap["市值桶"] = pd.cut(cap["market_cap_yi"], bins=bins, labels=labels, include_lowest=True, right=False)
-                                                cap_tbl = (
-                                                    cap.groupby("市值桶", as_index=False)
-                                                    .agg(
-                                                        样本数=("ret_pct", "count"),
-                                                        胜率=("ret_pct", lambda x: float((pd.to_numeric(x, errors="coerce") > 0).mean() * 100.0)),
-                                                        平均收益=("ret_pct", "mean"),
-                                                    )
-                                                )
-                                                st.dataframe(cap_tbl, use_container_width=True, hide_index=True)
-
-                                with tab_c:
-                                    det_cols = [
-                                        c for c in [
-                                            "strategy", "ts_code", "stock_name", "industry", "signal_date", "entry_trade_date", "exit_trade_date",
-                                            "horizon_days", "actual_horizon_days", "is_settled",
-                                            "score", "market_cap_yi", "ret_pct", "excess_ret_pct", "max_dd_pct", "max_up_pct"
-                                        ] if c in detail_work.columns
-                                    ]
-                                    det_show = detail_work[det_cols].copy()
-                                    rename_det_cols = {
-                                        "strategy": "策略",
-                                        "ts_code": "股票代码",
-                                        "stock_name": "股票名称",
-                                        "industry": "行业",
-                                        "signal_date": "信号日期",
-                                        "entry_trade_date": "入场交易日",
-                                        "exit_trade_date": "结算交易日",
-                                        "horizon_days": "计划持有天数",
-                                        "actual_horizon_days": "已走天数",
-                                        "is_settled": "结算状态",
-                                        "score": "评分",
-                                        "market_cap_yi": "市值(亿)",
-                                        "ret_pct": "收益率(%)",
-                                        "excess_ret_pct": "超额收益(%)",
-                                        "max_dd_pct": "期间最大回撤(%)",
-                                        "max_up_pct": "期间最大涨幅(%)",
-                                    }
-                                    det_show = det_show.rename(columns=rename_det_cols)
-                                    if "结算状态" in det_show.columns:
-                                        det_show["结算状态"] = det_show["结算状态"].map(lambda x: "已结算" if bool(x) else "未结算")
-                                    for pct_col in ["收益率(%)", "超额收益(%)", "期间最大回撤(%)", "期间最大涨幅(%)"]:
-                                        if pct_col in det_show.columns:
-                                            det_show[pct_col] = pd.to_numeric(det_show[pct_col], errors="coerce").round(1)
-                                    for num_col in ["评分", "市值(亿)"]:
-                                        if num_col in det_show.columns:
-                                            det_show[num_col] = pd.to_numeric(det_show[num_col], errors="coerce").round(1)
-                                    if "收益率(%)" in det_show.columns:
-                                        det_show = det_show.sort_values("收益率(%)", ascending=False)
-                                    st.caption("字段说明：计划持有天数=策略目标周期；已走天数=当前已走交易日；结算状态=是否达到完整持有周期。")
-                                    st.dataframe(det_show.head(500), use_container_width=True, hide_index=True)
-                                    st.download_button(
-                                        "导出信号级绩效明细CSV",
-                                        data=_df_to_csv_bytes(det_show),
-                                        file_name=f"股票池信号绩效明细_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                        mime="text/csv; charset=utf-8",
-                                        key="download_stock_pool_detail_perf",
-                                        use_container_width=True,
-                                    )
-                        if not snap_df.empty:
-                            shown = set(show_df["策略"].astype(str).str.lower().tolist()) if "策略" in show_df.columns else set()
-                            missing = [s for s in ["v9", "v8", "v5", "combo"] if s in set(snap_df["策略"].astype(str).str.lower()) and s not in shown]
-                            if missing:
-                                st.caption(f"未进入当前绩效表的策略：{', '.join(missing)}（通常因未结算或样本不足）")
-                        if perf_source_meta:
-                            st.caption(f"来源股票池meta：{perf_source_meta}")
-                        elif perf_exec_file:
-                            st.caption(f"来源执行文件：{perf_exec_file}")
-                            st.caption(f"来源看板文件：{perf_csv_file}")
+        render_data_ops_status_page(
+            connect_permanent_db=_connect_permanent_db,
+            rollback_latest_promoted_params=_rollback_latest_promoted_params,
+            fund_bonus_enabled=_fund_bonus_enabled,
+            get_last_trade_date_from_tushare=_get_last_trade_date_from_tushare,
+            compute_health_report=_compute_health_report,
+            run_funding_repair=_run_funding_repair,
+            airivo_has_role=_airivo_has_role,
+            airivo_guard_action=_airivo_guard_action,
+            airivo_append_action_audit=_airivo_append_action_audit,
+            db_manager=db_manager,
+            permanent_db_path=PERMANENT_DB_PATH,
+        )
         
-        # 数据库状态
-        with st.expander("数据库状态", expanded=True):
-            try:
-                from data.dao import DataAccessError, detect_daily_table  # type: ignore
-
-                conn = _connect_permanent_db()
-                cursor = conn.cursor()
-                
-                cursor.execute("SELECT COUNT(*) FROM stock_basic")
-                stock_count = cursor.fetchone()[0]
-
-                try:
-                    daily_table = detect_daily_table(conn)
-                except DataAccessError:
-                    daily_table = ""
-
-                if daily_table:
-                    cursor.execute(f"SELECT COUNT(DISTINCT ts_code) FROM {daily_table}")
-                    data_stock_count = cursor.fetchone()[0]
-
-                    cursor.execute(f"SELECT COUNT(*) FROM {daily_table}")
-                    total_records = cursor.fetchone()[0]
-
-                    cursor.execute(f"SELECT MIN(trade_date), MAX(trade_date) FROM {daily_table}")
-                    date_range = cursor.fetchone()
-                else:
-                    data_stock_count = 0
-                    total_records = 0
-                    date_range = (None, None)
-                
-                conn.close()
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("股票总数", f"{stock_count:,}")
-                with col2:
-                    st.metric("有数据股票", f"{data_stock_count:,}")
-                with col3:
-                    st.metric("交易记录", f"{total_records:,}")
-                with col4:
-                    if date_range[0] and date_range[1]:
-                        st.metric("数据范围", f"{date_range[0]}~{date_range[1]}")
-                    else:
-                        st.metric("数据范围", "无数据")
-                
-            except Exception as e:
-                st.error(f"无法读取数据库状态: {e}")
-
-        # 自动进化状态
-        with st.expander("自动进化状态", expanded=False):
-            try:
-                # 运行状态与日志
-                status_cols = st.columns(3)
-                lock_path = "/tmp/auto_evolve.lock"
-                log_path = os.path.join(os.path.dirname(__file__), "auto_evolve.log")
-                is_running = os.path.exists(lock_path)
-                with status_cols[0]:
-                    st.metric("运行状态", "运行中" if is_running else "空闲")
-                with status_cols[1]:
-                    st.metric("锁文件", "存在" if os.path.exists(lock_path) else "无")
-                with status_cols[2]:
-                    st.metric("日志文件", "存在" if os.path.exists(log_path) else "无")
-
-                show_logs = st.checkbox("显示最新日志", value=False, key="auto_evolve_show_logs")
-                if show_logs:
-                    if os.path.exists(log_path):
-                        try:
-                            with open(log_path, "r", encoding="utf-8") as f:
-                                lines = f.readlines()[-120:]
-                            st.code("".join(lines))
-                        except Exception as e:
-                            st.warning(f"无法读取日志: {e}")
-                    else:
-                        st.info("未找到自动进化日志文件。")
-
-                evolve_path = os.path.join(os.path.dirname(__file__), "evolution", "last_run.json")
-                if os.path.exists(evolve_path):
-                    with open(evolve_path, "r", encoding="utf-8") as f:
-                        evolve = json.load(f)
-                    st.markdown(f"**最近运行时间**：{evolve.get('run_at', 'N/A')}")
-                    st.markdown(f"**综合评分**：{evolve.get('score', 0):.2f}")
-                    params = evolve.get("params", {})
-                    stats = evolve.get("stats", {})
-                    col_a, col_b, col_c, col_d = st.columns(4)
-                    with col_a:
-                        st.metric("阈值", params.get("score_threshold", "—"))
-                    with col_b:
-                        st.metric("持仓天数", params.get("max_holding_days", "—"))
-                    with col_c:
-                        st.metric("止损%", params.get("stop_loss_pct", "—"))
-                    with col_d:
-                        st.metric("止盈%", params.get("take_profit_pct", "—"))
-                    st.caption("自动进化仅更新后台参数。")
-                    if stats:
-                        st.markdown("**回测摘要**")
-                        st.write({
-                            "总信号": stats.get("total_signals"),
-                            "胜率(%)": stats.get("win_rate"),
-                            "加权平均收益(%)": stats.get("weighted_avg_return"),
-                            "夏普比率": stats.get("sharpe_ratio"),
-                            "最大回撤(%)": stats.get("max_drawdown"),
-                        })
-                    st.markdown("**参数回滚（最近一次备份）**")
-                    rb1, rb2 = st.columns([2, 1])
-                    with rb1:
-                        rollback_strategy = st.selectbox(
-                            "选择回滚策略",
-                            ["V4", "V5", "V6", "V7", "V8", "V9", "COMBO", "STABLE_UPTREND", "AI_V5", "AI_V2"],
-                            key="auto_evolve_rollback_strategy",
-                        )
-                    with rb2:
-                        if st.button("回滚到上一个稳定版本", key="auto_evolve_rollback_btn", use_container_width=True):
-                            ok, msg = _rollback_latest_promoted_params(rollback_strategy)
-                            if ok:
-                                st.success(msg)
-                                st.rerun()
-                            else:
-                                st.error(msg)
-                else:
-                    st.info("未发现自动进化结果文件。后台任务未运行或尚未生成。")
-            except Exception as e:
-                st.error(f"读取自动进化结果失败: {e}")
-
-        # 资金类数据开关
-        with st.expander("资金类数据开关", expanded=False):
-            st.caption("当资金接口延迟严重时，可关闭资金加分与相关健康告警。")
-            enable_funds = st.checkbox("启用资金类加分", value=_fund_bonus_enabled(), key="enable_fund_bonus")
-            if enable_funds:
-                st.success("资金类加分已启用")
-            else:
-                st.warning("资金类加分已关闭（健康检测将忽略资金表）")
-
-        # 自动健康检测
-        with st.expander("自动健康检测", expanded=False):
-            report_path = os.path.join(os.path.dirname(__file__), "evolution", "health_report.json")
-
-            col_h1, col_h2, col_h3 = st.columns([1, 2, 2])
-            with col_h1:
-                run_now = st.button("立即检测", use_container_width=True, key="health_check_now")
-            with col_h2:
-                st.caption("手动检测会立即刷新报告。")
-
-        # 交易日历检测（来自 Tushare trade_cal）
-        with st.expander("交易日历检测", expanded=False):
-            cal_date = _get_last_trade_date_from_tushare()
-            if cal_date:
-                st.metric("交易日历最新交易日", cal_date)
-                try:
-                    db_max = status.get("max_date")
-                    if db_max and db_max != 'N/A':
-                        st.caption(f"数据库最新交易日：{db_max}")
-                        if str(db_max) < str(cal_date):
-                            st.warning("数据库落后于交易日历，建议更新数据")
-                        else:
-                            st.success("数据库与交易日历一致或领先")
-                except Exception:
-                    pass
-            else:
-                st.warning("交易日历获取失败（trade_cal），请检查 Tushare 连接")
-            with col_h3:
-                repair_now = st.button("一键修复资金表", use_container_width=True, key="health_repair_now")
-
-            report = None
-            if run_now:
-                report = _compute_health_report(getattr(db_manager, "db_path", PERMANENT_DB_PATH))
-                try:
-                    os.makedirs(os.path.dirname(report_path), exist_ok=True)
-                    with open(report_path, "w", encoding="utf-8") as f:
-                        json.dump(report, f, ensure_ascii=False, indent=2)
-                    st.success("健康报告已刷新")
-                except Exception as e:
-                    st.error(f"写入健康报告失败: {e}")
-            elif repair_now:
-                with st.spinner("正在修复资金表数据（可能需要1-3分钟）..."):
-                    repair = _run_funding_repair(PERMANENT_DB_PATH)
-                    if "error" in repair:
-                        st.error(f"修复失败: {repair['error'].get('error')}")
-                    else:
-                        ok_count = sum(1 for r in repair.values() if r and r.get("success"))
-                        st.success(f"修复完成：成功 {ok_count}/{len(repair)}")
-                        st.json(repair)
-                # 修复后立即刷新健康报告
-                report = _compute_health_report(getattr(db_manager, "db_path", PERMANENT_DB_PATH))
-                try:
-                    os.makedirs(os.path.dirname(report_path), exist_ok=True)
-                    with open(report_path, "w", encoding="utf-8") as f:
-                        json.dump(report, f, ensure_ascii=False, indent=2)
-                except Exception:
-                    pass
-            elif os.path.exists(report_path):
-                try:
-                    with open(report_path, "r", encoding="utf-8") as f:
-                        report = json.load(f)
-                except Exception as e:
-                    st.error(f"读取健康报告失败: {e}")
-
-            if report:
-                st.markdown(f"**最近检测时间**：{report.get('run_at', 'N/A')}")
-                if report.get("ok"):
-                    st.success("系统健康：未发现明显异常")
-                else:
-                    st.warning("发现异常，请根据提示处理")
-
-                warnings = report.get("warnings", [])
-                risk_stale_report = bool(((report.get("stats") or {}).get("risk_stale", False)))
-                if warnings:
-                    st.markdown("**异常提示**")
-                    for w in warnings:
-                        if risk_stale_report and str(w).startswith("risk sentinel="):
-                            continue
-                        st.markdown(f"- {w}")
-
-                stats = report.get("stats", {})
-                if stats:
-                    col_s1, col_s2, col_s3 = st.columns(3)
-                    with col_s1:
-                        st.metric("最新交易日", stats.get("last_trade_date", "N/A"))
-                    with col_s2:
-                        st.metric("最新日记录数", stats.get("records_last_trade_date", "N/A"))
-                    with col_s3:
-                        recent = stats.get("recent_trade_dates", [])
-                        st.metric("近10交易日", f"{len(recent)}天")
-                    risk_run_at = stats.get("risk_run_at")
-                    risk_age_mins = stats.get("risk_age_mins")
-                    if risk_run_at:
-                        if isinstance(risk_age_mins, int):
-                            stale_note = "（历史状态，仅参考）" if risk_stale_report else ""
-                            st.caption(f"风险哨兵时间：{risk_run_at} · 约 {risk_age_mins} 分钟前 {stale_note}")
-                        else:
-                            st.caption(f"风险哨兵时间：{risk_run_at}")
-
-                # 建议操作
-                if warnings:
-                    st.markdown("**建议处理**")
-                    tips = []
-                    for w in warnings:
-                        if risk_stale_report and str(w).startswith("risk sentinel="):
-                            continue
-                        if "table missing" in w or "not updated" in w or "lagging" in w:
-                            tips.append("到「数据与系统」执行一次数据更新，并确保自动任务在收盘后运行。")
-                        elif "records low" in w:
-                            tips.append("检查交易日是否完整，必要时执行深度更新（90天）。")
-                        elif "win_rate low" in w:
-                            tips.append("检查评分阈值是否过低或市场环境偏弱，建议提高阈值或减少策略一致数。")
-                        elif "max_drawdown high" in w:
-                            tips.append("考虑开启弱市空仓或提高止损严格度。")
-                    if tips:
-                        for t in sorted(set(tips)):
-                            st.markdown(f"- {t}")
-        
-        st.markdown("---")
-        
-        update_mode = st.radio("更新模式", ["快速（5天）", "标准（30天）", "深度（90天）"], horizontal=True)
-        
-        if update_mode == "快速（5天）":
-            days = 5
-        elif update_mode == "标准（30天）":
-            days = 30
-        else:
-            days = 90
-        
-        st.caption(f"更新窗口：最近 {days} 天")
-        
-        if st.button("开始更新数据", type="primary", use_container_width=True):
-            with st.spinner(f"正在更新{days}天数据..."):
-                try:
-                    result = db_manager.update_stock_data_from_tushare(days=days)
-                    
-                    if result['success']:
-                        st.success(f"""
-                         更新成功！
-                        - 更新天数：{result['updated_days']}天
-                        - 失败天数：{result.get('failed_days', 0)}天
-                        - 总记录数：{result['total_records']:,}条
-                        """)
-                        if result.get('calendar_warning'):
-                            st.warning(result.get('calendar_warning'))
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error(f"更新失败：{result.get('error')}")
-                
-                except Exception as e:
-                    st.error(f"更新失败：{e}")
-                    import traceback
-                    st.code(traceback.format_exc())
-        
-        st.markdown("---")
-        
-        # 市值数据更新
-        st.subheader("流通市值数据更新")
-        st.caption("市值筛选异常时先执行本操作。")
-        
-        if st.button("更新流通市值数据", use_container_width=True, type="primary"):
-            with st.spinner("正在从Tushare获取最新市值数据..."):
-                result = db_manager.update_market_cap()
-                if result.get('success'):
-                    stats = result.get('stats', {})
-                    st.success(f"""
-                     市值数据更新成功！
-                    - 更新股票数：{result.get('updated_count', 0):,}只
-                    - 100-500亿：{stats.get('count_100_500', 0)}只 黄金区间
-                    - 50-100亿：{stats.get('count_50_100', 0)}只
-                    - <50亿：{stats.get('count_below_50', 0)}只
-                    - >500亿：{stats.get('count_above_500', 0)}只
-                    """)
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error(f"更新失败：{result.get('error')}")
-        
-        st.markdown("---")
-        
-        # 数据库优化和维护
-        st.subheader("数据库优化与维护")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("数据库健康检查", use_container_width=True):
-                with st.spinner("正在检查数据库健康状态..."):
-                    health = db_manager.check_database_health()
-                    if 'error' in health:
-                        st.error(f"检查失败: {health['error']}")
-                    else:
-                        if health.get('has_stock_basic') and health.get('has_daily_data'):
-                            st.success("数据库结构正常")
-                            
-                            col_a, col_b, col_c = st.columns(3)
-                            with col_a:
-                                st.metric("股票数量", f"{health.get('stock_count', 0):,}")
-                            with col_b:
-                                st.metric("数据记录", f"{health.get('data_count', 0):,}")
-                            with col_c:
-                                days_old = health.get('days_since_update', 999)
-                                is_fresh = health.get('is_fresh', False)
-                                st.metric("数据新鲜度", 
-                                         f"{days_old}天前" if days_old < 999 else "未知",
-                                         delta="新鲜" if is_fresh else "需更新",
-                                         delta_color="normal" if is_fresh else "inverse")
-                        else:
-                            st.warning("数据库结构不完整，建议重新初始化")
-        
-        with col2:
-            if st.button("优化数据库", use_container_width=True, type="secondary"):
-                with st.spinner("正在优化数据库（清理重复数据、重建索引）..."):
-                    result = db_manager.optimize_database()
-                    if result.get('success'):
-                        st.success(f"{result.get('message')}")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error(f"优化失败: {result.get('error')}")
-        
-        with st.expander("数据库维护说明"):
-            st.markdown("建议：每周检查健康、每月优化一次、更新前保留备份。")
+        render_data_ops_update_page(
+            airivo_has_role=_airivo_has_role,
+            airivo_guard_action=_airivo_guard_action,
+            airivo_append_action_audit=_airivo_append_action_audit,
+            db_manager=db_manager,
+        )
 
     # ==================== Tab 5:  智能交易助手 ====================
     with tab_assistant:
@@ -22102,1291 +11304,42 @@ def main():
 
             # ========== 子Tab 0: OpenClaw问答 ==========
             with qa_tab:
-                st.subheader("ClawAlpha 智能体 v2.0")
-                st.markdown(
-                    """
-                    <style>
-                    /* QA chat visual polish */
-                    div[data-testid="stChatMessage"] {
-                        border: 1px solid #e8edf4;
-                        border-radius: 12px;
-                        padding: 6px 10px;
-                        margin-bottom: 8px;
-                        background: #ffffff;
-                    }
-                    div[data-testid="stChatMessageContent"] p,
-                    div[data-testid="stChatMessageContent"] li {
-                        font-size: 16px !important;
-                        line-height: 1.75 !important;
-                    }
-                    div[data-testid="stChatInput"] {
-                        margin-top: 10px;
-                    }
-                    div[data-testid="stChatInput"] input {
-                        min-height: 48px !important;
-                        border-radius: 12px !important;
-                        border: 1.5px solid #cfd8e6 !important;
-                        padding: 10px 14px !important;
-                        font-size: 15px !important;
-                    }
-                    div[data-testid="stChatInput"] input:focus {
-                        border-color: #2b6cb0 !important;
-                        box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.16) !important;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                st.info("可提问示例：你是谁？| 600519可以买吗？| 量化交易的哲学本质 | 博弈论在投资中的应用")
-                _llm_on = os.getenv("OPENCLAW_QA_USE_LLM", "0") == "1"
-                _model_name = os.getenv("OPENAI_MODEL", "规则引擎")
-                if _llm_on:
-                    st.caption(f"当前模式：Kimi LLM 增强（{_model_name}）+ 本地量化规则引擎")
-                else:
-                    st.caption("当前模式：本地量化规则引擎（可在 .env 中开启 LLM）")
-
                 from openclaw.assistant import OpenClawStockAssistant
 
-                _QA_VERSION = "v2.2"
-                if st.session_state.get("_qa_engine_version") != _QA_VERSION:
-                    st.session_state.pop("openclaw_qa_assistant", None)
-                    st.session_state.pop("openclaw_qa_messages", None)
-                    st.session_state.pop("openclaw_qa_session_id", None)
-                    st.session_state["_qa_engine_version"] = _QA_VERSION
-
-                if "openclaw_qa_assistant" not in st.session_state:
-                    st.session_state.openclaw_qa_assistant = OpenClawStockAssistant(
-                        log_dir="logs/openclaw",
-                        db_path=PERMANENT_DB_PATH,
-                    )
-                if "openclaw_qa_messages" not in st.session_state:
-                    st.session_state.openclaw_qa_messages = [
-                        {
-                            "role": "assistant",
-                            "content": "我是 ClawAlpha v2.0 — 由 Kimi LLM 驱动的超级智能体。\n\n我擅长：股票投研、量化策略、风控分析、哲学/历史/概率/博弈论等跨学科思维。\n\n试试问我：**你是谁？** 或 **600519可以买吗？**",
-                        }
-                    ]
-                if "openclaw_qa_session_id" not in st.session_state:
-                    st.session_state.openclaw_qa_session_id = f"stock-web-{uuid.uuid4().hex[:10]}"
-                if st.button("清空对话", key="openclaw_qa_clear_history"):
-                    st.session_state.openclaw_qa_messages = [
-                        {
-                            "role": "assistant",
-                            "content": "对话已清空。你可以继续问我策略、回测、个股问题。",
-                        }
-                    ]
-                    st.session_state.openclaw_qa_session_id = f"stock-web-{uuid.uuid4().hex[:10]}"
-                    st.session_state.pop("openclaw_qa_assistant", None)
-                    _set_focus_once(main_tab="智能交易助手", assistant_tab="OpenClaw问答")
-                    st.rerun()
-
-                chat_history_box = st.container(height=520, border=False)
-                with chat_history_box:
-                    for msg in st.session_state.openclaw_qa_messages[-30:]:
-                        with st.chat_message(msg["role"]):
-                            st.markdown(msg["content"])
-
-                with st.expander("ClawAlpha 自学习看板", expanded=False):
-                    col_brief_left, col_snapshot_left, col_snapshot_right = st.columns([1, 1, 1])
-                    with col_brief_left:
-                        if st.button("生成今日陪伴简报", key="openclaw_companion_brief"):
-                            try:
-                                brief_text = st.session_state.openclaw_qa_assistant.get_daily_companion_brief()
-                            except Exception as e:
-                                brief_text = f"今日简报暂时生成失败：{e}"
-                            st.session_state.openclaw_qa_messages.append(
-                                {"role": "assistant", "content": brief_text}
-                            )
-                            _set_focus_once(main_tab="智能交易助手", assistant_tab="OpenClaw问答")
-                            st.rerun()
-                    with col_snapshot_left:
-                        if st.button("创建策略快照", key="openclaw_create_snapshot"):
-                            try:
-                                snap = st.session_state.openclaw_qa_assistant.create_strategy_snapshot()
-                                if snap.get("ok"):
-                                    st.success(f"已创建快照，ID={snap.get('snapshot_id')}")
-                                else:
-                                    st.warning(f"创建快照失败：{snap.get('error', 'unknown')}")
-                            except Exception as e:
-                                st.warning(f"创建快照失败：{e}")
-                    with col_snapshot_right:
-                        restore_id = st.text_input("回滚快照ID", key="openclaw_restore_snapshot_id", placeholder="例如 12")
-                        if st.button("执行回滚", key="openclaw_restore_snapshot"):
-                            try:
-                                sid = int(str(restore_id).strip())
-                                rst = st.session_state.openclaw_qa_assistant.restore_strategy_snapshot(sid)
-                                if rst.get("ok"):
-                                    st.success(f"回滚成功：恢复 {rst.get('restored_keys', 0)} 项配置")
-                                else:
-                                    st.warning(f"回滚失败：{rst.get('error', 'snapshot_not_found')}")
-                            except Exception as e:
-                                st.warning(f"回滚失败：{e}")
-                    try:
-                        dashboard = st.session_state.openclaw_qa_assistant.get_learning_dashboard()
-                    except Exception:
-                        dashboard = {}
-                    try:
-                        h_dashboard = st.session_state.openclaw_qa_assistant.get_humanlike_dashboard()
-                    except Exception:
-                        h_dashboard = {}
-                    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-                    with col_m1:
-                        st.metric("学习卡片", int(dashboard.get("total_cards", 0)))
-                    with col_m2:
-                        st.metric("待补结果", int(dashboard.get("pending_cards", 0)))
-                    with col_m3:
-                        st.metric("硬规则", int(dashboard.get("hard_rules", 0)))
-                    with col_m4:
-                        st.metric("软规则", int(dashboard.get("soft_rules", 0)))
-                    if h_dashboard:
-                        col_h1, col_h2, col_h3 = st.columns(3)
-                        with col_h1:
-                            st.metric("工具栈状态", "OK" if h_dashboard.get("ok", False) else "ERR")
-                        with col_h2:
-                            st.metric("审计日志", int(h_dashboard.get("audit_count", 0)))
-                        with col_h3:
-                            st.metric("结果回填", int(h_dashboard.get("outcome_count", 0)))
-
-                    run_weekly = st.checkbox("同时执行周评估", value=False, key="openclaw_selflearn_weekly")
-                    if st.button("执行自学习评估", key="openclaw_selflearn_run"):
-                        with st.spinner("正在执行自学习评估..."):
-                            cycle = st.session_state.openclaw_qa_assistant.run_self_learning_cycle(
-                                force_weekly=run_weekly
-                            )
-                        daily_score = ((cycle.get("daily") or {}).get("overall_score"))
-                        st.success(f"评估完成：日评估总分={daily_score if daily_score is not None else 'N/A'}")
-                        st.session_state["openclaw_last_cycle"] = cycle
-
-                    last_daily = dashboard.get("last_daily") or {}
-                    if last_daily:
-                        st.caption(
-                            f"最近日评估：overall={last_daily.get('overall_score', 'N/A')} | "
-                            f"evaluated_cards={last_daily.get('evaluated_cards', 'N/A')}"
-                        )
-                    last_weekly = dashboard.get("last_weekly") or {}
-                    if last_weekly:
-                        st.caption(
-                            f"最近周评估：promoted={last_weekly.get('promoted_rules', 0)} | "
-                            f"downgraded={last_weekly.get('downgraded_rules', 0)}"
-                        )
-                    last_tracking = dashboard.get("last_tracking") or {}
-                    if last_tracking:
-                        st.caption(
-                            f"最近结果回填：processed={last_tracking.get('processed_cards', 0)} | "
-                            f"closed={last_tracking.get('closed_cards', 0)} | "
-                            f"skipped={last_tracking.get('skipped_cards', 0)}"
-                        )
-
-                user_q = st.chat_input("输入问题（如：688608还能加仓吗？给我仓位与风控计划）")
-                if user_q:
-                    # Keep focus on assistant tabs after Streamlit rerun.
-                    _set_focus_once(main_tab="智能交易助手", assistant_tab="OpenClaw问答")
-                    st.session_state.openclaw_qa_messages.append({"role": "user", "content": user_q})
-
-                    with st.spinner("ClawAlpha 正在思考..."):
-                        # 第一优先：本地智能体（Kimi LLM + 规则引擎）
-                            qa_result = st.session_state.openclaw_qa_assistant.answer(
-                                user_q,
-                                st.session_state.openclaw_qa_messages[-12:],
-                            )
-                    answer_text = qa_result.get("answer", "暂无回答")
-                    sources = qa_result.get("sources", [])
-                    route_used = qa_result.get("mode") or qa_result.get("route") or "unknown"
-                    conf_used = qa_result.get("confidence")
-                    agent_hits = qa_result.get("agent_hits") if isinstance(qa_result, dict) else []
-                    agent_ver = qa_result.get("agent_version") if isinstance(qa_result, dict) else ""
-                    show_meta = os.getenv("OPENCLAW_QA_SHOW_META", "0") == "1"
-                    if sources and show_meta:
-                        answer_text = f"{answer_text}\n\n参考数据源：{len(sources)}项"
-                    if show_meta:
-                        if conf_used is not None:
-                            answer_text += f"\n\n路由：`{route_used}` ｜ 置信度：`{conf_used}`"
-                        else:
-                            answer_text += f"\n\n路由：`{route_used}`"
-                        if agent_ver:
-                            answer_text += f"\n智能体网格：`{agent_ver}`"
-                        if isinstance(agent_hits, list) and agent_hits:
-                            answer_text += f"\n命中智能体：`{', '.join(agent_hits[:8])}`"
-                    learning_card_id = qa_result.get("learning_card_id")
-                    self_eval = qa_result.get("self_eval") if isinstance(qa_result, dict) else {}
-                    eval_score = (self_eval or {}).get("overall_score")
-                    eval_flag = (self_eval or {}).get("reflection_required")
-                    if show_meta:
-                        if learning_card_id:
-                            answer_text += f"\n\n学习卡片：`{learning_card_id}`"
-                        if eval_score is not None:
-                            answer_text += f"\n自评得分：{eval_score}"
-                        if eval_flag:
-                            answer_text += "\n自我反思：已触发规则修正。"
-
-                    st.session_state.openclaw_qa_messages.append(
-                        {"role": "assistant", "content": answer_text}
-                    )
-                    st.session_state.openclaw_last_qa_meta = {
-                        "learning_card_id": qa_result.get("learning_card_id"),
-                        "route": qa_result.get("route"),
-                        "confidence": qa_result.get("confidence"),
-                        "self_eval": qa_result.get("self_eval"),
-                    }
-                    st.rerun()
-            
-            # ========== 子Tab 1: 交易工作台 ==========
-            with sub_tab1:
-                st.subheader("交易工作台")
-                st.caption("先看账户状态与交易表现，再做当日选股与执行。")
-
-                try:
-                    _holdings_df = assistant.get_holdings()
-                    _trades_df = assistant.get_trade_history(limit=200)
-                    _daily_cnt = len(st.session_state.get('daily_recommendations', []) or [])
-                    _hold_count = len(_holdings_df) if isinstance(_holdings_df, pd.DataFrame) else 0
-                    _today_sell = 0
-                    _today_pnl = 0.0
-                    if isinstance(_trades_df, pd.DataFrame) and not _trades_df.empty:
-                        _t = _trades_df.copy()
-                        if "action" in _t.columns:
-                            _t = _t[_t["action"] == "sell"]
-                        if "trade_date" in _t.columns:
-                            _today = datetime.now().strftime("%Y-%m-%d")
-                            _t["trade_date"] = _t["trade_date"].astype(str)
-                            _t_today = _t[_t["trade_date"].str.startswith(_today)]
-                        else:
-                            _t_today = _t
-                        _today_sell = len(_t_today)
-                        if "profit_loss" in _t_today.columns:
-                            _today_pnl = float(pd.to_numeric(_t_today["profit_loss"], errors="coerce").fillna(0).sum())
-
-                    _m1, _m2, _m3, _m4 = st.columns(4)
-                    with _m1:
-                        st.metric("当前持仓", f"{_hold_count}只")
-                    with _m2:
-                        st.metric("今日已卖出", f"{_today_sell}笔")
-                    with _m3:
-                        st.metric("今日已实现盈亏", f"¥{_today_pnl:,.2f}")
-                    with _m4:
-                        st.metric("今日推荐池", f"{_daily_cnt}只")
-                except Exception:
-                    pass
-
-                st.markdown("---")
-                st.markdown("### 每日智能选股")
-                
-                st.info("""
-                 **选股说明**
-                - 基于**共识策略**（v4/v5/v7/v8/v9）
-                - 自动扫描全市场股票
-                - 推荐Top高分标的（一致性筛选）
-                - 仅供参考，需人工决策
-                """)
-                
-                col1, col2 = st.columns([3, 1])
-                
-                with col1:
-                    top_n = st.slider("推荐数量", 3, 10, 5, key="assistant_daily_scan_top_n")
-                
-                with col2:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("开始选股", type="primary", use_container_width=True):
-                        with st.spinner("正在扫描全市场...（可能需要2-3分钟）"):
-                            recommendations = assistant.daily_stock_scan(top_n=top_n)
-                            st.session_state['daily_recommendations'] = recommendations
-                            if recommendations:
-                                st.success(f"选股完成！找到{len(recommendations)}只标的数量")
-                            else:
-                                st.warning("本次未选出股票，已记录诊断信息")
-                            st.rerun()
-                
-                # 显示推荐结果
-                if 'daily_recommendations' in st.session_state and st.session_state['daily_recommendations']:
-                    st.markdown("---")
-                    st.subheader("今日推荐")
-                    
-                    recs = st.session_state['daily_recommendations']
-                    recs_df = pd.DataFrame(recs)
-                    if not recs_df.empty:
-                        _render_result_overview(recs_df, score_col="score", title="今日推荐概览")
-                    
-                    for i, rec in enumerate(recs, 1):
-                        with st.expander(f"#{i} {rec['stock_name']} ({rec['ts_code']}) - ⭐ {rec['score']:.1f}分", expanded=(i==1)):
-                            col1, col2, col3 = st.columns(3)
-                            
-                            with col1:
-                                st.metric("评分", f"{rec['score']:.1f}分")
-                            with col2:
-                                st.metric("价格", f"¥{rec['price']:.2f}")
-                            with col3:
-                                st.metric("市值", f"{rec['market_cap']/100000000:.1f}亿")
-                            
-                            st.markdown(f"** 行业**: {rec['industry']}")
-                            st.markdown(f"** 筛选理由**: {rec['reason'][:150]}...")
-                            
-                            # 快速添加到持仓
-                            st.markdown("---")
-                            col1, col2, col3 = st.columns([2, 2, 1])
-                            
-                            with col1:
-                                buy_price = st.number_input(
-                                    "买入价格",
-                                    value=float(rec['price']),
-                                    key=f"price_{rec['ts_code']}"
-                                )
-                            
-                            with col2:
-                                quantity = st.number_input(
-                                    "买入数量",
-                                    value=100,
-                                    step=100,
-                                    key=f"qty_{rec['ts_code']}"
-                                )
-                            
-                            with col3:
-                                st.markdown("<br>", unsafe_allow_html=True)
-                                if st.button("记录买入", key=f"buy_{rec['ts_code']}"):
-                                    assistant.add_holding(
-                                        ts_code=rec['ts_code'],
-                                        buy_price=buy_price,
-                                        quantity=quantity,
-                                        score=rec['score']
-                                    )
-                                    st.success(f"已记录买入 {rec['stock_name']}")
-                                    st.rerun()
-                elif 'daily_recommendations' in st.session_state:
-                    st.warning("本次未选出股票，请查看诊断信息")
-                    debug_info = getattr(assistant, "last_scan_debug", None)
-                    if debug_info:
-                        st.code(json.dumps(debug_info, ensure_ascii=False, indent=2))
-            
-            # ========== 子Tab 2: 持仓管理 ==========
-            with sub_tab2:
-                st.subheader("当前持仓管理")
-                
-                col1, col2 = st.columns([4, 1])
-                
-                with col2:
-                    if st.button("更新持仓", use_container_width=True):
-                        with st.spinner("更新中..."):
-                            assistant.update_holdings()
-                            st.success("更新完成")
-                            st.rerun()
-                
-                # 获取持仓
-                conn = sqlite3.connect(assistant.assistant_db)
-                holdings = pd.read_sql_query(
-                    "SELECT * FROM holdings WHERE status = 'holding' ORDER BY buy_date DESC",
-                    conn
+                render_qa_chat_shell(
+                    qa_assistant_cls=OpenClawStockAssistant,
+                    permanent_db_path=PERMANENT_DB_PATH,
+                    set_focus_once=_set_focus_once,
                 )
-                conn.close()
-                
-                if holdings.empty:
-                    st.info("当前无持仓")
-                else:
-                    # 持仓汇总
-                    total_cost = holdings['cost_total'].sum()
-                    total_value = holdings['current_value'].sum()
-                    total_profit = holdings['profit_loss'].sum()
-                    total_profit_pct = total_profit / total_cost if total_cost > 0 else 0
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("持仓数量", f"{len(holdings)}只")
-                    with col2:
-                        st.metric("总成本", f"¥{total_cost:,.2f}")
-                    with col3:
-                        st.metric("总市值", f"¥{total_value:,.2f}")
-                    with col4:
-                        st.metric("总盈亏", f"¥{total_profit:,.2f}", 
-                                 delta=f"{total_profit_pct*100:.2f}%")
-                    
-                    st.markdown("---")
-                    
-                    check_alerts = st.button("检查止盈止损", key="assistant_check_stop_conditions")
-                    alerts = st.session_state.get("assistant_stop_alerts", [])
-                    if check_alerts:
-                        alerts = assistant.check_stop_conditions()
-                        st.session_state["assistant_stop_alerts"] = alerts
-                    if alerts:
-                        st.warning("**止盈止损提醒**")
-                        for alert in alerts:
-                            if alert['type'] == 'take_profit':
-                                st.success(alert['message'])
-                            else:
-                                st.error(alert['message'])
-                    
-                    # 显示每个持仓
-                    for idx, holding in holdings.iterrows():
-                        # 安全获取盈亏值
-                        profit_loss = holding.get('profit_loss', 0) or 0
-                        profit_loss_pct = holding.get('profit_loss_pct', 0) or 0
-                        buy_price = holding.get('buy_price', 0) or 0
-                        current_price = holding.get('current_price', 0) or buy_price
-                        
-                        profit_color = "" if profit_loss > 0 else ""
-                        
-                        with st.expander(f"{profit_color} {holding['stock_name']} ({holding['ts_code']}) - {profit_loss_pct*100:.2f}%"):
-                            col1, col2, col3, col4 = st.columns(4)
-                            
-                            with col1:
-                                st.metric("买入价", f"¥{buy_price:.2f}")
-                            with col2:
-                                st.metric("当前价", f"¥{current_price:.2f}")
-                            with col3:
-                                st.metric("数量", f"{holding['quantity']}股")
-                            with col4:
-                                st.metric("盈亏", 
-                                        f"¥{profit_loss:.2f}",
-                                        delta=f"{profit_loss_pct*100:.2f}%")
-                            
-                            st.markdown(f"**买入日期**: {holding.get('buy_date', 'N/A')}")
-                            cost_total = holding.get('cost_total', 0) or 0
-                            current_value = holding.get('current_value', 0) or 0
-                            st.markdown(f"**成本**: ¥{cost_total:.2f}")
-                            st.markdown(f"**市值**: ¥{current_value:.2f}")
-                            
-                            # 卖出操作
-                            st.markdown("---")
-                            col1, col2, col3 = st.columns([2, 2, 1])
-                            
-                            with col1:
-                                sell_price = st.number_input(
-                                    "卖出价格",
-                                    value=float(holding['current_price']),
-                                    key=f"sell_price_{holding['id']}"
-                                )
-                            
-                            with col2:
-                                sell_reason = st.selectbox(
-                                    "卖出原因",
-                                    ["止盈", "止损", "手动卖出", "其他"],
-                                    key=f"sell_reason_{holding['id']}"
-                                )
-                            
-                            with col3:
-                                st.markdown("<br>", unsafe_allow_html=True)
-                                if st.button("卖出", key=f"sell_{holding['id']}"):
-                                    assistant.sell_holding(
-                                        ts_code=holding['ts_code'],
-                                        sell_price=sell_price,
-                                        reason=sell_reason
-                                    )
-                                    st.success(f"已记录卖出 {holding['stock_name']}")
-                                    st.rerun()
-            
-            # ========== 子Tab 3: 交易记录 ==========
-            with sub_tab3:
-                st.subheader("交易历史记录")
-                
-                # 获取交易记录
-                conn = sqlite3.connect(assistant.assistant_db)
-                trades = pd.read_sql_query(
-                    "SELECT * FROM trade_history ORDER BY trade_date DESC, created_at DESC LIMIT 50",
-                    conn
+
+                render_qa_self_learning_panel(
+                    qa_assistant=st.session_state.openclaw_qa_assistant,
+                    airivo_has_role=_airivo_has_role,
+                    airivo_guard_action=_airivo_guard_action,
+                    airivo_append_action_audit=_airivo_append_action_audit,
+                    set_focus_once=_set_focus_once,
                 )
-                conn.close()
-                
-                if trades.empty:
-                    st.info("暂无交易记录")
-                else:
-                    # 已实现盈亏统计（日/周/月）
-                    trades['trade_date'] = pd.to_datetime(trades['trade_date'], errors='coerce')
-                    sell_trades = trades[trades['action'] == 'sell'].copy()
-                    if not sell_trades.empty:
-                        sell_trades['amount'] = pd.to_numeric(sell_trades.get('amount', 0), errors='coerce').fillna(0)
-                        sell_trades['profit_loss'] = pd.to_numeric(sell_trades.get('profit_loss', 0), errors='coerce').fillna(0)
-                        sell_trades['cost_basis'] = sell_trades['amount'] - sell_trades['profit_loss']
-                        sell_trades = sell_trades.dropna(subset=['trade_date'])
-                    
-                    def _period_stats(df: pd.DataFrame) -> Tuple[float, float, float]:
-                        if df.empty:
-                            return 0.0, 0.0, 0.0
-                        profit = df['profit_loss'].sum()
-                        cost = df['cost_basis'].sum()
-                        amount = df['amount'].sum()
-                        pct = profit / cost if cost > 0 else 0.0
-                        return float(profit), float(pct), float(amount)
-                    
-                    today = pd.Timestamp.now().normalize()
-                    week_start = today - pd.Timedelta(days=today.weekday())
-                    month_start = today.replace(day=1)
-                    
-                    daily_profit, daily_pct, daily_amount = _period_stats(
-                        sell_trades[sell_trades['trade_date'] >= today] if not sell_trades.empty else sell_trades
-                    )
-                    weekly_profit, weekly_pct, weekly_amount = _period_stats(
-                        sell_trades[sell_trades['trade_date'] >= week_start] if not sell_trades.empty else sell_trades
-                    )
-                    monthly_profit, monthly_pct, monthly_amount = _period_stats(
-                        sell_trades[sell_trades['trade_date'] >= month_start] if not sell_trades.empty else sell_trades
-                    )
-                    
-                    st.markdown("###  已实现盈亏统计（卖出记录）")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("今日盈亏", f"¥{daily_profit:,.2f}", delta=f"{daily_pct*100:.2f}%")
-                        st.caption(f"成交额：¥{daily_amount:,.2f}")
-                    with col2:
-                        st.metric("本周盈亏", f"¥{weekly_profit:,.2f}", delta=f"{weekly_pct*100:.2f}%")
-                        st.caption(f"成交额：¥{weekly_amount:,.2f}")
-                    with col3:
-                        st.metric("本月盈亏", f"¥{monthly_profit:,.2f}", delta=f"{monthly_pct*100:.2f}%")
-                        st.caption(f"成交额：¥{monthly_amount:,.2f}")
-                    
-                    st.markdown("---")
 
-                    # 统计
-                    buy_trades = trades[trades['action'] == 'buy']
-                    sell_trades = trades[trades['action'] == 'sell']
-                    profit_trades = sell_trades[sell_trades['profit_loss'] > 0]
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("总交易", f"{len(trades)}次")
-                    with col2:
-                        st.metric("买入", f"{len(buy_trades)}次")
-                    with col3:
-                        st.metric("卖出", f"{len(sell_trades)}次")
-                    with col4:
-                        win_rate = len(profit_trades) / len(sell_trades) if len(sell_trades) > 0 else 0
-                        st.metric("胜率", f"{win_rate*100:.1f}%")
-                    
-                    st.markdown("---")
-                    
-                    # 显示交易记录
-                    for idx, trade in trades.iterrows():
-                        action_emoji = "" if trade['action'] == 'buy' else ""
-                        action_text = "买入" if trade['action'] == 'buy' else "卖出"
-                        
-                        col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 2])
-                        
-                        with col1:
-                            st.markdown(f"{action_emoji} **{trade['stock_name']}** ({trade['ts_code']})")
-                        with col2:
-                            st.markdown(f"{trade['trade_date']}")
-                        with col3:
-                            st.markdown(f"¥{trade['price']:.2f}")
-                        with col4:
-                            st.markdown(f"{trade['quantity']}股")
-                        with col5:
-                            if trade['action'] == 'sell' and trade['profit_loss']:
-                                profit_text = f"{'' if trade['profit_loss'] > 0 else ''} ¥{trade['profit_loss']:.2f} ({trade['profit_loss_pct']*100:.2f}%)"
-                                st.markdown(profit_text)
-                            else:
-                                st.markdown(f"¥{trade['amount']:.2f}")
-            
-            # ========== 子Tab 4: 每日报告 ==========
-            with sub_tab4:
-                st.subheader("每日交易报告")
-                
-                if st.button("生成报告", type="primary"):
-                    with st.spinner("生成中..."):
-                        report = assistant.generate_daily_report()
-                        st.session_state['daily_report'] = report
-                        st.success("报告生成完成")
-                
-                if 'daily_report' in st.session_state:
-                    st.code(st.session_state['daily_report'], language='text')
-                    
-                    # 下载按钮
-                    filename = f"trading_report_{datetime.now().strftime('%Y%m%d')}.txt"
-                    st.download_button(
-                        label=" 下载报告",
-                        data=st.session_state['daily_report'],
-                        file_name=filename,
-                        mime="text/plain"
-                    )
+                render_qa_submission_controller(
+                    qa_assistant=st.session_state.openclaw_qa_assistant,
+                    set_focus_once=_set_focus_once,
+                )
 
-                st.markdown("---")
-                st.markdown("### OC 执行追踪（partner_execution）")
-                st.caption("展示 oc daily 产物中的 tracking.record / tracking.refresh / tracking.scoreboard")
-
-                try:
-                    from pathlib import Path
-                    import json as _json
-                    import subprocess as _sp
-                    import sys as _sys
-                    _oc_log_dir = Path("logs/openclaw")
-                    _sum_files = sorted(_oc_log_dir.glob("run_summary_*.json"), reverse=True)
-                    col_a, col_b = st.columns([1, 2])
-                    with col_a:
-                        if st.button("补跑追踪（非交易日可用）", key="assistant_tracking_rerun"):
-                            if not _sum_files:
-                                st.warning("未找到 run_summary 文件，无法补跑。请先执行一次 oc daily。")
-                            else:
-                                _latest_sum = str(_sum_files[0])
-                                for _spth in _sum_files[:20]:
-                                    try:
-                                        _sobj = _json.loads(_spth.read_text(encoding="utf-8"))
-                                        _scan_picks = (((_sobj.get("scan") or {}).get("result") or {}).get("picks") or [])
-                                        _opps = _sobj.get("opportunities") or []
-                                        if (isinstance(_scan_picks, list) and len(_scan_picks) > 0) or (isinstance(_opps, list) and len(_opps) > 0):
-                                            _latest_sum = str(_spth)
-                                            break
-                                    except Exception:
-                                        pass
-                                _cmd = [
-                                    _sys.executable,
-                                    "openclaw/strategy_tracking_cli.py",
-                                    "run-all",
-                                    "--run-summary",
-                                    _latest_sum,
-                                    "--output-dir",
-                                    str(_oc_log_dir),
-                                ]
-                                try:
-                                    _res = _sp.run(_cmd, capture_output=True, text=True, timeout=90)
-                                    if _res.returncode == 0:
-                                        _obj = _json.loads((_res.stdout or "").strip() or "{}")
-                                        st.session_state["assistant_tracking_rerun_result"] = _obj
-                                        st.success("补跑完成。已刷新 tracking 看板。")
-                                    else:
-                                        st.warning(f"补跑失败：{(_res.stderr or _res.stdout or '').strip()[:500]}")
-                                except Exception as _e:
-                                    st.warning(f"补跑异常：{_e}")
-                    with col_b:
-                        _latest_sum_text = str(_sum_files[0]) if _sum_files else "N/A"
-                        st.caption(f"最新 run_summary：{_latest_sum_text}")
-
-                    if "assistant_tracking_rerun_result" in st.session_state:
-                        with st.expander("最近一次补跑结果", expanded=False):
-                            st.json(st.session_state["assistant_tracking_rerun_result"])
-
-                    _exec_files = sorted(_oc_log_dir.glob("partner_execution_*.json"), reverse=True)
-                    if not _exec_files:
-                        st.info("未找到 partner_execution 日志。请先执行一次 oc daily。")
-                    else:
-                        import ast as _ast
-                        import pandas as _pd
-
-                        def _oc_abs_path(_p):
-                            if not _p:
-                                return None
-                            _path = Path(str(_p))
-                            if _path.is_absolute():
-                                return _path
-                            return Path.cwd() / _path
-
-                        def _extract_non_empty_result(_exec_obj):
-                            def _normalize_result_df(_df):
-                                if _df is None or _df.empty:
-                                    return _df
-                                _out = _df.copy()
-                                if "strategies" in _out.columns and "strategy" not in _out.columns:
-                                    _out["strategy"] = _out["strategies"].apply(
-                                        lambda _x: ",".join(_x) if isinstance(_x, list) else str(_x or "")
-                                    )
-                                if "reasons" in _out.columns and "reason" not in _out.columns:
-                                    _out["reason"] = _out["reasons"].apply(
-                                        lambda _x: ",".join(_x) if isinstance(_x, list) else str(_x or "")
-                                    )
-                                return _out
-
-                            def _has_rich_detail(_df):
-                                if _df is None or _df.empty:
-                                    return False
-                                _detail_cols = ["strategy", "reason", "weighted_score", "score", "strategies", "reasons"]
-                                for _col in _detail_cols:
-                                    if _col not in _df.columns:
-                                        continue
-                                    _s = _df[_col].astype(str).str.strip()
-                                    _s = _s.replace({"": "nan", "None": "nan", "none": "nan", "nan": "nan", "NaN": "nan"})
-                                    if (_s != "nan").any():
-                                        return True
-                                return False
-
-                            _artifacts = _exec_obj.get("artifacts") or {}
-                            _csv_candidates = []
-                            _report_csv_paths = _artifacts.get("report_csv_paths") or []
-                            if isinstance(_report_csv_paths, list):
-                                _csv_candidates.extend(_report_csv_paths)
-                            elif isinstance(_report_csv_paths, str) and _report_csv_paths:
-                                _csv_candidates.append(_report_csv_paths)
-
-                            for _csv in _csv_candidates:
-                                _csv_path = _oc_abs_path(_csv)
-                                if not _csv_path or not _csv_path.exists():
-                                    continue
-                                try:
-                                    _df_csv = _pd.read_csv(_csv_path)
-                                    if not _df_csv.empty and "ts_code" in _df_csv.columns and _has_rich_detail(_df_csv):
-                                        return {
-                                            "kind": "csv",
-                                            "artifact": str(_csv_path),
-                                            "df": _normalize_result_df(_df_csv),
-                                        }
-                                except Exception:
-                                    pass
-
-                            _md_path = _oc_abs_path(_artifacts.get("report_markdown"))
-                            if _md_path and _md_path.exists():
-                                try:
-                                    _rows = []
-                                    _in_opp = False
-                                    for _raw_line in _md_path.read_text(encoding="utf-8").splitlines():
-                                        _line = _raw_line.strip()
-                                        if _line.startswith("## Opportunities"):
-                                            _in_opp = True
-                                            continue
-                                        if _in_opp and _line.startswith("## "):
-                                            break
-                                        if _in_opp and _line.startswith("- {"):
-                                            _obj = _ast.literal_eval(_line[2:].strip())
-                                            if isinstance(_obj, dict):
-                                                _rows.append(_obj)
-                                    if _rows:
-                                        return {
-                                            "kind": "markdown",
-                                            "artifact": str(_md_path),
-                                            "df": _normalize_result_df(_pd.DataFrame(_rows)),
-                                        }
-                                except Exception:
-                                    pass
-
-                            for _csv in _csv_candidates:
-                                _csv_path = _oc_abs_path(_csv)
-                                if not _csv_path or not _csv_path.exists():
-                                    continue
-                                try:
-                                    _df_csv = _pd.read_csv(_csv_path)
-                                    if not _df_csv.empty and "ts_code" in _df_csv.columns:
-                                        return {
-                                            "kind": "csv",
-                                            "artifact": str(_csv_path),
-                                            "df": _normalize_result_df(_df_csv),
-                                        }
-                                except Exception:
-                                    pass
-
-                            return None
-
-                        _options = [str(p) for p in _exec_files[:30]]
-                        _default_idx = 0
-                        _exec_obj_cache = {}
-                        _latest_non_empty = None
-                        for _idx, _opt in enumerate(_options):
-                            try:
-                                _obj = _json.loads(Path(_opt).read_text(encoding="utf-8"))
-                                _exec_obj_cache[_opt] = _obj
-                                _non_empty = _extract_non_empty_result(_obj)
-                                if _latest_non_empty is None and _non_empty is not None:
-                                    _default_idx = _idx
-                                    _latest_non_empty = {
-                                        "exec": _opt,
-                                        "kind": _non_empty["kind"],
-                                        "artifact": _non_empty["artifact"],
-                                        "df": _non_empty["df"],
-                                    }
-                            except Exception:
-                                continue
-
-                        _selected_exec = st.selectbox(
-                            "选择执行文件",
-                            options=_options,
-                            index=_default_idx,
-                            key="assistant_partner_exec_select",
-                        )
-                        _exec_obj = _exec_obj_cache.get(_selected_exec)
-                        if _exec_obj is None:
-                            _exec_obj = _json.loads(Path(_selected_exec).read_text(encoding="utf-8"))
-                        _tracking = _exec_obj.get("tracking") or {}
-                        _tracking_by_strategy = _exec_obj.get("tracking_by_strategy") or []
-                        _record = _tracking.get("record") or {}
-                        _refresh = _tracking.get("refresh") or {}
-                        _scoreboard = _tracking.get("scoreboard") or {}
-
-                        _record_reason = str(_record.get("reason") or "")
-                        _refresh_reason = str(_refresh.get("reason") or "")
-                        _score_reason = str(_scoreboard.get("reason") or "")
-                        _inserted = int(_record.get("inserted") or 0)
-                        _evaluated = int(_refresh.get("evaluated") or 0)
-                        _rows = int(_scoreboard.get("rows") or 0)
-
-                        # 人话总结：先给结论，再看技术细节
-                        st.markdown("#### 人话结论")
-                        _summary_lines: List[str] = []
-                        _next_action = "继续正常使用，等待下一次交易日数据刷新。"
-                        if not _tracking:
-                            _summary_lines.append("当前文件没有追踪数据。")
-                            _next_action = "换一个更新的执行文件，或点击上方“补跑追踪”。"
-                        else:
-                            if _inserted > 0:
-                                _summary_lines.append(f"本次已记录新信号 {_inserted} 条。")
-                            elif _record_reason in {"no_picks", "no_run_summary"}:
-                                _summary_lines.append("本次没有可记录新信号（常见于当日无新标的）。")
-                            else:
-                                _summary_lines.append("本次信号记录量为 0。")
-
-                            if _evaluated > 0:
-                                _summary_lines.append(f"已完成 {_evaluated} 条信号评估。")
-                            elif _refresh_reason == "no_signals":
-                                _summary_lines.append("当前没有可评估信号。")
-                            else:
-                                _summary_lines.append("评估阶段暂无新增结果。")
-
-                            if _rows > 0:
-                                _summary_lines.append(f"看板已生成，共 {_rows} 行。")
-                                _next_action = "可直接展开下方 Markdown/CSV 看板查看策略表现。"
-                            elif _score_reason == "no_performance_rows":
-                                _summary_lines.append("看板暂为空：样本还没走完 T+N 窗口（例如 T+5/T+10）。")
-                                _next_action = "等待 1-2 个交易日后再看，或继续积累信号样本。"
-                            else:
-                                _summary_lines.append("看板暂未生成。")
-
-                        for _line in _summary_lines:
-                            st.markdown(f"- {_line}")
-                        st.caption(f"下一步建议：{_next_action}")
-
-                        st.markdown("#### 按策略跟踪状态")
-                        _rows_tracking = []
-                        if isinstance(_tracking_by_strategy, list) and _tracking_by_strategy:
-                            for _item in _tracking_by_strategy:
-                                if not isinstance(_item, dict):
-                                    continue
-                                _sname = str(_item.get("strategy") or "").strip() or "unknown"
-                                _res = _item.get("result") or {}
-                                _rec = (_res.get("record") or {}) if isinstance(_res, dict) else {}
-                                _ref = (_res.get("refresh") or {}) if isinstance(_res, dict) else {}
-                                _new_signals = int(_rec.get("inserted") or 0)
-                                _pending_settle = int(_ref.get("skipped_no_price") or 0)
-                                _settled_signals = int(_ref.get("skipped_existing") or 0) + int(_ref.get("evaluated") or 0)
-                                _rows_tracking.append(
-                                    {
-                                        "策略": _sname,
-                                        "新增信号": _new_signals,
-                                        "待结算": _pending_settle,
-                                        "已结算": _settled_signals,
-                                    }
-                                )
-                        else:
-                            _rows_tracking.append(
-                                {
-                                    "策略": str(_exec_obj.get("strategy") or "latest"),
-                                    "新增信号": int(_record.get("inserted") or 0),
-                                    "待结算": int(_refresh.get("skipped_no_price") or 0),
-                                    "已结算": int(_refresh.get("skipped_existing") or 0) + int(_refresh.get("evaluated") or 0),
-                                }
-                            )
-                        try:
-                            _df_track = _pd.DataFrame(_rows_tracking)
-                            st.dataframe(_df_track, use_container_width=True, hide_index=True)
-                        except Exception:
-                            st.table(_rows_tracking)
-
-                        st.markdown("#### 最近一次非空选股结果（自动）")
-                        if _latest_non_empty is None:
-                            st.info("最近 30 次执行里暂未找到非空选股结果。")
-                        else:
-                            st.caption(f"来源执行文件：{_latest_non_empty['exec']}")
-                            st.caption(f"来源产物：{_latest_non_empty['artifact']}")
-                            _result_df = _latest_non_empty["df"]
-                            if _result_df is None or _result_df.empty:
-                                st.info("该结果无可展示行。")
-                            else:
-                                _show_cols = [
-                                    _c for _c in [
-                                        "ts_code",
-                                        "weighted_score",
-                                        "score",
-                                        "strategy",
-                                        "reason",
-                                        "reasons",
-                                    ] if _c in _result_df.columns
-                                ]
-                                if not _show_cols:
-                                    _show_cols = list(_result_df.columns)[:8]
-                                st.dataframe(_result_df[_show_cols], use_container_width=True)
-
-                        if not _tracking:
-                            st.warning("该执行文件没有 tracking 字段。请选更新的 partner_execution 文件，或点击上方“补跑追踪”。")
-                        elif _inserted == 0 and _record_reason in {"no_picks", "no_run_summary"}:
-                            st.info("本次没有新信号可记录（no_picks），这是正常现象。")
-                        elif _inserted > 0:
-                            st.success(f"本次新记录信号：{_inserted} 条。")
-
-                        if _evaluated == 0 and _refresh_reason == "no_signals":
-                            st.info("当前没有可评估信号（no_signals）。先累计几次选股后会自动出现。")
-                        elif _evaluated == 0 and (_score_reason == "no_performance_rows" or _rows == 0):
-                            st.info("样本还没走完 T+N（例如 T+5/T+10），因此看板暂时为空。")
-                        elif _rows > 0:
-                            st.success(f"策略看板已生成：{_rows} 行。")
-
-                        with st.expander("技术明细（tracking JSON）", expanded=False):
-                            col_tr1, col_tr2, col_tr3 = st.columns(3)
-                            with col_tr1:
-                                st.markdown("**tracking.record**")
-                                st.json(_record)
-                            with col_tr2:
-                                st.markdown("**tracking.refresh**")
-                                st.json(_refresh)
-                            with col_tr3:
-                                st.markdown("**tracking.scoreboard**")
-                                st.json(_scoreboard)
-
-                        _sb_md = _scoreboard.get("markdown") or (_exec_obj.get("artifacts") or {}).get("strategy_scoreboard_markdown") or ""
-                        _sb_csv = _scoreboard.get("csv") or (_exec_obj.get("artifacts") or {}).get("strategy_scoreboard_csv") or ""
-
-                        st.markdown("#### Scoreboard 文件")
-                        c_sb1, c_sb2 = st.columns(2)
-                        with c_sb1:
-                            st.code(str(_sb_md or "N/A"), language="text")
-                            if _sb_md and Path(_sb_md).exists():
-                                try:
-                                    _md_content = Path(_sb_md).read_text(encoding="utf-8")
-                                    _md_content = (
-                                        _md_content
-                                        .replace("Strategy Scoreboard", "策略评分看板")
-                                        .replace("lookback_days", "回看天数")
-                                        .replace("rows", "行数")
-                                        .replace("strategy", "策略")
-                                        .replace("horizon_days", "期限(天)")
-                                        .replace("samples", "样本数")
-                                        .replace("win_rate_pct", "胜率(%)")
-                                        .replace("avg_ret_pct", "平均收益(%)")
-                                        .replace("median_ret_pct", "中位收益(%)")
-                                        .replace("avg_excess_ret_pct", "平均超额收益(%)")
-                                    )
-                                    with st.expander("预览 Markdown 看板", expanded=False):
-                                        st.markdown(_md_content)
-                                except Exception as _e:
-                                    st.warning(f"读取 markdown 失败：{_e}")
-                        with c_sb2:
-                            st.code(str(_sb_csv or "N/A"), language="text")
-                            if _sb_csv and Path(_sb_csv).exists():
-                                try:
-                                    import pandas as _pd
-                                    _df_sb = _pd.read_csv(_sb_csv)
-                                    with st.expander("预览 CSV 看板", expanded=False):
-                                        if _df_sb.empty:
-                                            st.info("当前看板为空（通常是样本还未走完 T+N）。")
-                                        else:
-                                            _rename = {
-                                                "strategy": "策略",
-                                                "horizon_days": "期限(天)",
-                                                "samples": "样本数",
-                                                "win_rate_pct": "胜率(%)",
-                                                "avg_ret_pct": "平均收益(%)",
-                                                "median_ret_pct": "中位收益(%)",
-                                                "avg_excess_ret_pct": "平均超额收益(%)",
-                                            }
-                                            st.dataframe(_df_sb.rename(columns=_rename), use_container_width=True)
-                                except Exception as _e:
-                                    st.warning(f"读取 csv 失败：{_e}")
-                except Exception as e:
-                    st.warning(f"执行追踪展示异常：{e}")
-            
-            # ========== 子Tab 5: 配置设置 ==========
-            with sub_tab5:
-                st.subheader("策略参数配置")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("### 选股参数")
-                    
-                    min_score = st.slider(
-                        "最低评分",
-                        50, 80, int(float(assistant.get_config('min_score'))),
-                        key="assistant_min_score_cfg",
-                        help="只推荐评分高于此值的股票"
-                    )
-                    
-                    market_cap_min = st.number_input(
-                        "最小市值（亿）",
-                        50, 500,
-                        int(float(assistant.get_config('market_cap_min'))/100000000),
-                        key="assistant_mcap_min_cfg"
-                    )
-                    
-                    market_cap_max = st.number_input(
-                        "最大市值（亿）",
-                        100, 1000,
-                        int(float(assistant.get_config('market_cap_max'))/100000000),
-                        key="assistant_mcap_max_cfg"
-                    )
-                    
-                    recommend_count = st.slider(
-                        "推荐数量",
-                        3, 10, int(assistant.get_config('recommend_count')),
-                        key="assistant_rec_count_cfg"
-                    )
-                
-                with col2:
-                    st.markdown("### 风控参数")
-                    
-                    take_profit = st.slider(
-                        "止盈比例（%）",
-                        3, 15, int(float(assistant.get_config('take_profit_pct'))*100),
-                        help="达到此涨幅时提醒止盈"
-                    )
-                    
-                    stop_loss = st.slider(
-                        "止损比例（%）",
-                        2, 10, int(float(assistant.get_config('stop_loss_pct'))*100),
-                        key="assistant_stop_loss_cfg",
-                        help="达到此跌幅时提醒止损"
-                    )
-                    
-                    single_position = st.slider(
-                        "单只仓位（%）",
-                        10, 30, int(float(assistant.get_config('single_position_pct'))*100),
-                        key="assistant_single_pos_cfg",
-                        help="单只股票最大仓位比例"
-                    )
-                    
-                    max_position = st.slider(
-                        "最大仓位（%）",
-                        50, 100, int(float(assistant.get_config('max_position_pct'))*100),
-                        key="assistant_max_pos_cfg",
-                        help="总仓位上限"
-                    )
-                
-                st.markdown("---")
-                st.markdown("### 自学习自动调参")
-                st.caption("基于近30天学习卡片结果（T+1/T+5/T+20）自动给出参数优化建议。")
-                col_t1, col_t2 = st.columns([1, 1])
-                with col_t1:
-                    if st.button("生成调参建议", key="assistant_gen_tuning", use_container_width=True):
-                        with st.spinner("正在分析最近学习结果..."):
-                            if hasattr(assistant, "get_auto_tuning_recommendation"):
-                                tuning_rec = assistant.get_auto_tuning_recommendation(lookback_days=30, min_samples=8)
-                            else:
-                                tuning_rec = {"ok": False, "reason": "当前部署版本不支持自动调参（缺少 get_auto_tuning_recommendation）"}
-                        st.session_state["assistant_tuning_rec"] = tuning_rec
-                with col_t2:
-                    if st.button("应用自动调参", key="assistant_apply_tuning", use_container_width=True):
-                        with st.spinner("正在应用调参..."):
-                            base_rec = st.session_state.get("assistant_tuning_rec")
-                            if hasattr(assistant, "apply_auto_tuning"):
-                                tune_result = assistant.apply_auto_tuning(base_rec if isinstance(base_rec, dict) else None)
-                            else:
-                                tune_result = {"ok": False, "applied": False, "reason": "当前部署版本不支持自动调参（缺少 apply_auto_tuning）"}
-                        st.session_state["assistant_tuning_apply"] = tune_result
-                        if tune_result.get("ok") and tune_result.get("applied"):
-                            st.success("自动调参已应用")
-                            st.rerun()
-                        elif tune_result.get("ok"):
-                            st.info("当前参数无需变更")
-                        else:
-                            st.warning(f"自动调参未应用：{tune_result.get('reason', 'unknown')}")
-
-                tuning_rec = st.session_state.get("assistant_tuning_rec")
-                if isinstance(tuning_rec, dict):
-                    if tuning_rec.get("ok"):
-                        metrics = tuning_rec.get("metrics", {})
-                        st.caption(
-                            f"样本={metrics.get('sample_count', 0)} | "
-                            f"D5胜率={float(metrics.get('d5_win_rate', 0))*100:.1f}% | "
-                            f"D5均值={metrics.get('d5_avg_ret_pct', 0):.2f}% | "
-                            f"波动={metrics.get('d5_vol_pct', 0):.2f}"
-                        )
-                        changes = tuning_rec.get("changes", {})
-                        if changes:
-                            change_df = pd.DataFrame(
-                                [
-                                    {"参数": k, "当前": v.get("from"), "建议": v.get("to")}
-                                    for k, v in changes.items()
-                                ]
-                            )
-                            st.dataframe(change_df, use_container_width=True, hide_index=True)
-                        else:
-                            st.info("暂无建议变更，参数状态稳定。")
-                    else:
-                        st.info(f"暂无法生成建议：{tuning_rec.get('reason', '数据不足')}")
-
-                tuning_apply = st.session_state.get("assistant_tuning_apply")
-                if isinstance(tuning_apply, dict) and tuning_apply.get("applied"):
-                    st.caption("最近一次自动调参已完成。")
-
-                st.markdown("###  通知设置")
-                
-                st.info("""
-                **通知功能说明**
-                -  支持邮件通知（推荐）
-                -  支持企业微信通知
-                -  支持钉钉通知
-                -  每日推荐 + 止盈止损提醒
-                """)
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    enable_email = st.checkbox(
-                        " 启用邮件通知",
-                        value=False,
-                        key="enable_email_notif"
-                    )
-                    
-                    if enable_email:
-                        email_address = st.text_input(
-                            "接收邮箱",
-                            placeholder="your@email.com",
-                            key="email_addr"
-                        )
-                        
-                        smtp_server = st.text_input(
-                            "SMTP服务器",
-                            value="smtp.qq.com",
-                            help="QQ邮箱: smtp.qq.com, 163邮箱: smtp.163.com",
-                            key="smtp_server"
-                        )
-                        
-                        smtp_user = st.text_input(
-                            "SMTP用户名",
-                            placeholder="your@email.com",
-                            key="smtp_user"
-                        )
-                        
-                        smtp_password = st.text_input(
-                            "SMTP密码/授权码",
-                            type="password",
-                            help="QQ/163邮箱需要使用授权码，不是登录密码",
-                            key="smtp_pwd"
-                        )
-                
-                with col2:
-                    enable_wechat = st.checkbox(
-                        " 启用企业微信通知",
-                        value=False,
-                        key="enable_wechat_notif",
-                        help="需要企业微信群机器人Webhook"
-                    )
-                    
-                    if enable_wechat:
-                        wechat_webhook = st.text_input(
-                            "企业微信Webhook URL",
-                            placeholder="https://qyapi.weixin.qq.com/...",
-                            key="wechat_webhook"
-                        )
-                    
-                    enable_dingtalk = st.checkbox(
-                        " 启用钉钉通知",
-                        value=False,
-                        key="enable_dingtalk_notif",
-                        help="需要钉钉群机器人Webhook"
-                    )
-                    
-                    if enable_dingtalk:
-                        dingtalk_webhook = st.text_input(
-                            "钉钉Webhook URL",
-                            placeholder="https://oapi.dingtalk.com/...",
-                            key="dingtalk_webhook"
-                        )
-                
-                if enable_email or enable_wechat or enable_dingtalk:
-                    st.markdown("---")
-                    st.markdown("####  通知内容设置")
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        notify_daily = st.checkbox("每日选股推荐", value=True, key="notify_daily")
-                        notify_stop_loss = st.checkbox("止损提醒", value=True, key="notify_stop")
-                    with col2:
-                        notify_take_profit = st.checkbox("止盈提醒", value=True, key="notify_profit")
-                        notify_holdings = st.checkbox("持仓汇总（每周）", value=True, key="notify_hold")
-                
-                st.markdown("---")
-                
-                col1, col2, col3 = st.columns([2, 2, 1])
-                
-                with col1:
-                    if st.button("保存配置", type="primary"):
-                        # 保存策略参数
-                        assistant.update_config('min_score', str(min_score))
-                        assistant.update_config('market_cap_min', str(market_cap_min * 100000000))
-                        assistant.update_config('market_cap_max', str(market_cap_max * 100000000))
-                        assistant.update_config('recommend_count', str(recommend_count))
-                        assistant.update_config('take_profit_pct', str(take_profit / 100))
-                        assistant.update_config('stop_loss_pct', str(stop_loss / 100))
-                        assistant.update_config('single_position_pct', str(single_position / 100))
-                        assistant.update_config('max_position_pct', str(max_position / 100))
-                        
-                        # 保存通知配置
-                        if enable_email and email_address and smtp_user and smtp_password:
-                            try:
-                                notification_config = {
-                                    "email": {
-                                        "enabled": True,
-                                        "smtp_server": smtp_server,
-                                        "smtp_port": 465 if "qq.com" in smtp_server else 587,
-                                        "smtp_user": smtp_user,
-                                        "smtp_password": smtp_password,
-                                        "from_addr": smtp_user,
-                                        "to_addr": email_address
-                                    },
-                                    "wechat_work": {
-                                        "enabled": enable_wechat,
-                                        "webhook_url": wechat_webhook if enable_wechat else ""
-                                    },
-                                    "dingtalk": {
-                                        "enabled": enable_dingtalk,
-                                        "webhook_url": dingtalk_webhook if enable_dingtalk else ""
-                                    }
-                                }
-                                
-                                with open('notification_config.json', 'w', encoding='utf-8') as f:
-                                    json.dump(notification_config, f, indent=2, ensure_ascii=False)
-                                
-                                st.success("配置已保存（包括通知设置）")
-                            except Exception as e:
-                                st.error(f"保存通知配置失败: {e}")
-                        else:
-                            st.success("策略配置已保存")
-                        
-                        st.rerun()
-                
-                with col2:
-                    if (enable_email or enable_wechat or enable_dingtalk) and st.button("发送测试通知", type="secondary"):
-                        try:
-                            from notification_service import NotificationService
-                            notifier = NotificationService()
-                            
-                            test_message = """
-                             智能交易助手测试通知
-                            
-                            如果您收到此消息，说明通知功能已正常配置！
-                            
-                            系统将自动发送：
-                            -  每日选股推荐
-                            -  止盈提醒
-                            -  止损提醒
-                            -  持仓汇总
-                            """
-                            
-                            success = notifier.send_notification(
-                                "【测试】智能交易助手",
-                                test_message
-                            )
-                            
-                            if success:
-                                st.success("测试通知已发送，请查收！")
-                            else:
-                                st.error("发送失败，请检查配置")
-                        except Exception as e:
-                            st.error(f"发送测试失败: {e}")
-                
-                with col3:
-                    if st.button("帮助文档"):
-                        st.info("""
-                        **邮件配置帮助**
-                        
-                        QQ邮箱：
-                        1. 开启SMTP服务
-                        2. 生成授权码
-                        3. 使用授权码登录
-                        
-                        服务器：smtp.qq.com
-                        端口：465（SSL）
-                        
-                        163邮箱：
-                        服务器：smtp.163.com
-                        端口：465（SSL）
-                        
-                        Gmail：
-                        服务器：smtp.gmail.com
-                        端口：587（TLS）
-                        """)
-
-            # ========== 子Tab 6: 单股评分 ==========
-            with sub_tab6:
-                render_single_stock_eval_tab(assistant)
+            render_assistant_ops_tabs(
+                sub_tab1=sub_tab1,
+                sub_tab2=sub_tab2,
+                sub_tab3=sub_tab3,
+                sub_tab4=sub_tab4,
+                sub_tab5=sub_tab5,
+                sub_tab6=sub_tab6,
+                assistant=assistant,
+                render_result_overview=_render_result_overview,
+                render_single_stock_eval_tab=render_single_stock_eval_tab,
+                notification_service_cls=NotificationService,
+                airivo_has_role=_airivo_has_role,
+                airivo_guard_action=_airivo_guard_action,
+                airivo_append_action_audit=_airivo_append_action_audit,
+            )
         
         except ImportError as e:
             st.error(f"交易助手模块加载失败: {e}")

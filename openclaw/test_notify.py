@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from notification_service import NotificationService
+from openclaw.runtime.root_dependency_bridge import load_notification_service_class
+
+NotificationService = load_notification_service_class()
 
 
 def main() -> int:

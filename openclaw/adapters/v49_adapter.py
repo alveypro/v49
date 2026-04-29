@@ -216,6 +216,11 @@ class V49Adapter:
 
         summary = context.get("summary", {})
         opportunities = context.get("opportunities", [])
+        overnight_decision = context.get("overnight_decision", {})
+        validation_review = context.get("validation_review", {})
+        validation_streak = context.get("validation_streak", {})
+        scan_publish_gate = context.get("scan_publish_gate", {})
+        publish_preview = context.get("publish_preview", {})
 
         md_body = [
             f"# {report_type} Report",
@@ -223,13 +228,120 @@ class V49Adapter:
             f"- run_id: {run_id}",
             f"- generated_at: {datetime.now().isoformat()}",
             "",
-            "## Summary",
-            json.dumps(summary, ensure_ascii=False, indent=2),
-            "",
-            "## Opportunities",
+            "## Executive Summary",
+            f"- strategy: {summary.get('strategy', '')}",
+            f"- risk_level: {summary.get('risk_level', '')}",
+            f"- opportunity_count: {summary.get('count', 0)}",
+            f"- execution_mode: {summary.get('execution_mode', '')}",
         ]
-        for row in opportunities:
-            md_body.append(f"- {row}")
+        if validation_review:
+            md_body.append(f"- validation_gates: {','.join(validation_review.get('gates', []) or []) or 'ok'}")
+            md_body.append(f"- consecutive_severe_runs: {validation_streak.get('consecutive_severe_runs', 0)}")
+        if scan_publish_gate:
+            md_body.append(f"- scan_publish_gate: {scan_publish_gate.get('gate', '') or 'ok'}")
+            md_body.append(f"- publish_allowed: {bool(scan_publish_gate.get('ok', True))}")
+        if overnight_decision:
+            calib = overnight_decision.get("calibration") or {}
+            selection_policy = overnight_decision.get("selection_policy") or {}
+            md_body.append(f"- overnight_trade_date: {overnight_decision.get('trade_date', '')}")
+            md_body.append(f"- calibration_samples: {calib.get('samples', 0)}")
+            md_body.append(f"- selected_picks: {selection_policy.get('selected_count', len(overnight_decision.get('recommendations') or []))}")
+            md_body.append(f"- candidate_pool_size: {selection_policy.get('candidate_pool_size', '')}")
+        md_body.extend(["", "## Top Opportunities"])
+        for idx, row in enumerate(opportunities[:10], 1):
+            md_body.append(
+                f"{idx}. {row.get('ts_code', '')} | score={row.get('score', row.get('weighted_score', ''))} | "
+                f"strategy={row.get('strategy', '') or ','.join(row.get('strategies', []) or [])} | "
+                f"reason={','.join(row.get('reasons', []) or [str(row.get('reason', ''))]).strip(',')}"
+            )
+        if overnight_decision:
+            recs = overnight_decision.get("recommendations") or []
+            holds = overnight_decision.get("holding_comparisons") or []
+            decisions = overnight_decision.get("position_decisions") or []
+            md_body.extend(["", "## Overnight Two-Pick Plan"])
+            if recs:
+                for idx, row in enumerate(recs, 1):
+                    md_body.append(
+                        f"{idx}. {row.get('stock_name', '')}({row.get('ts_code', '')}) | "
+                        f"预测涨幅={row.get('expected_return_pct', '')}% | 风险值={row.get('risk_value', '')} | "
+                        f"建议={row.get('action', '')} | 时间段={((row.get('trade_window') or {}).get('window', ''))}"
+                    )
+                    md_body.append(f"   理由: {((row.get('trade_window') or {}).get('reason', ''))}")
+            else:
+                md_body.append("- 无可执行两票推荐")
+            md_body.extend(["", "## Current Holdings Review"])
+            if holds:
+                for row in holds:
+                    md_body.append(
+                        f"- {row.get('stock_name', '')}({row.get('ts_code', '')}) | "
+                        f"今日预测涨幅={row.get('predicted_return_pct', '')}% | 风险值={row.get('risk_value', '')} | "
+                        f"当前盈亏={row.get('profit_loss_pct', '')}%"
+                    )
+            else:
+                md_body.append("- 当前无持仓数据")
+            md_body.extend(["", "## Switch Decision"])
+            if decisions:
+                for row in decisions:
+                    md_body.append(
+                        f"- 当前={row.get('current_ts_code', '-')}, 候选={row.get('candidate_ts_code', '-')} | "
+                        f"决策={row.get('decision', '')} | 换仓分={row.get('switch_score', '')}"
+                    )
+                    md_body.append(f"  依据: {row.get('rationale', '')}")
+            else:
+                md_body.append("- 暂无换仓比较")
+            md_body.extend(
+                [
+                    "",
+                    "## Validation Review",
+                    f"- recommended_count: {validation_review.get('recommended_count', 0)}",
+                    f"- executed_count: {validation_review.get('executed_count', 0)}",
+                    f"- execution_rate: {validation_review.get('execution_rate', 0)}",
+                    f"- avg_realized_return_pct: {validation_review.get('avg_realized_return_pct', None)}",
+                    f"- win_rate: {validation_review.get('win_rate', None)}",
+                    f"- validation_gates: {','.join(validation_review.get('gates', []) or []) or 'ok'}",
+                    f"- consecutive_severe_runs: {validation_streak.get('consecutive_severe_runs', 0)}",
+                    "",
+                    "## Risk Alerts",
+                    f"- policy_note: {overnight_decision.get('policy_note', '')}",
+                ]
+            )
+            if scan_publish_gate or publish_preview:
+                md_body.extend(
+                    [
+                        "",
+                        "## Publish Gate",
+                        f"- scan_gate: {scan_publish_gate.get('gate', '') or 'ok'}",
+                        f"- publish_allowed: {bool(scan_publish_gate.get('ok', True))}",
+                        f"- gate_reason: {scan_publish_gate.get('reason', '') or 'none'}",
+                        f"- scan_observability_at: {scan_publish_gate.get('scan_observability_at', '') or 'none'}",
+                        f"- scan_observability_age_minutes: {scan_publish_gate.get('scan_observability_age_minutes', '')}",
+                    ]
+                )
+                if publish_preview:
+                    md_body.extend(
+                        [
+                            "",
+                            "## Notification Preview",
+                            f"- title: {publish_preview.get('title', '')}",
+                            f"- would_publish: {publish_preview.get('would_publish', False)}",
+                            f"- blocked_by_gate: {publish_preview.get('blocked_by_gate', '') or 'none'}",
+                            f"- blocked_reason: {publish_preview.get('blocked_reason', '') or 'none'}",
+                            "",
+                            "```text",
+                            str(publish_preview.get('body', '') or ''),
+                            "```",
+                        ]
+                    )
+            if selection_policy:
+                md_body.extend(
+                    [
+                        "",
+                        "## Pick Policy",
+                        f"- min_expected_return: {selection_policy.get('min_expected_return', '')}",
+                        f"- max_risk_value: {selection_policy.get('max_risk_value', '')}",
+                        f"- second_pick_min_gap: {selection_policy.get('second_pick_min_gap', '')}",
+                    ]
+                )
 
         md_path.write_text("\n".join(md_body), encoding="utf-8")
 
@@ -238,9 +350,14 @@ class V49Adapter:
                 f,
                 fieldnames=[
                     "ts_code",
+                    "stock_name",
                     "score",
                     "strategy",
                     "reason",
+                    "expected_return_pct",
+                    "risk_value",
+                    "action",
+                    "trade_window",
                     "strategy_focus",
                     "strategy_ui_tag",
                     "primary_strategies_hit",
@@ -251,9 +368,14 @@ class V49Adapter:
                 writer.writerow(
                     {
                         "ts_code": row.get("ts_code", ""),
+                        "stock_name": row.get("stock_name", row.get("name", "")),
                         "score": row.get("score", row.get("weighted_score", "")),
                         "strategy": row.get("strategy", ""),
                         "reason": row.get("reason", ""),
+                        "expected_return_pct": row.get("expected_return_pct", ""),
+                        "risk_value": row.get("risk_value", ""),
+                        "action": row.get("action", ""),
+                        "trade_window": (row.get("trade_window") or {}).get("window", ""),
                         "strategy_focus": row.get("strategy_focus", ""),
                         "strategy_ui_tag": row.get("strategy_ui_tag", ""),
                         "primary_strategies_hit": ",".join(row.get("primary_strategies_hit", []) or []),

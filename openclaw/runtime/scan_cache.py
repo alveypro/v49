@@ -6,10 +6,11 @@ import hashlib
 import json
 import logging
 import os
+import glob
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import pandas as pd
 
@@ -130,6 +131,53 @@ def load_scan_cache(strategy: str, params: Dict[str, Any], db_last: str) -> Tupl
         return df, meta
     except Exception as exc:
         logger.warning("load_scan_cache(%s) failed: %s", strategy, exc)
+        return None, {}
+
+
+def load_scan_cache_meta_from_paths(csv_path: str, meta_path: str) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    try:
+        if not (os.path.exists(csv_path) and os.path.exists(meta_path)):
+            return None, {}
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f) or {}
+        df = pd.read_csv(csv_path)
+        return df, meta if isinstance(meta, dict) else {}
+    except Exception as exc:
+        logger.warning("load_scan_cache_meta_from_paths failed: %s", exc)
+        return None, {}
+
+
+def find_recent_scan_cache(
+    strategy: str,
+    db_last: str,
+    predicate: Optional[Callable[[Dict[str, Any]], bool]] = None,
+) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    try:
+        base = cache_dir()
+        candidates = sorted(
+            glob.glob(os.path.join(base, f"{strategy}_*.meta.json")),
+            key=os.path.getmtime,
+            reverse=True,
+        )
+        for meta_path in candidates:
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f) or {}
+            except Exception:
+                continue
+            if not isinstance(meta, dict):
+                continue
+            if str(meta.get("db_last") or "") != str(db_last):
+                continue
+            if predicate and not predicate(meta):
+                continue
+            csv_path = meta_path.replace(".meta.json", ".csv")
+            df, loaded_meta = load_scan_cache_meta_from_paths(csv_path, meta_path)
+            if isinstance(df, pd.DataFrame) and not df.empty:
+                return df, loaded_meta
+        return None, {}
+    except Exception as exc:
+        logger.warning("find_recent_scan_cache(%s) failed: %s", strategy, exc)
         return None, {}
 
 

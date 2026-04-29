@@ -117,3 +117,40 @@ class TestGenerateReport:
         md_path = Path(result["markdown"])
         assert md_path.exists()
         assert "daily_brief" in md_path.read_text(encoding="utf-8")
+
+    def test_report_includes_overnight_sections(self, tmp_path: Path):
+        adapter = _make_adapter()
+        result = adapter.generate_report(
+            "daily_brief",
+            {
+                "summary": {"strategy": "v5", "count": 2, "risk_level": "green", "execution_mode": "normal"},
+                "validation_review": {"recommended_count": 8, "executed_count": 6, "execution_rate": 0.75, "avg_realized_return_pct": 1.2, "win_rate": 0.58, "gates": ["ok_marker"]},
+                "validation_streak": {"consecutive_severe_runs": 2},
+                "opportunities": [
+                    {"ts_code": "000001.SZ", "stock_name": "平安银行", "weighted_score": 85, "strategy": "v5", "expected_return_pct": 2.8, "risk_value": 31, "action": "buy", "trade_window": {"window": "09:35-09:50"}, "reasons": ["consensus_strong"]},
+                ],
+                "overnight_decision": {
+                    "trade_date": "2026-04-06",
+                    "calibration": {"samples": 12},
+                    "selection_policy": {"selected_count": 1, "candidate_pool_size": 8, "min_expected_return": 1.2, "max_risk_value": 68.0, "second_pick_min_gap": 1.0},
+                    "recommendations": [
+                        {"ts_code": "000001.SZ", "stock_name": "平安银行", "expected_return_pct": 2.8, "risk_value": 31, "action": "buy", "trade_window": {"window": "09:35-09:50", "reason": "test"}},
+                    ],
+                    "holding_comparisons": [
+                        {"ts_code": "600000.SH", "stock_name": "浦发银行", "predicted_return_pct": 1.2, "risk_value": 48, "profit_loss_pct": 3.1},
+                    ],
+                    "position_decisions": [
+                        {"current_ts_code": "600000.SH", "candidate_ts_code": "000001.SZ", "decision": "switch", "switch_score": 1.6, "rationale": "test"},
+                    ],
+                    "policy_note": "仅输出研究与人工执行建议",
+                },
+            },
+            output_dir=tmp_path,
+        )
+        md = Path(result["markdown"]).read_text(encoding="utf-8")
+        assert "Overnight Two-Pick Plan" in md
+        assert "Current Holdings Review" in md
+        assert "Switch Decision" in md
+        assert "Validation Review" in md
+        assert "consecutive_severe_runs: 2" in md
+        assert "Pick Policy" in md

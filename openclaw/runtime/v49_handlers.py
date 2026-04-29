@@ -15,7 +15,9 @@ from types import ModuleType
 
 import pandas as pd
 from data.dao import resolve_db_path as resolve_db_path_dao
+from openclaw.runtime.async_env import temp_environ as runtime_temp_environ
 
+from openclaw.runtime.root_dependency_bridge import load_v6_ultra_short_backtest_module
 from openclaw.runtime.streamlit_stub import install_streamlit_stub
 
 JsonDict = Dict[str, Any]
@@ -107,10 +109,9 @@ class HandlerFactory:
             db_path = _resolve_db_path(params.get("db_path"))
 
             if strategy == "v6":
-                import backtest_v6_ultra_short as v6_mod
+                v6_mod = load_v6_ultra_short_backtest_module()
                 v6_mod.PERMANENT_DB_PATH = str(db_path)
                 V6UltraShortBacktest = v6_mod.V6UltraShortBacktest
-
                 bt = V6UltraShortBacktest()
                 _patch_backtest_stock_pool(bt)
                 try:
@@ -623,15 +624,5 @@ def _resolve_db_path(preferred: Optional[str]) -> Path:
 @contextmanager
 def _temp_environ(patch: Dict[str, str]):
     """Temporarily patch process env with lock to avoid cross-run contamination."""
-    with _ENV_LOCK:
-        old_vals: Dict[str, Optional[str]] = {k: os.environ.get(k) for k in patch}
-        try:
-            for k, v in patch.items():
-                os.environ[k] = v
-            yield
-        finally:
-            for k, old in old_vals.items():
-                if old is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = old
+    with runtime_temp_environ(patch, env_lock=_ENV_LOCK):
+        yield
