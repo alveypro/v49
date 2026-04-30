@@ -362,9 +362,13 @@ def recover_async_scan_task(
         csv_from_meta = str(merged.get("result_csv", "") or "")
         csv_guess = meta_path.replace(".meta.json", ".csv") if meta_path else ""
         result_csv = csv_from_meta if (csv_from_meta and os.path.exists(csv_from_meta)) else (csv_guess if csv_guess and os.path.exists(csv_guess) else "")
+        artifacts_ready = bool(meta_path or result_csv)
 
         pid = int(merged.get("pid", 0) or 0)
-        if status in {"queued", "running"} and pid > 0 and is_pid_alive(pid):
+        if status in {"queued", "running"} and artifacts_ready:
+            status = "success"
+            msg = "已检测到结果文件，自动恢复成功状态"
+        elif status in {"queued", "running"} and pid > 0 and is_pid_alive(pid):
             status = "running"
             msg = f"后台任务仍在运行（PID={pid}）"
         elif status in {"queued", "running"}:
@@ -378,11 +382,11 @@ def recover_async_scan_task(
             "strategy": strategy,
             "status": status,
             "stage": "done" if status == "success" else ("scan" if status == "running" else "error"),
-            "progress": int(merged.get("progress", 100 if status != "running" else 1) or 0),
+            "progress": int(merged.get("progress", 100 if status != "running" else 1) or 0) if status == "running" else 100,
             "message": msg,
             "created_at": 0,
             "created_at_text": "",
-            "ended_at": float(merged.get("ended_at", now_ts) or 0),
+            "ended_at": float(merged.get("ended_at", now_ts) or 0) if status != "running" else float(merged.get("ended_at", 0) or 0),
             "params": merged.get("params", {}) or {},
             "score_col": score_col,
             "result_csv": result_csv,

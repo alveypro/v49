@@ -38,16 +38,21 @@ def render_async_scan_status(
             st.session_state[task_key] = ""
             return None
     else:
-        if str(task.get("status", "")) in {"failed", "cancelled"}:
+        cached_status = str(task.get("status", ""))
+        if cached_status in {"failed", "cancelled"}:
             recovered = recover_async_scan_task(run_id)
             if recovered and str(recovered.get("status", "")) == "success":
                 task = recovered
-        elif str(task.get("status", "")) in {"queued", "running"}:
-            pid = int(task.get("pid", 0) or 0)
-            if pid > 0 and not is_pid_alive(pid):
-                recovered = recover_async_scan_task(run_id)
-                if recovered:
-                    task = recovered
+        elif cached_status in {"queued", "running"}:
+            recovered = recover_async_scan_task(run_id)
+            if recovered:
+                task = recovered
+            else:
+                pid = int(task.get("pid", 0) or 0)
+                if pid > 0 and not is_pid_alive(pid):
+                    recovered = recover_async_scan_task(run_id)
+                    if recovered:
+                        task = recovered
 
     status_now = str(task.get("status", ""))
     msg_now = str(task.get("message", ""))
@@ -106,11 +111,34 @@ def render_async_scan_status(
                 update_async_scan_task(run_id, status="success", message=task["message"])
                 status = "success"
 
+    if status in {"queued", "running"}:
+        maybe_df = read_async_scan_df(task)
+        result_csv = str(task.get("result_csv", "") or "")
+        meta_json = str(task.get("meta_json", "") or "")
+        if maybe_df is not None or result_csv or meta_json:
+            task = dict(task)
+            task["status"] = "success"
+            task["stage"] = "done"
+            task["progress"] = 100
+            task["message"] = "结果已生成，自动切换为完成状态"
+            update_async_scan_task(
+                run_id,
+                status="success",
+                stage="done",
+                progress=100,
+                message=task["message"],
+                ended_at=now_ts(),
+                row_count=int(len(maybe_df)) if maybe_df is not None else int(task.get("row_count", 0) or 0),
+            )
+            status = "success"
+
     if status not in {"failed", "cancelled"}:
         st.caption(str(task.get("message", "")))
 
     if status in {"queued", "running"}:
-        if hasattr(st, "autorefresh"):
+        if hasattr(st, "fragment"):
+            st.caption("任务运行中，状态每 5 秒自动刷新。")
+        elif hasattr(st, "autorefresh"):
             st.autorefresh(interval=5000, key=f"refresh_{run_id}")
         else:
             st.info("任务运行中，请手动刷新页面查看进度。")

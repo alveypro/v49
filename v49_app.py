@@ -697,20 +697,30 @@ def _recover_async_scan_task(run_id: str) -> Optional[Dict[str, Any]]:
 
 
 def _render_async_scan_status(task_key: str, title: str, score_col: str) -> Optional[pd.DataFrame]:
-    return runtime_render_async_scan_status(
-        task_key=task_key,
-        title=title,
-        score_col=score_col,
-        get_async_scan_task=_get_async_scan_task,
-        recover_async_scan_task=_recover_async_scan_task,
-        is_pid_alive=_is_pid_alive,
-        update_async_scan_task=_update_async_scan_task,
-        now_ts=_now_ts,
-        read_async_scan_df=_read_async_scan_df,
-        standardize_result_df=_standardize_result_df,
-        df_to_csv_bytes=_df_to_csv_bytes,
-        set_stock_pool_candidate=_set_stock_pool_candidate,
-    )
+    def _render_status_once() -> Optional[pd.DataFrame]:
+        return runtime_render_async_scan_status(
+            task_key=task_key,
+            title=title,
+            score_col=score_col,
+            get_async_scan_task=_get_async_scan_task,
+            recover_async_scan_task=_recover_async_scan_task,
+            is_pid_alive=_is_pid_alive,
+            update_async_scan_task=_update_async_scan_task,
+            now_ts=_now_ts,
+            read_async_scan_df=_read_async_scan_df,
+            standardize_result_df=_standardize_result_df,
+            df_to_csv_bytes=_df_to_csv_bytes,
+            set_stock_pool_candidate=_set_stock_pool_candidate,
+        )
+
+    if hasattr(st, "fragment"):
+        @st.fragment(run_every="5s")
+        def _render_status_fragment() -> Optional[pd.DataFrame]:
+            return _render_status_once()
+
+        return _render_status_fragment()
+
+    return _render_status_once()
 
 
 def _list_recent_async_scan_tasks(limit: int = 12) -> pd.DataFrame:
