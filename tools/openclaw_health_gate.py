@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""全链路健康检查 — 凌晨 01:50 由 launchd 执行，覆盖所有关键子系统。
+"""全链路健康检查 — 由真实部署调度器执行，覆盖所有关键子系统。
 
 检查项:
   0. Python 运行时版本 (>=3.11) 与解释器路径
   1. DB 可达 & 数据新鲜度
   2. 缓存目录完整性
   3. 关键 Python 模块可导入
-  4. launchd 任务状态
+  4. 定时任务/服务管理器状态
   5. 磁盘空间
   6. 最近 run_summary 是否成功
   7. 端口服务存活 (5101/8501)
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 import socket
 import sqlite3
@@ -164,9 +165,74 @@ def check_imports() -> Check:
     return c
 
 
+def _csv_env(name: str) -> List[str]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return []
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+
+def _service_manager() -> str:
+    forced = os.getenv("OPENCLAW_HEALTH_SERVICE_MANAGER", "").strip().lower()
+    if forced in {"systemd", "launchd", "none"}:
+        return forced
+    if platform.system().lower() == "darwin" and shutil.which("launchctl"):
+        return "launchd"
+    if shutil.which("systemctl"):
+        return "systemd"
+    return "none"
+
+
+def check_timed_services() -> Check:
+    c = Check("timed_services", "定时任务状态")
+    manager = _service_manager()
+    if manager == "systemd":
+        units = _csv_env("OPENCLAW_HEALTH_SYSTEMD_UNITS") or [
+            "openclaw-data-updater.timer",
+            "openclaw-daily-pipeline.timer",
+            "openclaw-auto-evolve-opt.timer",
+            "openclaw-tracking-guard.timer",
+        ]
+        missing = []
+        inactive = []
+        for unit in units:
+            try:
+                r = subprocess.run(
+                    ["systemctl", "is-enabled", unit],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if r.returncode != 0:
+                    missing.append(unit)
+                    continue
+                r = subprocess.run(
+                    ["systemctl", "is-active", unit],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if r.returncode != 0:
+                    inactive.append(unit)
+            except Exception:
+                inactive.append(unit)
+        if missing or inactive:
+            parts = []
+            if missing:
+                parts.append(f"未启用: {', '.join(missing)}")
+            if inactive:
+                parts.append(f"未活跃: {', '.join(inactive)}")
+            c.warn("; ".join(parts))
+        else:
+            c.ok(f"systemd timers active: {', '.join(units)}")
+        return c
+
+    if manager == "launchd":
+        return check_launchd()
+
+    c.warn("未识别 systemd/launchd，无法验证定时任务")
+    return c
+
+
 def check_launchd() -> Check:
-    c = Check("launchd", "定时任务状态")
-    labels = [
+    c = Check("timed_services", "定时任务状态")
+    labels = _csv_env("OPENCLAW_HEALTH_LAUNCHD_LABELS") or [
         "com.airivo.auto-evolve",
         "com.airivo.syncdb",
         "com.airivo.openclaw.data-update",
@@ -189,7 +255,7 @@ def check_launchd() -> Check:
     if missing:
         c.warn(f"未加载: {', '.join(missing)}")
     else:
-        c.ok(f"{len(labels)} 个任务全部活跃")
+        c.ok(f"launchd labels active: {', '.join(labels)}")
     return c
 
 
@@ -209,7 +275,7 @@ def check_disk() -> Check:
 
 def check_recent_run() -> Check:
     c = Check("last_run_summary", "最近运行摘要")
-    ld = log_dir()
+    ld = _run_summary_dir()
     summaries = sorted(ld.glob("run_summary_*.json"), reverse=True)
     if not summaries:
         c.warn("未找到 run_summary")
@@ -244,6 +310,20 @@ def check_recent_run() -> Check:
     except Exception as e:
         c.warn(f"解析失败: {e}")
     return c
+
+
+def _run_summary_dir() -> Path:
+    env = os.getenv("OPENCLAW_RUN_SUMMARY_DIR", "").strip()
+    candidates = []
+    if env:
+        candidates.append(Path(env))
+    candidates.append(log_dir())
+    candidates.append(Path("/opt/openclaw/app/logs/openclaw"))
+    candidates.append(Path("/opt/openclaw/logs/openclaw"))
+    for candidate in candidates:
+        if candidate.exists() and list(candidate.glob("run_summary_*.json")):
+            return candidate
+    return candidates[0]
 
 
 def _load_strategy_center_config() -> Dict[str, Any]:
@@ -373,7 +453,7 @@ def run_all() -> Dict[str, Any]:
         check_db(),
         check_cache(),
         check_imports(),
-        check_launchd(),
+        check_timed_services(),
         check_disk(),
         check_recent_run(),
         check_port(5101, "stock-agent", "股票智能体"),
