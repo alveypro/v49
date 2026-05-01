@@ -28,3 +28,21 @@ def test_build_scan_params_uses_center_runtime_and_run_policy():
     assert out["score_threshold"] == 66
     assert out["offline_stock_limit"] == 40
     assert out["limit"] == 30
+
+
+def test_build_combo_scan_params_uses_component_runtime_thresholds():
+    cfg = {
+        "auto_apply_backtest_best": False,
+        "runtime_defaults": {
+            "combo": {"score_threshold": 65, "sample_size": 50, "holding_days": 6},
+            "v5": {"score_threshold": 70, "sample_size": 50, "holding_days": 4},
+            "v8": {"score_threshold": 45, "sample_size": 50, "holding_days": 6},
+            "v9": {"score_threshold": 65, "sample_size": 80, "holding_days": 8},
+        },
+        "run_policy": {"combo": {"offline_stock_limit": 300}},
+    }
+    out = gate._build_scan_params("combo", cfg)
+    assert out["score_threshold"] == 65
+    assert out["thr_v5"] == 70
+    assert out["thr_v8"] == 45
+    assert out["thr_v9"] == 65

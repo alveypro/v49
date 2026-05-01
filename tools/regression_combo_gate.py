@@ -63,11 +63,23 @@ def _build_scan_params(strategy: str, center_cfg: Dict[str, Any]) -> Dict[str, i
     )
     run_policy = resolve_run_policy(strategy=strategy, center_config=center_cfg, default_timeout_sec=900)
     offline_limit = int(run_policy.get("offline_stock_limit", 300) or 300)
-    return {
+    params = {
         "score_threshold": int(resolved["score_threshold"]),
         "limit": 30,
         "offline_stock_limit": offline_limit,
     }
+    if strategy == "combo":
+        for component in ("v5", "v8", "v9"):
+            component_resolved = resolve_runtime_params(
+                strategy=component,
+                requested_score_threshold=None,
+                requested_sample_size=None,
+                requested_holding_days=None,
+                center_config=center_cfg,
+                project_root=ROOT,
+            )
+            params[f"thr_{component}"] = int(component_resolved["score_threshold"])
+    return params
 
 
 def run_single_round(
