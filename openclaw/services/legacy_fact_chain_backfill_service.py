@@ -166,7 +166,7 @@ def _backfill_overnight_decisions(conn: sqlite3.Connection) -> int:
             conn,
             decision_id=decision_id,
             decision_status=str(row[8] or "active"),
-            effective_trade_date=decision_date,
+            effective_trade_date=_compact_date(decision_date),
             selected_count=int(row[4] or 0),
             active_flag=bool(int(row[13] or 0)),
         )
@@ -196,7 +196,8 @@ def _backfill_overnight_execution_feedback(conn: sqlite3.Connection, *, limit_ro
         fact = _fetch_feedback_fact(conn, row_id)
         if not fact:
             continue
-        decision_date = str(fact.get("decision_date") or "")
+        decision_date = _compact_date(fact.get("decision_date"))
+        fact["decision_date"] = decision_date
         decision_id = _decision_id_for_date(decision_date)
         if not conn.execute("SELECT 1 FROM decision_events WHERE decision_id = ?", (decision_id,)).fetchone():
             based_on_run_id = _latest_signal_run_for_date(conn, decision_date)
@@ -218,7 +219,7 @@ def _backfill_overnight_execution_feedback(conn: sqlite3.Connection, *, limit_ro
                 conn,
                 decision_id=decision_id,
                 decision_status="active",
-                effective_trade_date=decision_date,
+                effective_trade_date=_compact_date(decision_date),
                 selected_count=0,
                 active_flag=False,
             )
