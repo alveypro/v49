@@ -58,7 +58,7 @@ def render_airivo_production_dashboard_page(
     with left:
         st.markdown("#### 最近候选池快照")
         if candidates is not None and not candidates.empty:
-            st.caption(f"来源：strategy_signal_tracking，信号日期 {signal_date}。数据过期时仅作研究回放。")
+            st.caption(f"来源：strategy_signal_tracking，信号日期 {signal_date}。这里按股票去重聚合，只保留最终候选视图；数据过期时仅作研究回放。")
             st.dataframe(candidates, use_container_width=True, hide_index=True)
         else:
             st.info("暂无候选池快照。请先运行生产扫描或日报流程。")

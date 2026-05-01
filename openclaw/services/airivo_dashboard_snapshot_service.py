@@ -99,6 +99,51 @@ def data_freshness_snapshot(db_path: str) -> Dict[str, Any]:
 def latest_candidate_snapshot(db_path: str, limit: int = 5) -> Tuple[pd.DataFrame, str]:
     try:
         conn = sqlite3.connect(db_path, timeout=10)
+        fact_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='signal_runs'",
+        ).fetchone()
+        if fact_exists:
+            latest_row = conn.execute(
+                """
+                SELECT run_id, trade_date
+                FROM signal_runs
+                WHERE run_type = 'scan' AND status = 'success'
+                ORDER BY created_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            latest_run_id = str((latest_row or ["", ""])[0] or "")
+            latest_date = str((latest_row or ["", ""])[1] or "")
+            if latest_run_id:
+                raw_df = pd.read_sql_query(
+                    """
+                    SELECT
+                        r.trade_date AS 信号日期,
+                        r.strategy AS 策略,
+                        i.ts_code AS TS代码,
+                        COALESCE(b.name, i.ts_code) AS 股票名称,
+                        COALESCE(b.industry, '') AS 行业,
+                        i.score AS 评分,
+                        i.rank_idx AS 排名,
+                        i.reason_codes AS 理由
+                    FROM signal_items i
+                    JOIN signal_runs r ON r.run_id = i.run_id
+                    LEFT JOIN stock_basic b ON b.ts_code = i.ts_code
+                    WHERE i.run_id = ?
+                    ORDER BY COALESCE(i.rank_idx, 999999), i.score DESC
+                    LIMIT ?
+                    """,
+                    conn,
+                    params=(latest_run_id, int(limit) * 3),
+                )
+                conn.close()
+                if not raw_df.empty:
+                    raw_df["理由"] = raw_df["理由"].fillna("").astype(str)
+                    raw_df["理由"] = raw_df["理由"].str.replace('["', "", regex=False).str.replace('"]', "", regex=False)
+                    raw_df["理由"] = raw_df["理由"].str.replace('","', "；", regex=False)
+                    raw_df["评分"] = pd.to_numeric(raw_df["评分"], errors="coerce")
+                    raw_df["排名"] = pd.to_numeric(raw_df["排名"], errors="coerce")
+                    return _dedup_candidate_snapshot(raw_df, latest_date, limit)
         exists = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='strategy_signal_tracking'",
         ).fetchone()
@@ -112,7 +157,7 @@ def latest_candidate_snapshot(db_path: str, limit: int = 5) -> Tuple[pd.DataFram
         if not latest_date:
             conn.close()
             return pd.DataFrame(), ""
-        df = pd.read_sql_query(
+        raw_df = pd.read_sql_query(
             """
             SELECT
                 s.signal_trade_date AS 信号日期,
@@ -133,6 +178,47 @@ def latest_candidate_snapshot(db_path: str, limit: int = 5) -> Tuple[pd.DataFram
             params=(latest_date, int(limit)),
         )
         conn.close()
-        return df, latest_date
+        if raw_df.empty:
+            return raw_df, latest_date
+
+        return _dedup_candidate_snapshot(raw_df, latest_date, limit)
     except Exception:
         return pd.DataFrame(), ""
+
+
+def _dedup_candidate_snapshot(raw_df: pd.DataFrame, latest_date: str, limit: int) -> Tuple[pd.DataFrame, str]:
+    raw_df["评分"] = pd.to_numeric(raw_df["评分"], errors="coerce")
+    raw_df["排名"] = pd.to_numeric(raw_df["排名"], errors="coerce")
+    raw_df["理由"] = raw_df["理由"].fillna("").astype(str)
+    raw_df["策略"] = raw_df["策略"].fillna("").astype(str)
+
+    dedup_rows = []
+    for ts_code, group in raw_df.groupby("TS代码", sort=False):
+        ranked = group.sort_values(by=["评分", "排名"], ascending=[False, True], na_position="last", kind="stable")
+        best = ranked.iloc[0]
+        strategy_values = [str(x).strip() for x in ranked["策略"].tolist() if str(x).strip()]
+        strategy_values = list(dict.fromkeys(strategy_values))
+        reason_values = [str(x).strip() for x in ranked["理由"].tolist() if str(x).strip()]
+        reason_values = list(dict.fromkeys(reason_values))
+        dedup_rows.append(
+            {
+                "信号日期": best["信号日期"],
+                "TS代码": ts_code,
+                "股票名称": best["股票名称"],
+                "行业": best["行业"],
+                "最高评分": best["评分"],
+                "最佳排名": best["排名"],
+                "主策略": strategy_values[0] if strategy_values else "",
+                "贡献策略数": len(strategy_values),
+                "贡献策略": " / ".join(strategy_values[:3]),
+                "理由摘要": "；".join(reason_values[:2]),
+            }
+        )
+
+    df = pd.DataFrame(dedup_rows).sort_values(
+        by=["最高评分", "最佳排名", "TS代码"],
+        ascending=[False, True, True],
+        na_position="last",
+        kind="stable",
+    ).head(int(limit)).reset_index(drop=True)
+    return df, latest_date

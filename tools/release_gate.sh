@@ -34,7 +34,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 PASS=true
+GIT_GATE_STATUS="failed"
+REGRESSION_GATE_STATUS="failed"
+HEALTH_GATE_STATUS="failed"
+PROFESSIONAL_AUDIT_GATE_STATUS="failed"
 LOG_FILE="$ROOT_DIR/logs/release_gate_$(date +%Y%m%d_%H%M%S).log"
+PROFESSIONAL_AUDIT_SUMMARY_FILE="${LOG_FILE%.log}.professional_audit.json"
 mkdir -p "$(dirname "$LOG_FILE")"
 
 log() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG_FILE"; }
@@ -81,6 +86,7 @@ fi
 
 if [[ "$LOCAL_SHORT" == "$GITHUB_SHORT" ]] && { [[ "$SKIP_REMOTE" == "true" ]] || [[ "$LOCAL_SHORT" == "$SERVER_SHORT" ]]; }; then
   log "  ✅ 关1 通过: 哈希一致"
+  GIT_GATE_STATUS="passed"
 else
   log "  ❌ 关1 失败: 哈希不一致"
   PASS=false
@@ -119,6 +125,7 @@ fi
 
 if "$PY_BIN" "$ROOT_DIR/tools/regression_combo_gate.py" --rounds "$ROUNDS" 2>&1 | tee -a "$LOG_FILE"; then
   log "  ✅ 关2 通过: $ROUNDS 轮全部成功"
+  REGRESSION_GATE_STATUS="passed"
 else
   log "  ❌ 关2 失败: 回归验证未通过"
   PASS=false
@@ -130,25 +137,107 @@ log "▶ 关3: 全链路健康检查"
 
 if "$PY_BIN" "$ROOT_DIR/tools/openclaw_health_gate.py" 2>&1 | tee -a "$LOG_FILE"; then
   log "  ✅ 关3 通过: 健康检查绿灯"
+  HEALTH_GATE_STATUS="passed"
 else
   EXIT_CODE=$?
   if [[ "$EXIT_CODE" -eq 1 ]]; then
     log "  ⚠️  关3 警告: 健康检查有黄灯 (可选通过)"
+    HEALTH_GATE_STATUS="warning"
   else
     log "  ❌ 关3 失败: 健康检查有红灯"
     PASS=false
   fi
 fi
 
+# ── 关4: 专业事实链审计 ──────────────────────────────────
+log ""
+log "▶ 关4: 专业事实链审计"
+
+if RELEASE_GATE_PROFESSIONAL_AUDIT_SUMMARY_FILE="$PROFESSIONAL_AUDIT_SUMMARY_FILE" "$PY_BIN" -c '
+import json
+import os
+import sys
+from pathlib import Path
+
+root = Path.cwd()
+sys.path.insert(0, str(root))
+
+from data.dao import resolve_db_path
+from openclaw.services.release_gate_service import run_professional_fact_audit_gate
+
+db = resolve_db_path(None)
+summary = run_professional_fact_audit_gate(
+    db,
+    output_path=os.environ.get("RELEASE_GATE_PROFESSIONAL_AUDIT_SUMMARY_FILE", ""),
+)
+print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+raise SystemExit(0 if summary["passed"] else 1)
+' 2>&1 | tee -a "$LOG_FILE"; then
+  log "  ✅ 关4 通过: 四条事实链可审计"
+  PROFESSIONAL_AUDIT_GATE_STATUS="passed"
+else
+  log "  ❌ 关4 失败: 四条事实链审计未通过"
+  PASS=false
+fi
+
+record_release_ledger() {
+  local overall="$1"
+  RELEASE_GATE_LOG_FILE="$LOG_FILE" \
+  RELEASE_GATE_OVERALL="$overall" \
+  RELEASE_GATE_ROUNDS="$ROUNDS" \
+  RELEASE_GATE_SKIP_REMOTE="$SKIP_REMOTE" \
+  RELEASE_GATE_GIT_STATUS="$GIT_GATE_STATUS" \
+  RELEASE_GATE_REGRESSION_STATUS="$REGRESSION_GATE_STATUS" \
+  RELEASE_GATE_HEALTH_STATUS="$HEALTH_GATE_STATUS" \
+  RELEASE_GATE_PROFESSIONAL_AUDIT_STATUS="$PROFESSIONAL_AUDIT_GATE_STATUS" \
+  RELEASE_GATE_PROFESSIONAL_AUDIT_SUMMARY_FILE="$PROFESSIONAL_AUDIT_SUMMARY_FILE" \
+  "$PY_BIN" -c '
+import os
+import sys
+from pathlib import Path
+
+root = Path.cwd()
+sys.path.insert(0, str(root))
+
+from data.dao import resolve_db_path
+from openclaw.services.release_gate_service import load_release_gate_audit_summary, record_release_gate_ledger
+
+db = resolve_db_path(None)
+overall = os.environ.get("RELEASE_GATE_OVERALL", "failed")
+log_file = os.environ.get("RELEASE_GATE_LOG_FILE", "")
+audit_summary = load_release_gate_audit_summary(os.environ.get("RELEASE_GATE_PROFESSIONAL_AUDIT_SUMMARY_FILE", ""))
+validations = {
+        "git_hash": os.environ.get("RELEASE_GATE_GIT_STATUS", "failed"),
+        "regression_combo": os.environ.get("RELEASE_GATE_REGRESSION_STATUS", "failed"),
+        "health_gate": os.environ.get("RELEASE_GATE_HEALTH_STATUS", "failed"),
+        "professional_fact_audit": os.environ.get("RELEASE_GATE_PROFESSIONAL_AUDIT_STATUS", "failed"),
+}
+release_id = record_release_gate_ledger(
+    db_path=db,
+    code_root=root,
+    overall=overall,
+    rounds=int(os.environ.get("RELEASE_GATE_ROUNDS", "0") or 0),
+    skip_remote=os.environ.get("RELEASE_GATE_SKIP_REMOTE", "") == "true",
+    log_file=log_file,
+    validation_statuses=validations,
+    audit_summary=audit_summary,
+    operator_name=os.environ.get("USER", "system"),
+)
+print(f"[release-gate-ledger] release_id={release_id} overall={overall}")
+' 2>&1 | tee -a "$LOG_FILE" || log "  ⚠️  release ledger write failed"
+}
+
 # ── 总结 ─────────────────────────────────────────────────
 log ""
 log "=========================================="
 if [[ "$PASS" == "true" ]]; then
+  record_release_ledger "passed"
   log "  ✅ 全部门槛通过 — 可发布部署"
   log "=========================================="
   log "  日志: $LOG_FILE"
   exit 0
 else
+  record_release_ledger "failed"
   log "  ❌ 发布门槛未满足 — 禁止部署"
   log "=========================================="
   log "  日志: $LOG_FILE"

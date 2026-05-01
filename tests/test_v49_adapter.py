@@ -113,7 +113,7 @@ class TestGenerateReport:
             },
             output_dir=tmp_path,
         )
-        assert result["run_id"].startswith("report_daily_brief_")
+        assert result["run_id"].startswith("run_report_daily_brief_")
         md_path = Path(result["markdown"])
         assert md_path.exists()
         assert "daily_brief" in md_path.read_text(encoding="utf-8")

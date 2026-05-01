@@ -1,0 +1,102 @@
+name: Airivo CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest pandas numpy
+
+      - name: Core import smoke
+        run: |
+          python - <<'PY'
+          import openclaw.services.lineage_service
+          import openclaw.services.backtest_credibility_service
+          import openclaw.services.data_quality_service
+          import openclaw.services.decision_service
+          import openclaw.services.execution_order_service
+          import openclaw.services.execution_evidence_service
+          import openclaw.services.experiment_governance_service
+          import openclaw.services.professional_audit_service
+          import openclaw.services.release_gate_service
+          import openclaw.services.release_event_service
+          import openclaw.runtime.backtest_stats
+          import openclaw.runtime.backtest_workers
+          import openclaw.runtime.combo_signal_evaluator
+          import openclaw.runtime.v49_app_router
+          import openclaw.runtime.v49_backtest_entry
+          import openclaw.runtime.v49_data_ops_entry
+          import openclaw.runtime.v49_entry_dispatcher
+          import openclaw.runtime.v49_research_entries
+          import openclaw.runtime.v49_sidebar
+          import openclaw.runtime.v49_strategy_evolution_entry
+          import openclaw.runtime.v49_today_decision_entry
+          import openclaw.runtime.v49_trading_assistant_entry
+          import openclaw.runtime.v8_advanced_factor_aggregator
+          import openclaw.runtime.v8_atr_risk
+          import openclaw.runtime.v8_core_factors
+          import openclaw.runtime.v8_evaluation_handler
+          import openclaw.runtime.v8_market_regime
+          import openclaw.runtime.v8_signal_evaluator
+          import openclaw.runtime.v9_signal_evaluator
+          import openclaw.adapters.v49_adapter
+          import openclaw.services.release_dry_run_fixture_service
+          import openclaw.services.release_dry_run_service
+          PY
+
+      - name: Professional schema and service tests
+        run: pytest tests/test_professional_system_services.py tests/test_execution_evidence_service.py tests/test_experiment_governance_service.py tests/test_backtest_credibility_service.py tests/test_release_dry_run_service.py tests/test_release_dry_run_fixture_service.py tests/test_backtest_stats.py tests/test_backtest_workers.py tests/test_v49_backtest_entry.py tests/test_v49_data_ops_entry.py tests/test_v49_research_entries.py tests/test_v49_strategy_evolution_entry.py tests/test_v49_today_decision_entry.py tests/test_v49_trading_assistant_entry.py tests/test_v49_entry_dispatcher.py tests/test_v49_sidebar.py tests/test_v49_app_router.py tests/test_v8_legacy_facades.py tests/test_v8_evaluation_handler.py tests/test_v8_atr_risk.py tests/test_v8_market_regime.py tests/test_v8_core_factors.py tests/test_v8_advanced_factor_aggregator.py tests/test_v8_signal_evaluator.py tests/test_v9_signal_evaluator.py tests/test_combo_signal_evaluator.py tests/test_v49_adapter.py -q
+
+      - name: Governance gate
+        run: python tools/governance_gate.py --all-files
+
+      - name: Release dry-run preflight evidence
+        run: |
+          python tools/build_release_dry_run_fixture.py \
+            --db artifacts/release_dry_run/fixture.db \
+            --payload artifacts/release_dry_run/fixture_payload.json \
+            --report artifacts/release_dry_run/fixture_report.md \
+            --code-root "$GITHUB_WORKSPACE" \
+            --operator ci \
+            --overwrite
+          python tools/release_dry_run_audit.py \
+            --db "${AIRIVO_DB_PATH:-data/openclaw.db}" \
+            --code-root "$GITHUB_WORKSPACE" \
+            --output artifacts/release_dry_run/current_readiness_payload.json \
+            --operator ci \
+            --non-blocking
+          python tools/release_dry_run_audit.py \
+            --trend artifacts/release_dry_run \
+            --output artifacts/release_dry_run/readiness_trend.json \
+            --markdown-output artifacts/release_dry_run/readiness_trend.md \
+            --stable-threshold 2 \
+            --non-blocking
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            cat artifacts/release_dry_run/readiness_trend.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload release dry-run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run-evidence
+          path: artifacts/release_dry_run/
+          if-no-files-found: ignore
