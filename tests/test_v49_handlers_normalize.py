@@ -51,6 +51,19 @@ def test_normalize_summary_supports_total_signals_and_analyzed_stocks():
     assert abs(out["signal_density"] - 0.4) < 1e-9
 
 
+def test_normalize_summary_uses_runtime_sample_size_when_legacy_result_omits_it():
+    out = _normalize_summary(
+        {
+            "win_rate": 100.0,
+            "max_drawdown": 0.0,
+            "total_trades": 3,
+        },
+        fallback_sample_size=40,
+    )
+    assert abs(out["win_rate"] - 1.0) < 1e-9
+    assert abs(out["signal_density"] - 0.075) < 1e-9
+
+
 def test_weighted_combo_summary_penalizes_worst_drawdown():
     out = _weighted_combo_summary(
         summaries={

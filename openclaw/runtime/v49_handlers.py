@@ -158,7 +158,11 @@ class HandlerFactory:
                         bt.conn.close()
                     except Exception:
                         pass
-                return {"summary": _normalize_summary(result), "raw": result, "meta": {"run_id": run_id} if run_id else {}}
+                return {
+                    "summary": _normalize_summary(result, fallback_sample_size=int(params.get("sample_size", 400))),
+                    "raw": result,
+                    "meta": {"run_id": run_id} if run_id else {},
+                }
 
             if strategy == "v5":
                 v5_mod = _import_backtest_module(
@@ -185,7 +189,11 @@ class HandlerFactory:
                         bt.conn.close()
                     except Exception:
                         pass
-                return {"summary": _normalize_summary(result), "raw": result, "meta": {"run_id": run_id} if run_id else {}}
+                return {
+                    "summary": _normalize_summary(result, fallback_sample_size=int(params.get("sample_size", 500))),
+                    "raw": result,
+                    "meta": {"run_id": run_id} if run_id else {},
+                }
 
             if strategy in {"v7", "v8", "v9", "combo"}:
                 analyzer = _get_analyzer(db_path)
@@ -240,7 +248,10 @@ class HandlerFactory:
                         result = _run_combo_ensemble_backtest(analyzer, df_bt, params)
 
                 stats_src = (result or {}).get("stats") if isinstance(result, dict) else None
-                summary = _normalize_summary(stats_src if isinstance(stats_src, dict) else result)
+                summary = _normalize_summary(
+                    stats_src if isinstance(stats_src, dict) else result,
+                    fallback_sample_size=int(params.get("sample_size", 500)),
+                )
                 return {"summary": summary, "raw": result, "meta": {"run_id": run_id} if run_id else {}}
 
             if strategy in {"v4", "stable"}:
@@ -357,7 +368,7 @@ def _find_col(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
     return None
 
 
-def _normalize_summary(result: Any) -> JsonDict:
+def _normalize_summary(result: Any, *, fallback_sample_size: Optional[int] = None) -> JsonDict:
     if not isinstance(result, dict):
         return {"win_rate": 0.0, "max_drawdown": 1.0, "signal_density": 0.0}
 
@@ -374,13 +385,10 @@ def _normalize_summary(result: Any) -> JsonDict:
         )
         or 0.0
     )
-    sample_size = float(
-        result.get(
-            "sample_size",
-            result.get("analyzed_stocks", result.get("分析股票数", 500.0)),
-        )
-        or 500.0
-    )
+    sample_size_raw = result.get("sample_size", result.get("analyzed_stocks", result.get("分析股票数", None)))
+    if sample_size_raw is None and fallback_sample_size is not None:
+        sample_size_raw = fallback_sample_size
+    sample_size = float(sample_size_raw or 500.0)
 
     # legacy scripts often return percent values for win_rate/max_drawdown
     win_rate = float(win_rate)
