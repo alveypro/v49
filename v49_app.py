@@ -3807,7 +3807,10 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
     bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
     conn.close()
 
-    combo_start = (datetime.now() - timedelta(days=lookback_days + 30)).strftime("%Y%m%d")
+    # Calendar days undercount trading rows around long holidays; keep the
+    # fetch window wide enough for the 80-row combo history gate.
+    combo_history_days = max(int(lookback_days) + 60, 140)
+    combo_start = (datetime.now() - timedelta(days=combo_history_days)).strftime("%Y%m%d")
     combo_end = datetime.now().strftime("%Y%m%d")
 
     ind_vals: Dict[str, List[float]] = {}
