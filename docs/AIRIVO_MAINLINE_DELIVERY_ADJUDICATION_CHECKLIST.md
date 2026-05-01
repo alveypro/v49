@@ -6,6 +6,8 @@ Authoritative references:
 
 - `docs/AIRIVO_UNIQUE_MAINLINE_DELIVERY_STANDARD.md`
 - `docs/AIRIVO_30_DAY_EXECUTION_PLAN.md`
+- `docs/AIRIVO_PROFESSIONAL_SYSTEM_BLUEPRINT.md`
+- `docs/AIRIVO_CURRENT_STAGE_STRATEGY_PRODUCTION_READINESS_PLAN.md`
 - `docs/AIRIVO_CODE_REVIEW_REJECTION_STANDARD.md`
 
 Any change that cannot pass this checklist must not enter the production mainline.
@@ -23,6 +25,7 @@ Any change that cannot pass this checklist must not enter the production mainlin
 - The request names one rollback path.
 - The request does not require a second entry, second mainline, or second truth source.
 - The request does not break existing `daily outputs`.
+- If the request concerns production strategy, experimental strategy, execution evidence, or release readiness, it follows `docs/AIRIVO_CURRENT_STAGE_STRATEGY_PRODUCTION_READINESS_PLAN.md`.
 
 Reject at intake if any item above is unclear.
 
@@ -44,6 +47,7 @@ Reject at intake if any item above is unclear.
 - Reviewer can confirm no cross-scope responsibility mixing was hidden inside the patch.
 - Reviewer can confirm `daily outputs` remain compatible or have an explicit migration and rollback note.
 - Reviewer can confirm tests and gates match the risk of the change.
+- Reviewer can confirm the change does not claim top-tier production readiness without four-chain evidence.
 
 If any answer is uncertain, the review result is `reject`, not `follow up later`.
 

@@ -92,6 +92,9 @@ from openclaw.runtime.async_task_orchestration import (
     launch_async_backtest_process as runtime_launch_async_backtest_process,
     launch_async_scan_process as runtime_launch_async_scan_process,
     restore_recent_async_task_refs as runtime_restore_recent_async_task_refs,
+    run_async_backtest_worker_main as runtime_run_async_backtest_worker_main,
+    run_async_scan_job as runtime_run_async_scan_job,
+    run_async_scan_worker_main as runtime_run_async_scan_worker_main,
     start_async_backtest_job as runtime_start_async_backtest_job,
     start_async_scan_task as runtime_start_async_scan_task,
 )
@@ -99,6 +102,30 @@ from openclaw.runtime.async_env import (
     build_async_scan_env as runtime_build_async_scan_env,
     temp_environ as runtime_temp_environ,
 )
+from openclaw.runtime.v49_handlers import (
+    execute_offline_scan_strategy as runtime_execute_offline_scan_strategy,
+)
+from openclaw.runtime.v49_app_router import (
+    apply_v49_desired_routes as runtime_apply_v49_desired_routes,
+    render_v49_route_selector as runtime_render_v49_route_selector,
+)
+from openclaw.runtime.v49_entry_dispatcher import (
+    render_v49_backtest_entry as runtime_render_v49_backtest_entry,
+    render_v49_data_ops_entry as runtime_render_v49_data_ops_entry,
+    render_v49_execution_center_entry as runtime_render_v49_execution_center_entry,
+    render_v49_strategy_evolution_entry as runtime_render_v49_strategy_evolution_entry,
+    render_v49_task_guide_entry as runtime_render_v49_task_guide_entry,
+    render_v49_task_logs_entry as runtime_render_v49_task_logs_entry,
+    render_v49_today_decision_entry as runtime_render_v49_today_decision_entry,
+    render_v49_trading_assistant_entry as runtime_render_v49_trading_assistant_entry,
+)
+from openclaw.runtime.v49_backtest_entry import BacktestEntryDependencies
+from openclaw.runtime.v49_data_ops_entry import DataOpsEntryDependencies
+from openclaw.runtime.v49_research_entries import (
+    render_v49_research_light_entries as runtime_render_v49_research_light_entries,
+)
+from openclaw.runtime.v49_sidebar import render_v49_sidebar as runtime_render_v49_sidebar
+from openclaw.runtime.v49_today_decision_entry import TodayDecisionDependencies
 from openclaw.runtime.scan_ui import (
     render_cached_scan_results as runtime_render_cached_scan_results,
     render_front_scan_summary as runtime_render_front_scan_summary,
@@ -161,6 +188,18 @@ from openclaw.runtime.backtest_data_context import (
     load_backtest_history_df as runtime_load_backtest_history_df,
     load_latest_production_backtest_audit as runtime_load_latest_production_backtest_audit,
 )
+from openclaw.runtime.backtest_workers import (
+    run_comparison_backtest_worker as runtime_run_comparison_backtest_worker,
+    run_single_backtest_worker as runtime_run_single_backtest_worker,
+)
+from openclaw.runtime.backtest_stats import calculate_backtest_stats as runtime_calculate_backtest_stats
+from openclaw.runtime.v9_signal_evaluator import calculate_v9_score_from_history as runtime_calculate_v9_score_from_history
+from openclaw.runtime.combo_signal_evaluator import (
+    evaluate_combo_signal as runtime_evaluate_combo_signal,
+    evaluate_combo_score_components as runtime_evaluate_combo_score_components,
+    finalize_combo_scan_score as runtime_finalize_combo_scan_score,
+    resolve_combo_signal_config as runtime_resolve_combo_signal_config,
+)
 from openclaw.runtime.dataframe_utils import (
     ensure_price_aliases as runtime_ensure_price_aliases,
     normalize_stock_df as runtime_normalize_stock_df,
@@ -192,6 +231,7 @@ from openclaw.services.airivo_batch_service import (
     get_canary_scope as service_get_canary_scope,
     get_override_audits as service_get_override_audits,
     get_release_outcome_review as service_get_release_outcome_review,
+    publish_manual_scan_to_execution_queue as service_publish_manual_scan_to_execution_queue,
     set_active_batch as service_set_active_batch,
     set_canary_batch as service_set_canary_batch,
 )
@@ -210,6 +250,11 @@ from openclaw.services.airivo_dashboard_snapshot_service import (
     latest_candidate_snapshot as service_latest_candidate_snapshot,
     parse_yyyymmdd as service_parse_yyyymmdd,
     table_latest as service_table_latest,
+)
+from openclaw.services.lineage_service import (
+    new_run_id as service_new_run_id,
+    record_backtest_result_chain as service_record_backtest_result_chain,
+    record_signal_dataframe_chain as service_record_signal_dataframe_chain,
 )
 from openclaw.services.airivo_artifact_service import (
     get_auto_evolve_status as service_get_auto_evolve_status,
@@ -551,117 +596,65 @@ def _async_scan_log_paths(run_id: str) -> Tuple[str, str]:
 
 
 def _launch_async_scan_process(run_id: str, strategy: str, params: Dict[str, Any], score_col: str) -> Dict[str, Any]:
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    py_bin = os.path.join(root_dir, ".venv", "bin", "python")
-    if not os.path.exists(py_bin):
-        py_bin = sys.executable or shutil.which("python3") or "/usr/bin/python3"
-    stdout_log, stderr_log = _async_scan_log_paths(run_id)
-    env = os.environ.copy()
-    env.update({
-        "OPENCLAW_ASYNC_SCAN_WORKER": "1",
-        "OPENCLAW_ASYNC_SCAN_RUN_ID": str(run_id),
-        "OPENCLAW_ASYNC_SCAN_STRATEGY": str(strategy),
-        "OPENCLAW_ASYNC_SCAN_SCORE_COL": str(score_col),
-    })
-    env.update({k: str(v) for k, v in _build_async_scan_env(strategy, params).items()})
-    with open(stdout_log, "ab") as out_f, open(stderr_log, "ab") as err_f:
-        proc = subprocess.Popen(
-            [py_bin, os.path.join(root_dir, "v49_app.py")],
-            cwd=root_dir,
-            env=env,
-            stdout=out_f,
-            stderr=err_f,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    return {"pid": int(proc.pid), "stdout_log": stdout_log, "stderr_log": stderr_log}
+    return runtime_launch_async_scan_process(
+        app_root=os.path.dirname(os.path.abspath(__file__)),
+        run_id=run_id,
+        strategy=strategy,
+        params=params,
+        score_col=score_col,
+        async_scan_log_paths=_async_scan_log_paths,
+        build_async_scan_env=_build_async_scan_env,
+        python_executable=sys.executable or shutil.which("python3") or None,
+    )
+
+
+def _execute_async_scan_strategy(
+    strategy: str,
+    params: Dict[str, Any],
+    env_overrides: Dict[str, Any],
+) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    return runtime_execute_offline_scan_strategy(
+        strategy=strategy,
+        env_overrides=env_overrides,
+        analyzer_factory=CompleteVolumePriceAnalyzer,
+        scan_handlers={
+            "v4": _offline_scan_v4,
+            "v5": _offline_scan_v5,
+            "v6": _offline_scan_v6,
+            "v8": _offline_scan_v8,
+            "v9": _offline_scan_v9,
+            "combo": _offline_scan_combo,
+        },
+        v7_scan_handler=run_offline_v7_scan,
+        temp_environ=_temp_environ,
+    )
+
+
+def _set_async_scan_thread_run_id(run_id: str) -> None:
+    _ASYNC_SCAN_THREAD_LOCAL.run_id = run_id
 
 
 def _run_async_scan_job(run_id: str, strategy: str, params: Dict[str, Any], score_col: str) -> None:
-    current = _get_async_scan_task(run_id)
-    if current and str(current.get("status", "")) == "cancelled":
-        return
-    _update_async_scan_task(run_id, status="running", stage="scan", progress=1, message="任务已启动")
-    result_df: Optional[pd.DataFrame] = None
-    meta: Dict[str, Any] = {}
-    try:
-        os.makedirs(ASYNC_SCAN_RESULT_DIR, exist_ok=True)
-        env_overrides = _build_async_scan_env(strategy, params)
-        _ASYNC_SCAN_THREAD_LOCAL.run_id = run_id
-        analyzer = CompleteVolumePriceAnalyzer()
-        with _temp_environ(env_overrides):
-            if strategy == "v4":
-                result_df, meta = _offline_scan_v4(analyzer)
-            elif strategy == "v5":
-                result_df, meta = _offline_scan_v5(analyzer)
-            elif strategy == "v8":
-                result_df, meta = _offline_scan_v8(analyzer)
-            elif strategy == "v9":
-                result_df, meta = _offline_scan_v9(analyzer)
-            elif strategy == "combo":
-                result_df, meta = _offline_scan_combo(analyzer)
-            elif strategy == "v6":
-                result_df, meta = _offline_scan_v6(analyzer)
-            elif strategy == "v7":
-                result_df, meta = run_offline_v7_scan()
-            else:
-                raise ValueError(f"不支持的后台扫描策略: {strategy}")
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        result_csv = os.path.join(ASYNC_SCAN_RESULT_DIR, f"{strategy}_{run_id}_{ts}.csv")
-        meta_json = os.path.join(ASYNC_SCAN_RESULT_DIR, f"{strategy}_{run_id}_{ts}.meta.json")
-        row_count = int(len(result_df)) if isinstance(result_df, pd.DataFrame) else 0
-        if isinstance(result_df, pd.DataFrame):
-            result_df.to_csv(result_csv, index=False)
-        else:
-            result_csv = ""
-        meta_out = {
-            "run_id": run_id,
-            "strategy": strategy,
-            "status": "success",
-            "score_col": score_col,
-            "row_count": row_count,
-            "finished_at": _now_text(),
-            "params": params,
-            "meta": meta or {},
-            "result_csv": result_csv,
-            "meta_json": meta_json,
-        }
-        with open(meta_json, "w", encoding="utf-8") as f:
-            json.dump(meta_out, f, ensure_ascii=False, indent=2)
-        _update_async_scan_task(
-            run_id,
-            status="success",
-            stage="done",
-            progress=100,
-            message=f"扫描完成：{row_count} 条结果",
-            ended_at=_now_ts(),
-            result_csv=result_csv,
-            meta_json=meta_json,
-            row_count=row_count,
-            meta=meta or {},
-        )
-    except Exception as exc:
-        if ASYNC_SCAN_CANCELLED_ERROR in str(exc):
-            _update_async_scan_task(
-                run_id,
-                status="cancelled",
-                stage="cancelled",
-                progress=100,
-                message="任务已取消（参数变更或新任务替代）",
-                ended_at=_now_ts(),
-            )
-            return
-        _update_async_scan_task(
-            run_id,
-            status="failed",
-            stage="error",
-            progress=100,
-            message=f"任务失败: {exc}",
-            error=traceback.format_exc(limit=12),
-            ended_at=_now_ts(),
-        )
-    finally:
-        _ASYNC_SCAN_THREAD_LOCAL.run_id = ""
+    runtime_run_async_scan_job(
+        run_id=run_id,
+        strategy=strategy,
+        params=params,
+        score_col=score_col,
+        result_dir=ASYNC_SCAN_RESULT_DIR,
+        cancelled_error=ASYNC_SCAN_CANCELLED_ERROR,
+        get_async_scan_task=_get_async_scan_task,
+        update_async_scan_task=_update_async_scan_task,
+        build_async_scan_env=_build_async_scan_env,
+        run_scan=_execute_async_scan_strategy,
+        now_text=_now_text,
+        now_ts=_now_ts,
+        set_current_run_id=_set_async_scan_thread_run_id,
+        record_signal_chain=lambda **kwargs: service_record_signal_dataframe_chain(
+            connect_db=_connect_permanent_db,
+            code_root=Path(os.path.dirname(os.path.abspath(__file__))),
+            **kwargs,
+        ),
+    )
 
 
 def _start_async_scan_task(strategy: str, params: Dict[str, Any], score_col: str) -> Tuple[bool, str, str]:
@@ -679,6 +672,7 @@ def _start_async_scan_task(strategy: str, params: Dict[str, Any], score_col: str
         persist_async_scan_task=_persist_async_scan_task,
         launch_async_scan_process=_launch_async_scan_process,
         merge_async_scan_task=_merge_async_scan_task,
+        run_id_factory=lambda strategy_name: service_new_run_id("scan", strategy_name),
     )
 
 
@@ -859,136 +853,19 @@ def _maybe_auto_publish_manual_scan_queue(candidate: Dict[str, Any]) -> None:
         st.session_state["airivo_auto_publish_status"] = {"mode": "error", "message": msg}
 
 
-def _airivo_parse_market_cap_yi(value: Any) -> float:
-    text = str(value or "").strip().replace("亿元", "").replace("亿", "")
-    if not text or text == "-":
-        return 0.0
-    try:
-        return float(text)
-    except Exception:
-        return 0.0
-
-
-def _airivo_build_manual_opportunities(candidate: Dict[str, Any]) -> List[Dict[str, Any]]:
-    df = candidate.get("df")
-    if not isinstance(df, pd.DataFrame) or df.empty:
-        return []
-    strategy = str(candidate.get("strategy") or "manual").strip().lower()
-    score_col = str(candidate.get("score_col") or "综合评分")
-    work = df.copy()
-    code_col = "股票代码" if "股票代码" in work.columns else ("TS代码" if "TS代码" in work.columns else ("ts_code" if "ts_code" in work.columns else ""))
-    name_col = "股票名称" if "股票名称" in work.columns else ("name" if "name" in work.columns else "")
-    industry_col = "行业" if "行业" in work.columns else ("industry" if "industry" in work.columns else "")
-    if not code_col:
-        return []
-    work["_ts_code"] = work[code_col].astype(str).str.strip()
-    work["_stock_name"] = work[name_col].astype(str).str.strip() if name_col else ""
-    work["_industry"] = work[industry_col].astype(str).str.strip() if industry_col else ""
-    work["_score"] = pd.to_numeric(work.get(score_col), errors="coerce")
-    if "排名" in work.columns:
-        work["_rank"] = pd.to_numeric(work["排名"], errors="coerce")
-    else:
-        work["_rank"] = pd.Series(range(1, len(work) + 1), index=work.index, dtype=float)
-    if "流通市值" in work.columns:
-        work["_circ_mv_yi"] = work["流通市值"].map(_airivo_parse_market_cap_yi)
-    else:
-        work["_circ_mv_yi"] = 0.0
-    work = work.dropna(subset=["_score"])
-    work = work[work["_ts_code"] != ""].sort_values(by=["_score", "_rank"], ascending=[False, True], kind="stable").head(30)
-    opportunities: List[Dict[str, Any]] = []
-    for idx, row in enumerate(work.to_dict(orient="records"), 1):
-        rank = int(float(row.get("_rank") or idx))
-        target_weight = max(0.10, round(0.45 - (idx - 1) * 0.03, 2))
-        reason = str(row.get("理由摘要") or row.get("筛选理由") or row.get("reason") or "").strip()
-        opportunities.append(
-            {
-                "ts_code": str(row.get("_ts_code") or ""),
-                "stock_name": str(row.get("_stock_name") or ""),
-                "industry": str(row.get("_industry") or ""),
-                "score": float(row.get("_score") or 0.0),
-                "rank_idx": rank,
-                "weighted_score": float(row.get("_score") or 0.0),
-                "strategies": [strategy],
-                "strategy": strategy,
-                "target_weight": target_weight,
-                "circ_mv": float(row.get("_circ_mv_yi") or 0.0) * 10000.0,
-                "reason": reason,
-            }
-        )
-    return opportunities
-
-
 def _publish_manual_scan_to_execution_queue(candidate: Dict[str, Any], db_path: str, runtime_snapshot: Dict[str, Any]) -> Tuple[bool, str]:
-    opportunities = _airivo_build_manual_opportunities(candidate)
-    if not opportunities:
-        return False, "当前扫描结果无法解析为执行候选。请先完成一次有效扫描。"
-    try:
-        from openclaw.overnight_decision import (
-            apply_feature_enrichment,
-            apply_trade_window_analysis,
-            build_overnight_decision,
-            export_execution_feedback_template,
-            load_active_holdings,
-            load_return_calibration,
-            next_trade_date,
-            persist_overnight_decision,
-            refresh_realized_outcomes,
-            seed_execution_feedback,
-        )
-
-        strategy = str(candidate.get("strategy") or "manual").strip().lower()
-        batch_id = f"{datetime.now().strftime('%Y-%m-%d')}#manual#{uuid.uuid4().hex[:6]}"
-        trade_date = next_trade_date(datetime.now().strftime("%Y-%m-%d"))
-        risk_level = str(runtime_snapshot.get("risk_level") or "YELLOW").lower()
-        with _connect_permanent_db() as conn:
-            opportunities = apply_feature_enrichment(conn, opportunities=opportunities)
-            active_holdings = load_active_holdings(conn)
-            calibration = load_return_calibration(conn, horizon_days=1, lookback_days=180, min_samples=6)
-            payload = build_overnight_decision(
-                trade_date=trade_date,
-                opportunities=opportunities,
-                active_holdings=active_holdings,
-                risk={"risk_level": risk_level},
-                calibration=calibration,
-                top_n=2,
-            )
-            payload = apply_trade_window_analysis(conn, payload=payload, lookback_days=20)
-            persist_overnight_decision(
-                conn,
-                decision_date=batch_id,
-                payload=payload,
-                source_type="manual_scan",
-                source_run_id=batch_id,
-                source_label=strategy,
-                activate=True,
-                approved_by="system",
-                release_note=f"manual_scan auto publish:{strategy}",
-                output_dir=logs_dir,
-                current_primary=strategy,
-            )
-            seed_execution_feedback(
-                conn,
-                decision_date=batch_id,
-                payload=payload,
-                source_type="manual_scan",
-                source_run_id=batch_id,
-            )
-            refresh_realized_outcomes(conn, lookback_days=60)
-            logs_dir = Path(os.path.dirname(__file__)) / "logs" / "openclaw"
-            export_execution_feedback_template(
-                output_dir=logs_dir,
-                decision_date=batch_id,
-                payload=payload,
-            )
-        try:
-            _airivo_latest_execution_queue_cached.clear()
-            _airivo_feedback_snapshot_cached.clear()
-        except Exception:
-            pass
+    logs_dir = Path(os.path.dirname(__file__)) / "logs" / "openclaw"
+    ok, msg, batch_id = service_publish_manual_scan_to_execution_queue(
+        candidate=candidate,
+        runtime_snapshot=runtime_snapshot,
+        connect_db=_connect_permanent_db,
+        logs_dir=logs_dir,
+        clear_execution_queue_cache=_airivo_latest_execution_queue_cached.clear,
+        clear_feedback_snapshot_cache=_airivo_feedback_snapshot_cached.clear,
+    )
+    if ok and batch_id:
         st.session_state["airivo_manual_queue_batch"] = batch_id
-        return True, f"已将手动扫描发布为今日执行队列：source=manual_scan/{strategy}, batch={batch_id}"
-    except Exception as exc:
-        return False, f"发布手动扫描队列失败：{exc}"
+    return ok, msg
 
 
 def _save_stock_pool_snapshot(strategy: str, params: Dict[str, Any], score_col: str, df: pd.DataFrame, note: str = "") -> Tuple[bool, str]:
@@ -1421,153 +1298,19 @@ def _load_backtest_history_df(days: int = 240, use_cache: bool = True) -> pd.Dat
 
 
 def _run_single_backtest_worker(payload: Dict[str, Any]) -> Dict[str, Any]:
-    try:
-        vp = CompleteVolumePriceAnalyzer()
-        df = _load_backtest_history_df(days=int(payload.get("history_days", 240)))
-        if df.empty:
-            return {"success": False, "error": "无法获取历史数据"}
-        strategy = str(payload.get("strategy", "v9.0 中线均衡版（生产）"))
-        full_market_mode = bool(payload.get("full_market_mode", False))
-        if full_market_mode:
-            sample_size = max(1, int(df["ts_code"].nunique())) if "ts_code" in df.columns else len(df)
-        else:
-            sample_size = int(payload.get("sample_size", 800))
-        holding_days = int(payload.get("holding_days", 10))
-        score_threshold = float(payload.get("score_threshold", 65))
-        if "v5.0" in strategy:
-            result = vp.backtest_bottom_breakthrough(df, sample_size=sample_size, holding_days=holding_days)
-        elif "v8.0" in strategy:
-            result = vp.backtest_v8_ultimate(df, sample_size=sample_size, holding_days=holding_days, score_threshold=score_threshold)
-        elif "组合策略" in strategy:
-            result = vp.backtest_combo_production(df, sample_size=sample_size, holding_days=holding_days, combo_threshold=score_threshold, min_agree=2)
-        else:
-            result = vp.backtest_v9_midterm(df, sample_size=sample_size, holding_days=holding_days, score_threshold=score_threshold)
-        return {"success": bool(result.get("success")), "result": result}
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-        }
+    return runtime_run_single_backtest_worker(
+        payload,
+        analyzer_factory=CompleteVolumePriceAnalyzer,
+        load_history_df=_load_backtest_history_df,
+    )
 
 
 def _run_comparison_backtest_worker(payload: Dict[str, Any]) -> Dict[str, Any]:
-    vp = CompleteVolumePriceAnalyzer()
-    df = _load_backtest_history_df(days=int(payload.get("history_days", 240)))
-    if df.empty:
-        return {"success": False, "error": "无法获取历史数据"}
-
-    sample_size = int(payload.get("sample_size", 300))
-    full_market_mode = bool(payload.get("full_market_mode", False))
-    strategy_params = payload.get("strategy_params") or {}
-    v5_hold = int((strategy_params.get("v5") or {}).get("holding_days", 8))
-    v8_hold = int((strategy_params.get("v8") or {}).get("holding_days", 10))
-    v8_thr = float((strategy_params.get("v8") or {}).get("score_threshold", 65))
-    v9_hold = int((strategy_params.get("v9") or {}).get("holding_days", 20))
-    v9_thr = float((strategy_params.get("v9") or {}).get("score_threshold", 65))
-    combo_hold = int((strategy_params.get("combo") or {}).get("holding_days", 10))
-    combo_thr = float((strategy_params.get("combo") or {}).get("score_threshold", 68))
-    validation_mode = str(payload.get("validation_mode", "快速全样本"))
-    wf_folds = int(payload.get("wf_folds", 4))
-    wf_window_days = int(payload.get("wf_window_days", 180))
-    wf_step_days = int(payload.get("wf_step_days", 40))
-
-    def _run_once(df_slice: pd.DataFrame, sample_for_run: int) -> Dict[str, Dict]:
-        out: Dict[str, Dict] = {}
-        resolved_sample_size = (
-            max(1, int(df_slice["ts_code"].nunique())) if full_market_mode and "ts_code" in df_slice.columns else int(sample_for_run)
-        )
-        v5 = vp.backtest_bottom_breakthrough(df_slice, sample_size=resolved_sample_size, holding_days=v5_hold)
-        if v5.get("success"):
-            out["v5.0 趋势趋势版"] = v5.get("stats", {})
-        v8 = vp.backtest_v8_ultimate(df_slice, sample_size=resolved_sample_size, holding_days=v8_hold, score_threshold=v8_thr)
-        if v8.get("success"):
-            out["v8.0 进阶版"] = v8.get("stats", {})
-        v9 = vp.backtest_v9_midterm(df_slice, sample_size=resolved_sample_size, holding_days=v9_hold, score_threshold=v9_thr)
-        if v9.get("success"):
-            out["v9.0 中线均衡版"] = v9.get("stats", {})
-        combo = vp.backtest_combo_production(df_slice, sample_size=resolved_sample_size, holding_days=combo_hold, combo_threshold=combo_thr, min_agree=2)
-        if combo.get("success"):
-            out["组合策略（生产共识）"] = combo.get("stats", {})
-        return out
-
-    def _aggregate(fold_results: List[Dict[str, Dict]]) -> Dict[str, Dict]:
-        by_strategy: Dict[str, List[Dict]] = {}
-        for fr in fold_results:
-            for k, stt in fr.items():
-                by_strategy.setdefault(k, []).append(stt)
-        out: Dict[str, Dict] = {}
-        for k, rows in by_strategy.items():
-            total_signals = float(sum(float(r.get("total_signals", 0) or 0) for r in rows))
-            w = total_signals if total_signals > 0 else float(max(1, len(rows)))
-            def _wavg(field: str) -> float:
-                if total_signals > 0:
-                    return float(sum(float(r.get(field, 0) or 0) * float(r.get("total_signals", 0) or 0) for r in rows) / w)
-                return float(sum(float(r.get(field, 0) or 0) for r in rows) / max(1, len(rows)))
-            out[k] = {
-                "total_signals": int(total_signals),
-                "analyzed_stocks": int(sum(int(r.get("analyzed_stocks", 0) or 0) for r in rows)),
-                "win_rate": _wavg("win_rate"),
-                "avg_return": _wavg("avg_return"),
-                "median_return": _wavg("median_return"),
-                "max_return": max(float(r.get("max_return", -999) or -999) for r in rows),
-                "min_return": min(float(r.get("min_return", 999) or 999) for r in rows),
-                "sharpe_ratio": _wavg("sharpe_ratio"),
-                "sortino_ratio": _wavg("sortino_ratio"),
-                "max_drawdown": _wavg("max_drawdown"),
-                "profit_loss_ratio": _wavg("profit_loss_ratio"),
-                "avg_holding_days": _wavg("avg_holding_days"),
-                "annualized_return": _wavg("annualized_return"),
-                "volatility": _wavg("volatility"),
-                "fold_count": len(rows),
-            }
-        return out
-
-    meta: Dict[str, Any] = {"validation_mode": validation_mode}
-    if validation_mode.startswith("Walk-forward"):
-        unique_dates = sorted([str(x) for x in df["trade_date"].dropna().unique()])
-        fold_results: List[Dict[str, Dict]] = []
-        fold_ranges: List[str] = []
-        fold_details: List[Dict[str, Any]] = []
-        pos = max(0, len(unique_dates) - int(wf_window_days))
-        sample_for_run = max(60, min(int(sample_size), int(300 / max(1, int(wf_folds)))))
-        for i in range(int(wf_folds)):
-            start_pos = pos - i * int(wf_step_days)
-            end_pos = start_pos + int(wf_window_days)
-            if start_pos < 0 or end_pos > len(unique_dates):
-                continue
-            d0 = unique_dates[start_pos]
-            d1 = unique_dates[end_pos - 1]
-            df_fold = df[(df["trade_date"] >= d0) & (df["trade_date"] <= d1)].copy()
-            if df_fold.empty:
-                continue
-            fold_ranges.append(f"{d0}-{d1}")
-            one = _run_once(df_fold, sample_for_run)
-            if one:
-                fold_results.append(one)
-                for sk, ss in one.items():
-                    fold_details.append({
-                        "fold": int(i + 1),
-                        "range": f"{d0}-{d1}",
-                        "strategy": sk,
-                        "win_rate": float(ss.get("win_rate", 0) or 0),
-                        "avg_return": float(ss.get("avg_return", 0) or 0),
-                        "sharpe_ratio": float(ss.get("sharpe_ratio", 0) or 0),
-                        "max_drawdown": float(ss.get("max_drawdown", 0) or 0),
-                        "total_signals": int(ss.get("total_signals", 0) or 0),
-                    })
-        fold_results = list(reversed(fold_results))
-        results = _aggregate(fold_results)
-        meta.update({
-            "fold_count": len(fold_results),
-            "fold_ranges": fold_ranges,
-            "fold_details": fold_details,
-            "wf_window_days": int(wf_window_days),
-            "wf_step_days": int(wf_step_days),
-        })
-    else:
-        results = _run_once(df, int(sample_size))
-    return {"success": bool(results), "results": results, "meta": meta}
+    return runtime_run_comparison_backtest_worker(
+        payload,
+        analyzer_factory=CompleteVolumePriceAnalyzer,
+        load_history_df=_load_backtest_history_df,
+    )
 
 
 def _launch_async_backtest_process(run_id: str, job_kind: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -1590,6 +1333,7 @@ def _start_async_backtest_job(job_kind: str, payload: Dict[str, Any]) -> Tuple[b
         now_text=_now_text,
         merge_async_backtest_job=_merge_async_backtest_job,
         launch_async_backtest_process=_launch_async_backtest_process,
+        run_id_factory=lambda kind: service_new_run_id("backtest", kind),
     )
 
 
@@ -2501,88 +2245,30 @@ def _auto_buy_ai_stocks(stocks: pd.DataFrame, per_buy_amount: float, top_n: int)
 
 
 def _run_async_scan_worker_main() -> int:
-    run_id = str(os.getenv("OPENCLAW_ASYNC_SCAN_RUN_ID", "") or "").strip()
-    strategy = str(os.getenv("OPENCLAW_ASYNC_SCAN_STRATEGY", "") or "").strip().lower()
-    score_col = str(os.getenv("OPENCLAW_ASYNC_SCAN_SCORE_COL", "综合评分") or "综合评分")
-    if not run_id or not strategy:
-        sys.stderr.write("missing async scan worker env\n")
-        return 2
-    _ASYNC_SCAN_THREAD_LOCAL.run_id = run_id
-    try:
-        _update_async_scan_task(
-            run_id,
-            status="running",
-            stage="scan",
-            progress=1,
-            message="任务已启动",
-            pid=os.getpid(),
-            worker_started_at=_now_text(),
-        )
-        _run_async_scan_job(run_id, strategy, _load_async_scan_state(run_id).get("params", {}) or {}, score_col)
-        return 0
-    except Exception:
-        _update_async_scan_task(
-            run_id,
-            status="failed",
-            stage="error",
-            progress=100,
-            message="任务失败: worker crashed",
-            error=traceback.format_exc(limit=20),
-            ended_at=_now_ts(),
-            pid=os.getpid(),
-        )
-        return 1
-    finally:
-        _ASYNC_SCAN_THREAD_LOCAL.run_id = ""
+    return runtime_run_async_scan_worker_main(
+        load_async_scan_state=_load_async_scan_state,
+        update_async_scan_task=_update_async_scan_task,
+        run_async_scan_job=_run_async_scan_job,
+        now_text=_now_text,
+        now_ts=_now_ts,
+        set_current_run_id=_set_async_scan_thread_run_id,
+    )
 
 
 def _run_async_backtest_worker_main() -> int:
-    run_id = str(os.getenv("OPENCLAW_ASYNC_BACKTEST_RUN_ID", "") or "").strip()
-    job_kind = str(os.getenv("OPENCLAW_ASYNC_BACKTEST_JOB_KIND", "") or "").strip().lower()
-    if not run_id or not job_kind:
-        sys.stderr.write("missing async backtest worker env\n")
-        return 2
-    job = _load_async_backtest_state(run_id)
-    payload = dict(job.get("payload") or {})
-    try:
-        _merge_async_backtest_job(
-            run_id,
-            job,
-            status="running",
-            pid=os.getpid(),
-            worker_started_at=_now_text(),
-        )
-        if job_kind == "single":
-            out = _run_single_backtest_worker(payload)
-        else:
-            out = _run_comparison_backtest_worker(payload)
-        out_error = str(out.get("error", "") or "")
-        if not out_error:
-            nested = out.get("result")
-            if isinstance(nested, dict):
-                out_error = str(nested.get("error", "") or "")
-        _merge_async_backtest_job(
-            run_id,
-            job,
-            status="success" if out.get("success") else "failed",
-            result=out,
-            error=out_error if not out.get("success") else "",
-            traceback=str(out.get("traceback", "")) if not out.get("success") else "",
-            ended_at=_now_ts(),
-            pid=os.getpid(),
-        )
-        return 0 if out.get("success") else 1
-    except Exception:
-        _merge_async_backtest_job(
-            run_id,
-            job,
-            status="failed",
-            error="后台回测 worker crashed",
-            traceback=traceback.format_exc(),
-            ended_at=_now_ts(),
-            pid=os.getpid(),
-        )
-        return 1
+    return runtime_run_async_backtest_worker_main(
+        load_async_backtest_state=_load_async_backtest_state,
+        merge_async_backtest_job=_merge_async_backtest_job,
+        run_single_backtest_worker=_run_single_backtest_worker,
+        run_comparison_backtest_worker=_run_comparison_backtest_worker,
+        now_text=_now_text,
+        now_ts=_now_ts,
+        record_backtest_chain=lambda **kwargs: service_record_backtest_result_chain(
+            connect_db=_connect_permanent_db,
+            code_root=Path(os.path.dirname(os.path.abspath(__file__))),
+            **kwargs,
+        ),
+    )
 
 st.set_page_config(
     page_title="Airivo Quant Decision System",
@@ -3160,7 +2846,12 @@ def _airivo_refresh_realized_outcomes(db_path: str, lookback_days: int = 120) ->
     )
 
 
-def _render_airivo_feedback_workbench(db_path: str, default_bucket: str = "manual_review") -> None:
+def _render_airivo_feedback_workbench(
+    db_path: str,
+    default_bucket: str = "manual_review",
+    preloaded_snapshot: Dict[str, Any] | None = None,
+    preloaded_pending_rows: pd.DataFrame | None = None,
+) -> None:
     runtime_render_airivo_feedback_workbench(
         db_path=db_path,
         default_bucket=default_bucket,
@@ -3175,6 +2866,8 @@ def _render_airivo_feedback_workbench(db_path: str, default_bucket: str = "manua
         update_feedback_row=_airivo_update_feedback_row,
         apply_batch_feedback_action=_airivo_apply_batch_feedback_action,
         refresh_realized_outcomes=_airivo_refresh_realized_outcomes,
+        preloaded_snapshot=preloaded_snapshot,
+        preloaded_pending_rows=preloaded_pending_rows,
     )
 
 
@@ -4114,7 +3807,10 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
     bonus_global, bonus_stock_map, top_list_set, top_inst_set, bonus_industry_map = _load_external_bonus_maps(conn)
     conn.close()
 
-    combo_start = (datetime.now() - timedelta(days=lookback_days + 30)).strftime("%Y%m%d")
+    # Calendar days undercount trading rows around long holidays; keep the
+    # fetch window wide enough for the 80-row combo history gate.
+    combo_history_days = max(int(lookback_days) + 60, 140)
+    combo_start = (datetime.now() - timedelta(days=combo_history_days)).strftime("%Y%m%d")
     combo_end = datetime.now().strftime("%Y%m%d")
 
     ind_vals: Dict[str, List[float]] = {}
@@ -4158,43 +3854,16 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
         if production_only:
             scores["v4"] = None
             scores["v7"] = None
-        active_keys = [k for k, v in scores.items() if (v is not None and float(weights.get(k, 0.0)) > 0.0)]
-        if not active_keys:
-            return None
-        agree_count = sum(
-            1
-            for key in active_keys
-            for val in [scores.get(key)]
-            if val is not None and val >= score_thresholds.get(key, combo_threshold)
+        consensus_result = runtime_evaluate_combo_score_components(
+            scores=scores,
+            thresholds=score_thresholds,
+            weights=weights,
+            combo_threshold=combo_threshold,
+            min_agree=min_agree,
+            market_env=market_env_combo,
         )
-        required_agree = max(1, min(int(min_agree), len(active_keys)))
-        if agree_count < required_agree:
+        if not consensus_result:
             return None
-
-        weight_sum = sum(weights[k] for k in active_keys)
-        if weight_sum <= 0:
-            return None
-        weighted_score = sum((scores[k] * weights[k]) for k in active_keys if scores[k] is not None) / weight_sum
-
-        score_list = [scores[k] for k in active_keys if scores[k] is not None]
-        score_std = float(np.std(score_list)) if len(score_list) > 1 else 0.0
-        disagree_count = sum(
-            1
-            for key in active_keys
-            for val in [scores.get(key)]
-            if val is not None and val < score_thresholds.get(key, combo_threshold)
-        )
-        penalty = (score_std * disagree_std_weight) + (disagree_count * disagree_count_weight)
-
-        env_multiplier = 1.0
-        if market_env_combo == "bull":
-            env_multiplier = 1.02
-        elif market_env_combo == "bear":
-            env_multiplier = 0.95
-        else:
-            env_multiplier = 0.98
-        adj_factor = 1.0 - market_adjust_strength + (market_adjust_strength * env_multiplier)
-
         extra = _calc_external_bonus(
             row["ts_code"],
             row["industry"],
@@ -4204,26 +3873,18 @@ def _offline_scan_combo(analyzer: "CompleteVolumePriceAnalyzer") -> Tuple[Option
             top_inst_set,
             bonus_industry_map,
         )
-        final_score = (weighted_score * adj_factor) + extra - penalty
-
-        contrib = {
-            "v4贡献": (scores["v4"] * weights["v4"] / weight_sum) if scores["v4"] is not None else 0.0,
-            "v5贡献": (scores["v5"] * weights["v5"] / weight_sum) if scores["v5"] is not None else 0.0,
-            "v7贡献": (scores["v7"] * weights["v7"] / weight_sum) if scores["v7"] is not None else 0.0,
-            "v8贡献": (scores["v8"] * weights["v8"] / weight_sum) if scores["v8"] is not None else 0.0,
-            "v9贡献": (scores["v9"] * weights["v9"] / weight_sum) if scores["v9"] is not None else 0.0,
-        }
-        return {
-            "scores": scores,
-            "agree_count": int(agree_count),
-            "weighted_score": float(weighted_score),
-            "penalty": float(penalty),
-            "adj_factor": float(adj_factor),
-            "extra": float(extra),
-            "final_score": float(final_score),
-            "contrib": contrib,
-            "required_agree": int(required_agree),
-        }
+        return runtime_finalize_combo_scan_score(
+            consensus_result=consensus_result,
+            scores=scores,
+            thresholds=score_thresholds,
+            weights=weights,
+            combo_threshold=combo_threshold,
+            disagree_std_weight=disagree_std_weight,
+            disagree_count_weight=disagree_count_weight,
+            market_adjust_strength=market_adjust_strength,
+            market_env=market_env_combo,
+            external_bonus=extra,
+        )
 
     results = run_stock_scan_pipeline(
         stocks_df=stocks_df,
@@ -7029,128 +6690,11 @@ class CompleteVolumePriceAnalyzer:
             return {'success': False, 'error': str(e), 'strategy': strategy_name, 'stats': {}}
     
     def _calculate_backtest_stats(self, backtest_df: pd.DataFrame, analyzed_count: int, holding_days: int) -> dict:
-        """计算回测统计指标 - v49增强版（更全面的风险和收益指标）"""
-        # 兼容不同回测器字段：优先 signal_strength，缺失时回退到 score
-        if 'signal_strength' not in backtest_df.columns:
-            if 'score' in backtest_df.columns:
-                backtest_df = backtest_df.copy()
-                backtest_df['signal_strength'] = backtest_df['score']
-            else:
-                backtest_df = backtest_df.copy()
-                backtest_df['signal_strength'] = 0.0
-
-        stats = {
-            'total_signals': len(backtest_df),
-            'analyzed_stocks': analyzed_count,
-            'avg_return': float(backtest_df['future_return'].mean()),
-            'median_return': float(backtest_df['future_return'].median()),
-            'win_rate': float((backtest_df['future_return'] > 0).sum() / len(backtest_df) * 100),
-            'max_return': float(backtest_df['future_return'].max()),
-            'min_return': float(backtest_df['future_return'].min()),
-            'avg_holding_days': float(backtest_df['holding_days_realized'].mean()) if 'holding_days_realized' in backtest_df.columns else holding_days,
-        }
-        if 'round_trip_cost_pct' in backtest_df.columns:
-            stats['avg_round_trip_cost_pct'] = float(backtest_df['round_trip_cost_pct'].mean())
-        if 'gross_return' in backtest_df.columns:
-            stats['avg_gross_return'] = float(backtest_df['gross_return'].mean())
-        
-        # 夏普比率
-        std_return = backtest_df['future_return'].std()
-        stats['sharpe_ratio'] = float(stats['avg_return'] / std_return) if std_return > 0 else 0
-        stats['volatility'] = float(std_return)
-        
-        # 盈亏比
-        winning_trades = backtest_df[backtest_df['future_return'] > 0]
-        losing_trades = backtest_df[backtest_df['future_return'] <= 0]
-        
-        if len(losing_trades) > 0:
-            avg_win = winning_trades['future_return'].mean() if len(winning_trades) > 0 else 0
-            avg_loss = abs(losing_trades['future_return'].mean())
-            stats['profit_loss_ratio'] = float(avg_win / avg_loss) if avg_loss > 0 else float('inf')
-        else:
-            stats['profit_loss_ratio'] = float('inf')
-        
-        stats['avg_win'] = float(avg_win) if len(winning_trades) > 0 else 0
-        stats['avg_loss'] = float(avg_loss) if len(losing_trades) > 0 else 0
-        
-        #  高级风险指标
-        # 最大回撤 (Max Drawdown)
-        cumulative_returns = (1 + backtest_df['future_return'] / 100).cumprod()
-        running_max = cumulative_returns.expanding().max()
-        drawdown = (cumulative_returns - running_max) / running_max * 100
-        stats['max_drawdown'] = float(drawdown.min())
-        
-        # Sortino比率 (只考虑下行波动)
-        downside_returns = backtest_df[backtest_df['future_return'] < 0]['future_return']
-        downside_std = downside_returns.std() if len(downside_returns) > 0 else 0
-        stats['sortino_ratio'] = float(stats['avg_return'] / downside_std) if downside_std > 0 else 0
-        
-        # Calmar比率 (年化收益/最大回撤)
-        annualized_return = stats['avg_return'] * (252 / holding_days)  # 年化收益
-        stats['calmar_ratio'] = float(abs(annualized_return / stats['max_drawdown'])) if stats['max_drawdown'] != 0 else 0
-        stats['annualized_return'] = float(annualized_return)
-        
-        # 连续盈亏统计
-        backtest_df_sorted = backtest_df.sort_values('trade_date') if 'trade_date' in backtest_df.columns else backtest_df
-        returns_list = backtest_df_sorted['future_return'].tolist()
-        
-        max_consecutive_wins = 0
-        max_consecutive_losses = 0
-        current_wins = 0
-        current_losses = 0
-        
-        for ret in returns_list:
-            if ret > 0:
-                current_wins += 1
-                current_losses = 0
-                max_consecutive_wins = max(max_consecutive_wins, current_wins)
-            else:
-                current_losses += 1
-                current_wins = 0
-                max_consecutive_losses = max(max_consecutive_losses, current_losses)
-        
-        stats['max_consecutive_wins'] = max_consecutive_wins
-        stats['max_consecutive_losses'] = max_consecutive_losses
-        
-        # 收益分位数
-        stats['return_25_percentile'] = float(backtest_df['future_return'].quantile(0.25))
-        stats['return_75_percentile'] = float(backtest_df['future_return'].quantile(0.75))
-        
-        # 期望值 (Expected Value)
-        win_rate_decimal = stats['win_rate'] / 100
-        stats['expected_value'] = float(
-            win_rate_decimal * stats['avg_win'] + (1 - win_rate_decimal) * stats['avg_loss']
+        return runtime_calculate_backtest_stats(
+            backtest_df,
+            analyzed_count=analyzed_count,
+            holding_days=holding_days,
         )
-        
-        # 分强度统计
-        strength_bins = [0, 60, 65, 70, 75, 80, 85, 90, 100]
-        strength_labels = ['<60', '60-65', '65-70', '70-75', '75-80', '80-85', '85-90', '90+']
-        
-        backtest_df['strength_bin'] = pd.cut(
-            backtest_df['signal_strength'],
-            bins=strength_bins,
-            labels=strength_labels,
-            include_lowest=True
-        )
-        
-        strength_performance = {}
-        for label in strength_labels:
-            subset = backtest_df[backtest_df['strength_bin'] == label]
-            if len(subset) > 0:
-                strength_performance[label] = {
-                    'count': int(len(subset)),
-                    'avg_return': float(subset['future_return'].mean()),
-                    'win_rate': float((subset['future_return'] > 0).sum() / len(subset) * 100),
-                    'max_return': float(subset['future_return'].max()),
-                    'min_return': float(subset['future_return'].min())
-                }
-        
-        stats['strength_performance'] = strength_performance
-        
-        #  计算资金曲线数据 (用于后续绘制)
-        stats['cumulative_returns'] = cumulative_returns.tolist()[-100:] if len(cumulative_returns) > 100 else cumulative_returns.tolist()
-        
-        return stats
     
     def _backtest_with_real_evaluator_v4(self, df: pd.DataFrame, sample_size: int = 800, holding_days: int = 5,
                                          min_score: float = 60, max_score: float = 85) -> dict:
@@ -8746,93 +8290,7 @@ class CompleteVolumePriceAnalyzer:
 
     # ===================== v9.0 中线均衡版（算法优化）=====================
     def _calc_v9_score_from_hist(self, hist: pd.DataFrame, industry_strength: float = 0.0) -> dict:
-        """计算v9.0中线均衡版评分（资金流/动量/趋势/波动/成交）"""
-        if hist is None or hist.empty or len(hist) < 80:
-            return {"score": 0.0, "details": {}}
-
-        h = _ensure_price_aliases(hist).sort_values("trade_date")
-        close_col = "close_price" if "close_price" in h.columns else ("close" if "close" in h.columns else "")
-        if not close_col:
-            return {"score": 0.0, "details": {}}
-        close = pd.to_numeric(h[close_col], errors="coerce").ffill()
-        vol = pd.to_numeric(h.get("vol", pd.Series(dtype=float)), errors="coerce").fillna(0.0)
-        amount = pd.to_numeric(h.get("amount", pd.Series(dtype=float)), errors="coerce").fillna(0.0)
-        pct = pd.to_numeric(h.get("pct_chg", pd.Series(dtype=float)), errors="coerce")
-        if pct.isna().all():
-            pct = close.pct_change() * 100
-
-        ma20 = close.rolling(20).mean()
-        ma60 = close.rolling(60).mean()
-        ma120 = close.rolling(120).mean()
-
-        # 放宽趋势条件：MA20>MA60 且 MA20/MA60 近5日向上
-        trend_strong = bool(ma20.iloc[-1] > ma60.iloc[-1] > ma120.iloc[-1])
-        trend_ok = bool((ma20.iloc[-1] > ma60.iloc[-1]) and (ma20.iloc[-1] > ma20.iloc[-5]) and (ma60.iloc[-1] >= ma60.iloc[-5]))
-
-        momentum_20 = (close.iloc[-1] / close.iloc[-21] - 1.0) if len(close) > 21 else 0.0
-        momentum_60 = (close.iloc[-1] / close.iloc[-61] - 1.0) if len(close) > 61 else 0.0
-
-        vol_ratio = (vol.iloc[-1] / vol.tail(20).mean()) if vol.tail(20).mean() > 0 else 0.0
-
-        # 资金流向（用成交额与涨跌符号近似）
-        flow_sign = pct.fillna(0).apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
-        flow_val = (amount * flow_sign).tail(20).sum()
-        flow_base = amount.tail(20).sum() if amount.tail(20).sum() > 0 else 1.0
-        flow_ratio = flow_val / flow_base
-
-        # 波动率（20日）
-        vol_20 = pct.tail(20).std() / 100.0 if pct.tail(20).std() is not None else 0.0
-
-        # 评分模块（总分100）
-        # 放宽资金流与量能门槛
-        fund_score = max(0.0, min(20.0, (flow_ratio + 0.03) / 0.12 * 20.0))
-        volume_score = max(0.0, min(15.0, (vol_ratio - 0.5) / 1.0 * 15.0))
-        # 放宽动量阈值
-        momentum_score = max(0.0, min(8.0, momentum_20 * 100 / 8.0 * 8.0)) + \
-                         max(0.0, min(7.0, momentum_60 * 100 / 16.0 * 7.0))
-        sector_score = max(0.0, min(15.0, (industry_strength + 2.0) / 6.0 * 15.0))
-
-        # 放宽波动率打分区间（低波动不再被明显扣分）
-        if vol_20 <= 0.03:
-            vola_score = 12.0
-        elif vol_20 <= 0.06:
-            vola_score = 15.0
-        elif vol_20 <= 0.10:
-            vola_score = 8.0
-        else:
-            vola_score = 0.0
-
-        trend_score = 15.0 if trend_strong else (10.0 if trend_ok else 0.0)
-
-        # 近期回撤惩罚，避免中线回撤过大
-        rolling_peak = close.cummax()
-        drawdown = (rolling_peak - close) / rolling_peak
-        max_dd = float(drawdown.tail(60).max())
-        dd_penalty = 0.0
-        if max_dd > 0.15:
-            dd_penalty = min(10.0, (max_dd - 0.15) / 0.15 * 10.0)
-
-        total_score = fund_score + volume_score + momentum_score + sector_score + vola_score + trend_score - dd_penalty
-        # 稳定性修正：避免负分
-        if total_score < 0:
-            total_score = 0.0
-
-        return {
-            "score": round(total_score, 2),
-            "details": {
-                "fund_score": round(fund_score, 2),
-                "volume_score": round(volume_score, 2),
-                "momentum_score": round(momentum_score, 2),
-                "sector_score": round(sector_score, 2),
-                "volatility_score": round(vola_score, 2),
-                "trend_score": round(trend_score, 2),
-                "flow_ratio": round(flow_ratio, 4),
-                "vol_ratio": round(vol_ratio, 3),
-                "momentum_20": round(momentum_20 * 100, 2),
-                "momentum_60": round(momentum_60 * 100, 2),
-                "vol_20": round(vol_20 * 100, 2),
-            },
-        }
+        return runtime_calculate_v9_score_from_history(hist, industry_strength=industry_strength)
 
     def backtest_v9_midterm(self, df: pd.DataFrame, sample_size: int = 500,
                             holding_days: int = 15, score_threshold: float = 60.0) -> dict:
@@ -8927,39 +8385,25 @@ class CompleteVolumePriceAnalyzer:
 
             combo_evo = _load_evolve_params("combo_best.json")
             combo_params = (combo_evo.get("params", {}) if isinstance(combo_evo, dict) else {}) or {}
-            w_v5 = float(combo_params.get("w_v5", 0.33))
-            w_v8 = float(combo_params.get("w_v8", 0.34))
-            w_v9 = float(combo_params.get("w_v9", 0.33))
-            thr_v5 = float(combo_params.get("thr_v5", 60))
-            thr_v8 = float(combo_params.get("thr_v8", 65))
-            thr_v9 = float(combo_params.get("thr_v9", 60))
-            combo_threshold = float(combo_params.get("combo_threshold", combo_threshold))
-            min_agree = int(combo_params.get("min_agree", min_agree))
             production_only = str(os.getenv("COMBO_PRODUCTION_ONLY", "1")) == "1"
             market_env = "oscillation"
             try:
                 market_env = str(self.get_market_environment()).strip().lower()
             except Exception:
                 market_env = "oscillation"
-            if market_env not in {"bull", "bear", "oscillation"}:
-                market_env = "oscillation"
-
-            # 生产模式下按市场状态切换基础权重，再叠加策略健康乘子。
-            if production_only:
-                base_by_env = {
-                    "bull": {"v5": 0.55, "v8": 0.10, "v9": 0.35},
-                    "oscillation": {"v5": 0.45, "v8": 0.05, "v9": 0.50},
-                    "bear": {"v5": 0.20, "v8": 0.20, "v9": 0.60},
-                }
-                env_w = base_by_env.get(market_env, base_by_env["oscillation"])
-                w_v5, w_v8, w_v9 = float(env_w["v5"]), float(env_w["v8"]), float(env_w["v9"])
-            health_mul = _production_strategy_health_multipliers()
-            w_v5 = float(w_v5) * float(health_mul.get("v5", 1.0))
-            w_v8 = float(w_v8) * float(health_mul.get("v8", 1.0))
-            w_v9 = float(w_v9) * float(health_mul.get("v9", 1.0))
-            wsum = float(w_v5 + w_v8 + w_v9)
-            if wsum > 1e-9:
-                w_v5, w_v8, w_v9 = (w_v5 / wsum), (w_v8 / wsum), (w_v9 / wsum)
+            combo_config = runtime_resolve_combo_signal_config(
+                combo_params=combo_params,
+                combo_threshold=combo_threshold,
+                min_agree=min_agree,
+                market_env=market_env,
+                production_only=production_only,
+                health_multipliers=_production_strategy_health_multipliers(),
+            )
+            thresholds = combo_config["thresholds"]
+            weights = combo_config["weights"]
+            combo_threshold = float(combo_config["combo_threshold"])
+            min_agree = int(combo_config["min_agree"])
+            market_env = str(combo_config["market_env"])
 
             index_data = None
             try:
@@ -8978,66 +8422,19 @@ class CompleteVolumePriceAnalyzer:
             engine = UnifiedBacktestEngine(df, sample_size=sample_size, holding_days=holding_days)
 
             def _signal_combo(ts_code: str, g: pd.DataFrame, i: int, current_data: pd.DataFrame) -> Optional[Dict[str, Any]]:
-                current_data = _ensure_price_aliases(current_data.copy())
-                industry = str(current_data['industry'].iloc[-1]) if ('industry' in current_data.columns and len(current_data) > 0) else ""
-
-                v5_score = None
-                v8_score = None
-                v9_score = None
-                try:
-                    v5_res = self.evaluator_v5.evaluate_stock_v4(current_data)
-                    if v5_res and v5_res.get("success"):
-                        v5_score = float(v5_res.get("final_score", 0))
-                except Exception:
-                    pass
-                try:
-                    v8_res = self.evaluator_v8.evaluate_stock_v8(
-                        current_data,
-                        ts_code=ts_code,
-                        index_data=index_data,
-                        industry=industry
-                    )
-                    if v8_res and v8_res.get("success"):
-                        v8_score = float(v8_res.get("final_score", 0))
-                except Exception:
-                    pass
-                try:
-                    v9_info = self._calc_v9_score_from_hist(current_data, industry_strength=0.0)
-                    if v9_info:
-                        v9_score = float(v9_info.get("score", 0))
-                except Exception:
-                    pass
-
-                scores = {"v5": v5_score, "v8": v8_score, "v9": v9_score}
-                thresholds = {"v5": thr_v5, "v8": thr_v8, "v9": thr_v9}
-                weights = {"v5": w_v5, "v8": w_v8, "v9": w_v9}
-                active_keys = [k for k, v in scores.items() if (v is not None and float(weights.get(k, 0.0)) > 0.0)]
-                if not active_keys:
-                    return None
-                required_agree = max(1, min(int(min_agree), len(active_keys)))
-                agree = sum(1 for k in active_keys if (scores.get(k) is not None and float(scores.get(k)) >= float(thresholds[k])))
-                if agree < required_agree:
-                    return None
-
-                valid_keys = list(active_keys)
-                weight_sum = sum(weights[k] for k in valid_keys)
-                if weight_sum <= 1e-9:
-                    return None
-                consensus = sum(float(scores[k]) * float(weights[k]) for k in valid_keys) / weight_sum
-                if consensus < combo_threshold:
-                    return None
-                return {
-                    "signal_strength": consensus,
-                    "v5_score": v5_score if v5_score is not None else np.nan,
-                    "v8_score": v8_score if v8_score is not None else np.nan,
-                    "v9_score": v9_score if v9_score is not None else np.nan,
-                    "agree_count": agree,
-                    "required_agree": int(required_agree),
-                    "w_v5": float(w_v5),
-                    "w_v8": float(w_v8),
-                    "w_v9": float(w_v9),
-                    "market_env": str(market_env),
-                }
+                return runtime_evaluate_combo_signal(
+                    ts_code=ts_code,
+                    current_data=current_data,
+                    v5_evaluator=self.evaluator_v5,
+                    v8_evaluator=self.evaluator_v8,
+                    v9_score_fn=lambda hist: self._calc_v9_score_from_hist(hist, industry_strength=0.0),
+                    index_data=index_data,
+                    thresholds=thresholds,
+                    weights=weights,
+                    combo_threshold=combo_threshold,
+                    min_agree=min_agree,
+                    market_env=market_env,
+                )
 
             backtest_df, analyzed = engine.run_last_point(
                 min_rows=80 + holding_days,
@@ -9095,7 +8492,7 @@ class CompleteVolumePriceAnalyzer:
                     "一致数量": int(r.get("agree_count", 0)),
                     "一致门槛": int(r.get("required_agree", min_agree)),
                     "行业": str(r.get("行业", "未知")),
-                    "权重(v5/v8/v9)": f"{float(r.get('w_v5', w_v5)):.2f}/{float(r.get('w_v8', w_v8)):.2f}/{float(r.get('w_v9', w_v9)):.2f}",
+                    "权重(v5/v8/v9)": f"{float(r.get('w_v5', weights.get('v5', 0.0))):.2f}/{float(r.get('w_v8', weights.get('v8', 0.0))):.2f}/{float(r.get('w_v9', weights.get('v9', 0.0))):.2f}",
                     f"{holding_days}天收益": f"{float(r.get('future_return', 0)):.2f}%",
                 })
             return {
@@ -10932,127 +10329,52 @@ def main():
     
     # 侧边栏
     with st.sidebar:
-        st.header("系统状态")
-        st.caption(f"pid {_fp['pid']} / {_fp['app_file']}")
-        
-        status = db_manager.get_database_status()
-        st.caption(f"当前数据库：`{getattr(db_manager, 'db_path', PERMANENT_DB_PATH)}`")
-        
-        if 'error' not in status:
-            st.metric("活跃股票", f"{status.get('active_stocks', 0):,} 只")
-            st.metric("行业板块", f"{status.get('total_industries', 0)} 个")
-            st.metric("数据量", f"{status.get('total_records', 0):,} 条")
-            st.metric("数据库", f"{status.get('db_size_gb', 0):.2f} GB")
-            
-            st.divider()
-            
-            st.markdown("**数据状态**")
-            st.markdown(f"- 最新：{status.get('max_date', 'N/A')}")
-            
-            if status.get('is_fresh'):
-                st.success(f"最新（{status.get('days_old', 0)}天前）")
-            else:
-                st.warning(f"需更新（{status.get('days_old', 999)}天前）")
-        else:
-            st.error(f"{status['error']}")
-
-        # 侧边栏健康警报（读取最近报告）
-        try:
-            report_path = os.path.join(os.path.dirname(__file__), "evolution", "health_report.json")
-            if os.path.exists(report_path):
-                with open(report_path, "r", encoding="utf-8") as f:
-                    report = json.load(f)
-                report_db_path = (((report or {}).get("stats") or {}).get("db_path") or "").strip()
-                current_db_path = str(getattr(db_manager, "db_path", "") or "").strip()
-                same_db = (not report_db_path) or (report_db_path == current_db_path)
-                if report and same_db and not report.get("ok", True):
-                    warnings = [str(w) for w in (report.get("warnings", []) or [])]
-                    risk_stale = bool(((report.get("stats") or {}).get("risk_stale", False)))
-                    if risk_stale:
-                        warnings = [w for w in warnings if not w.startswith("risk sentinel=")]
-                    preview = "\n".join(warnings[:3]) if warnings else "存在异常"
-                    if warnings:
-                        st.warning(f"健康警报\n{preview}")
-        except Exception:
-            pass
-        
-        st.divider()
-        st.caption("生产策略：v9 / v8 / v5 / combo")
-        session_meta = _airivo_session_meta()
-        role_label_map = {"viewer": "Viewer", "operator": "Operator", "admin": "Admin"}
-        st.caption("主流程：今日决策 -> 执行中心 -> 策略演进")
-        st.caption(
-            f"当前会话：{session_meta.get('display_name') or session_meta.get('username') or 'unknown'}"
-            f" · {role_label_map.get(session_meta.get('role', 'viewer'), 'Viewer')}"
+        status = runtime_render_v49_sidebar(
+            st=st,
+            db_manager=db_manager,
+            permanent_db_path=PERMANENT_DB_PATH,
+            fingerprint=_fp,
+            session_meta=_airivo_session_meta(),
+            app_dir=os.path.dirname(__file__),
         )
     st.divider()
-    
-    # 主入口只保留三层：生产 / 研究 / 运维。
-    _tabs = [
-        " 生产后台",
-        " 研究后台",
-        " 运维后台",
-    ]
-    _enable_tab_persistence()
-    tab_production_root, tab_research_root, tab_ops_root = st.tabs([t.strip() for t in _tabs])
-    desired_main_tab = st.session_state.pop("desired_main_tab", "")
-    if desired_main_tab:
-        _main_tab_map = {
-            "今日决策": "生产后台",
-            "执行中心": "生产后台",
-            "策略演进": "生产后台",
-            "研究与回测": "研究后台",
-            "智能交易助手": "研究后台",
-            "数据与系统": "运维后台",
-        }
-        _focus_tab_by_text(_main_tab_map.get(desired_main_tab, desired_main_tab))
+
+    # 单路由渲染：避免 Streamlit tabs 把所有工作面在每次交互时都全量执行。
+    runtime_apply_v49_desired_routes(st.session_state)
+
     _restore_recent_async_task_refs()
-    # AI 智能选股改为实验策略入口内按需显示（默认不展示）。
     show_ai_signal_panel = False
+    airivo_snapshot: Dict[str, Any] = {}
 
-    with tab_production_root:
-        st.caption("只保留当天真正要做的事：今日决策、执行中心、策略演进。")
-        tab_today, tab_execution, tab_evolution = st.tabs(["今日决策", "执行中心", "策略演进"])
-        desired_production_tab = st.session_state.pop("desired_production_tab", "")
-        if desired_production_tab:
-            _focus_tab_by_text(desired_production_tab)
+    current_routes = runtime_render_v49_route_selector(st)
 
-    with tab_research_root:
-        st.caption("研究后台不参与当天生产决策，专门放回测、实验策略、辅助分析。")
-        tab_backtest, tab_pool, tab_sector, tab_assistant = st.tabs(["回测与参数", "股票池分析", "板块与热点", "智能助手"])
-        desired_research_tab = st.session_state.pop("desired_research_tab", "")
-        if desired_research_tab:
-            _focus_tab_by_text(desired_research_tab)
-        tab_ai = tab_assistant
-
-    with tab_ops_root:
-        st.caption("运维后台只放数据、健康门禁、任务与日志。")
-        tab_data, tab_guide = st.tabs(["数据与系统", "任务与日志"])
-        desired_ops_tab = st.session_state.pop("desired_ops_tab", "")
-        if desired_ops_tab:
-            _focus_tab_by_text(desired_ops_tab)
-
-    with tab_guide:
-        _render_async_task_dashboard(limit=12)
-
-    with tab_execution:
-        _render_airivo_execution_center(PERMANENT_DB_PATH)
-
-    # ==================== Tab 1:  今日决策 ====================
-    with tab_today:
-        airivo_snapshot = _render_airivo_production_dashboard(PERMANENT_DB_PATH)
-        render_today_console_panel(
+    runtime_render_v49_task_logs_entry(
+        routes=current_routes,
+        render_async_task_dashboard=_render_async_task_dashboard,
+        limit=12,
+    )
+    runtime_render_v49_execution_center_entry(
+        routes=current_routes,
+        render_airivo_execution_center=_render_airivo_execution_center,
+        permanent_db_path=PERMANENT_DB_PATH,
+    )
+    today_entry = runtime_render_v49_today_decision_entry(
+        routes=current_routes,
+        airivo_snapshot=airivo_snapshot,
+        show_ai_signal_panel=show_ai_signal_panel,
+        dependencies=TodayDecisionDependencies(
             permanent_db_path=PERMANENT_DB_PATH,
-            airivo_snapshot=airivo_snapshot if isinstance(airivo_snapshot, dict) else {},
+            render_airivo_production_dashboard=_render_airivo_production_dashboard,
+            render_today_console_panel=render_today_console_panel,
+            render_today_advanced_ops_panel=render_today_advanced_ops_panel,
+            render_today_strategy_selector_panel=render_today_strategy_selector_panel,
+            render_today_strategy_dispatcher=render_today_strategy_dispatcher,
+            production_strategies=production_strategies,
+            experimental_strategies=experimental_strategies,
             vp_analyzer=vp_analyzer,
-            status=status if isinstance(status, dict) else None,
+            status=status,
             set_focus_once=_set_focus_once,
             render_today_execution_queues=_render_airivo_today_execution_queues,
-        )
-
-        render_today_advanced_ops_panel(
-            permanent_db_path=PERMANENT_DB_PATH,
-            airivo_snapshot=airivo_snapshot if isinstance(airivo_snapshot, dict) else {},
             airivo_has_role=_airivo_has_role,
             airivo_guard_action=_airivo_guard_action,
             airivo_append_action_audit=_airivo_append_action_audit,
@@ -11063,23 +10385,10 @@ def main():
             save_production_unified_profile=_save_production_unified_profile,
             build_unified_from_latest_evolve=_build_unified_from_latest_evolve,
             get_production_compare_params=_get_production_compare_params,
-        )
-
-        strategy_mode, show_ai_signal_panel = render_today_strategy_selector_panel(
-            production_strategies=production_strategies,
-            experimental_strategies=experimental_strategies,
-            show_ai_signal_panel=show_ai_signal_panel,
-        )
-        
-        show_ai_signal_panel = render_today_strategy_dispatcher(
-            strategy_mode=strategy_mode,
-            show_ai_signal_panel=show_ai_signal_panel,
-            vp_analyzer=vp_analyzer,
             logger=logger,
-            permanent_db_path=PERMANENT_DB_PATH,
             db_manager=db_manager,
             bulk_history_limit=BULK_HISTORY_LIMIT,
-            strict_full_market_mode=bool(strict_full_market_mode),
+            strict_full_market_mode=bool(st.session_state.get("strict_full_market_mode", False)),
             v4_evaluator_available=V4_EVALUATOR_AVAILABLE,
             v5_evaluator_available=V5_EVALUATOR_AVAILABLE,
             v6_evaluator_available=V6_EVALUATOR_AVAILABLE,
@@ -11093,9 +10402,6 @@ def main():
             sync_scan_task_with_params=_sync_scan_task_with_params,
             render_scan_param_hint=_render_scan_param_hint,
             render_front_scan_summary=_render_front_scan_summary,
-            has_role=_airivo_has_role,
-            guard_action=_airivo_guard_action,
-            append_action_audit=_airivo_append_action_audit,
             detect_heavy_background_job=_detect_heavy_background_job,
             start_async_scan_task=_start_async_scan_task,
             mark_scan_submitted=_mark_scan_submitted,
@@ -11129,119 +10435,81 @@ def main():
             df_to_csv_bytes=_df_to_csv_bytes,
             render_cached_scan_results=_render_cached_scan_results,
             render_async_scan_status=_render_async_scan_status,
-        )
+        ),
+    )
+    airivo_snapshot = today_entry["airivo_snapshot"]
+    show_ai_signal_panel = today_entry["show_ai_signal_panel"]
 
-    # ==================== Tab 2: 股票池分析 ====================
-    with tab_pool:
-        _render_page_header(
-            " 股票池分析",
-            "多策略结果汇总 · 候选池分层 · 导出复盘",
-            tag="Pool Workspace",
-        )
-        _render_stock_pool_workspace()
-
-    # ==================== Tab 3:  板块热点分析 ====================
-    with tab_sector:
-        render_sector_flow_page(
+    runtime_render_v49_research_light_entries(
+        routes=current_routes,
+        show_ai_signal_panel=show_ai_signal_panel,
+        render_page_header=_render_page_header,
+        render_stock_pool_workspace=_render_stock_pool_workspace,
+        render_sector_flow_page=render_sector_flow_page,
+        market_scanner_cls=MarketScanner,
+        render_ai_signal_page=render_ai_signal_page,
+        load_evolve_params=_load_evolve_params,
+        vp_analyzer=vp_analyzer,
+        connect_permanent_db=_connect_permanent_db,
+        apply_filter_mode=_apply_filter_mode,
+        apply_multi_period_filter=_apply_multi_period_filter,
+        permanent_db_path=PERMANENT_DB_PATH,
+        add_reason_summary=_add_reason_summary,
+        get_sim_account=_get_sim_account,
+        auto_buy_ai_stocks=_auto_buy_ai_stocks,
+        render_result_overview=_render_result_overview,
+        signal_density_hint=_signal_density_hint,
+        standardize_result_df=_standardize_result_df,
+        df_to_csv_bytes=_df_to_csv_bytes,
+    )
+    runtime_render_v49_backtest_entry(
+        routes=current_routes,
+        st=st,
+        dependencies=BacktestEntryDependencies(
             render_page_header=_render_page_header,
-            market_scanner_cls=MarketScanner,
-        )
-
-    # ==================== Tab 3:  回测系统 ====================
-    with tab_backtest:
-        _render_page_header(
-            " 回测中心",
-            "单策略深度回测 · 参数优化 · 横向对比（辅助）",
-            tag="Backtest Lab",
-        )
-        _render_production_backtest_audit_panel()
-        st.markdown("---")
-        
-        # 选择回测模式
-        _backtest_modes = [" 单策略深度回测", " 参数优化", " 策略横向对比（辅助）"]
-        backtest_mode = st.radio(
-            "选择回测模式",
-            [m.strip() for m in _backtest_modes],
-            horizontal=True,
-            help="优先做单策略深度回测；横向对比仅用于辅助校验。",
-        )
-
-        if backtest_mode == "策略横向对比（辅助）":
-            render_strategy_comparison_page(
-                vp_analyzer=vp_analyzer,
-                get_production_compare_params=_get_production_compare_params,
-                start_async_backtest_job=_start_async_backtest_job,
-                connect_permanent_db=_connect_permanent_db,
-                get_async_backtest_job=_get_async_backtest_job,
-                is_pid_alive=_is_pid_alive,
-                merge_async_backtest_job=_merge_async_backtest_job,
-                now_ts=_now_ts,
-                v7_evaluator_available=V7_EVALUATOR_AVAILABLE,
-                v8_evaluator_available=V8_EVALUATOR_AVAILABLE,
-            )
-        
-        elif backtest_mode == "单策略深度回测":
-            render_single_backtest_page(
-                vp_analyzer=vp_analyzer,
-                load_evolve_params=_load_evolve_params,
-                airivo_has_role=_airivo_has_role,
-                airivo_guard_action=_airivo_guard_action,
-                airivo_append_action_audit=_airivo_append_action_audit,
-                start_async_backtest_job=_start_async_backtest_job,
-                set_sim_meta=_set_sim_meta,
-                auto_backtest_scheduler_tick=_auto_backtest_scheduler_tick,
-                connect_permanent_db=_connect_permanent_db,
-                ensure_price_aliases=_ensure_price_aliases,
-                get_async_backtest_job=_get_async_backtest_job,
-                is_pid_alive=_is_pid_alive,
-                merge_async_backtest_job=_merge_async_backtest_job,
-                now_ts=_now_ts,
-                now_text=_now_text,
-                pick_tradable_segment_from_strength=_pick_tradable_segment_from_strength,
-                apply_tradable_segment_to_strategy_session=_apply_tradable_segment_to_strategy_session,
-                build_calibrated_strength_df=_build_calibrated_strength_df,
-            )
-        
-        else:  # 参数优化
-            render_parameter_optimization_page(
-                vp_analyzer=vp_analyzer,
-                connect_permanent_db=_connect_permanent_db,
-                ensure_price_aliases=_ensure_price_aliases,
-                airivo_has_role=_airivo_has_role,
-                airivo_guard_action=_airivo_guard_action,
-                airivo_append_action_audit=_airivo_append_action_audit,
-                production_baseline_params=_production_baseline_params,
-                get_production_compare_params=_get_production_compare_params,
-                apply_production_baseline_to_session=_apply_production_baseline_to_session,
-                save_production_unified_profile=_save_production_unified_profile,
-            )
-
-    # ==================== Tab 4:  AI智能选股 ====================
-    with tab_ai:
-        render_ai_signal_page(
-            show_ai_signal_panel=show_ai_signal_panel,
-            render_page_header=_render_page_header,
-            load_evolve_params=_load_evolve_params,
+            render_production_backtest_audit_panel=_render_production_backtest_audit_panel,
+            render_strategy_comparison_page=render_strategy_comparison_page,
+            render_single_backtest_page=render_single_backtest_page,
+            render_parameter_optimization_page=render_parameter_optimization_page,
             vp_analyzer=vp_analyzer,
+            get_production_compare_params=_get_production_compare_params,
+            start_async_backtest_job=_start_async_backtest_job,
             connect_permanent_db=_connect_permanent_db,
-            apply_filter_mode=_apply_filter_mode,
-            apply_multi_period_filter=_apply_multi_period_filter,
-            permanent_db_path=PERMANENT_DB_PATH,
-            add_reason_summary=_add_reason_summary,
-            get_sim_account=_get_sim_account,
-            auto_buy_ai_stocks=_auto_buy_ai_stocks,
-            render_result_overview=_render_result_overview,
-            signal_density_hint=_signal_density_hint,
-            standardize_result_df=_standardize_result_df,
-            df_to_csv_bytes=_df_to_csv_bytes,
-        )
-
-    # ==================== Tab 5:  数据与参数管理 ====================
-    with tab_evolution:
-        _render_airivo_strategy_evolution(PERMANENT_DB_PATH, airivo_snapshot if isinstance(airivo_snapshot, dict) else {})
-
-    with tab_data:
-        render_data_ops_core_page(
+            get_async_backtest_job=_get_async_backtest_job,
+            is_pid_alive=_is_pid_alive,
+            merge_async_backtest_job=_merge_async_backtest_job,
+            now_ts=_now_ts,
+            v7_evaluator_available=V7_EVALUATOR_AVAILABLE,
+            v8_evaluator_available=V8_EVALUATOR_AVAILABLE,
+            load_evolve_params=_load_evolve_params,
+            airivo_has_role=_airivo_has_role,
+            airivo_guard_action=_airivo_guard_action,
+            airivo_append_action_audit=_airivo_append_action_audit,
+            set_sim_meta=_set_sim_meta,
+            auto_backtest_scheduler_tick=_auto_backtest_scheduler_tick,
+            ensure_price_aliases=_ensure_price_aliases,
+            now_text=_now_text,
+            pick_tradable_segment_from_strength=_pick_tradable_segment_from_strength,
+            apply_tradable_segment_to_strategy_session=_apply_tradable_segment_to_strategy_session,
+            build_calibrated_strength_df=_build_calibrated_strength_df,
+            production_baseline_params=_production_baseline_params,
+            apply_production_baseline_to_session=_apply_production_baseline_to_session,
+            save_production_unified_profile=_save_production_unified_profile,
+        ),
+    )
+    airivo_snapshot = runtime_render_v49_strategy_evolution_entry(
+        routes=current_routes,
+        permanent_db_path=PERMANENT_DB_PATH,
+        airivo_snapshot=airivo_snapshot,
+        render_airivo_production_dashboard=_render_airivo_production_dashboard,
+        render_airivo_strategy_evolution=_render_airivo_strategy_evolution,
+    )
+    runtime_render_v49_data_ops_entry(
+        routes=current_routes,
+        dependencies=DataOpsEntryDependencies(
+            render_data_ops_core_page=render_data_ops_core_page,
+            render_data_ops_status_page=render_data_ops_status_page,
+            render_data_ops_update_page=render_data_ops_update_page,
             render_page_header=_render_page_header,
             get_auto_evolve_status=_get_auto_evolve_status,
             load_production_report_by_strategy=_load_production_report_by_strategy,
@@ -11264,106 +10532,38 @@ def main():
             build_weekly_rebalance_quality_dashboard=_build_weekly_rebalance_quality_dashboard,
             load_latest_auto_rebalance_log=_load_latest_auto_rebalance_log,
             db_manager=db_manager,
-        )
-
-        render_data_ops_status_page(
             connect_permanent_db=_connect_permanent_db,
             rollback_latest_promoted_params=_rollback_latest_promoted_params,
             fund_bonus_enabled=_fund_bonus_enabled,
             get_last_trade_date_from_tushare=_get_last_trade_date_from_tushare,
             compute_health_report=_compute_health_report,
             run_funding_repair=_run_funding_repair,
-            airivo_has_role=_airivo_has_role,
-            airivo_guard_action=_airivo_guard_action,
-            airivo_append_action_audit=_airivo_append_action_audit,
-            db_manager=db_manager,
             permanent_db_path=PERMANENT_DB_PATH,
-        )
-        
-        render_data_ops_update_page(
-            airivo_has_role=_airivo_has_role,
-            airivo_guard_action=_airivo_guard_action,
-            airivo_append_action_audit=_airivo_append_action_audit,
-            db_manager=db_manager,
-        )
-
-    # ==================== Tab 5:  智能交易助手 ====================
-    with tab_assistant:
-        _render_page_header(
-            " 智能交易助手",
-            "半自动化交易 · 每日选股 · 持仓管理 · 止盈止损提醒",
-            tag="Execution",
-        )
-        
-        # 导入交易助手
-        try:
-            from trading_assistant import TradingAssistant
-            
-            # 初始化助手
-            if 'trading_assistant' not in st.session_state:
-                st.session_state.trading_assistant = TradingAssistant(db_path=PERMANENT_DB_PATH)
-            
-            assistant = st.session_state.trading_assistant
-            
-            # 创建子标签页（移除模拟交易，新增单股评分；工作台优先）
-            _assistant_tabs = [" OpenClaw问答", " 交易工作台", " 持仓管理", " 交易记录", " 每日报告", " 配置设置", " 单股评分"]
-            qa_tab, sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5, sub_tab6 = st.tabs([t.strip() for t in _assistant_tabs])
-            desired_assistant_tab = st.session_state.pop("desired_assistant_tab", "")
-            if desired_assistant_tab:
-                _focus_tab_by_text(desired_assistant_tab)
-
-            # ========== 子Tab 0: OpenClaw问答 ==========
-            with qa_tab:
-                from openclaw.assistant import OpenClawStockAssistant
-
-                render_qa_chat_shell(
-                    qa_assistant_cls=OpenClawStockAssistant,
-                    permanent_db_path=PERMANENT_DB_PATH,
-                    set_focus_once=_set_focus_once,
-                )
-
-                render_qa_self_learning_panel(
-                    qa_assistant=st.session_state.openclaw_qa_assistant,
-                    airivo_has_role=_airivo_has_role,
-                    airivo_guard_action=_airivo_guard_action,
-                    airivo_append_action_audit=_airivo_append_action_audit,
-                    set_focus_once=_set_focus_once,
-                )
-
-                render_qa_submission_controller(
-                    qa_assistant=st.session_state.openclaw_qa_assistant,
-                    set_focus_once=_set_focus_once,
-                )
-
-            render_assistant_ops_tabs(
-                sub_tab1=sub_tab1,
-                sub_tab2=sub_tab2,
-                sub_tab3=sub_tab3,
-                sub_tab4=sub_tab4,
-                sub_tab5=sub_tab5,
-                sub_tab6=sub_tab6,
-                assistant=assistant,
-                render_result_overview=_render_result_overview,
-                render_single_stock_eval_tab=render_single_stock_eval_tab,
-                notification_service_cls=NotificationService,
-                airivo_has_role=_airivo_has_role,
-                airivo_guard_action=_airivo_guard_action,
-                airivo_append_action_audit=_airivo_append_action_audit,
-            )
-        
-        except ImportError as e:
-            st.error(f"交易助手模块加载失败: {e}")
-            st.info("请确保 trading_assistant.py 文件存在")
-
-    # ==================== Tab 6:  实战指南 ====================
-    with tab_guide:
-        st.markdown("---")
-        _render_page_header(
-            " 实战操作指南",
-            "系统用法 · 风险提示 · 实战流程",
-            tag="Guide",
-        )
-        # (内容由原 Tab9 填充)
+        ),
+    )
+    runtime_render_v49_trading_assistant_entry(
+        routes=current_routes,
+        st=st,
+        permanent_db_path=PERMANENT_DB_PATH,
+        render_page_header=_render_page_header,
+        focus_tab_by_text=_focus_tab_by_text,
+        set_focus_once=_set_focus_once,
+        render_qa_chat_shell=render_qa_chat_shell,
+        render_qa_self_learning_panel=render_qa_self_learning_panel,
+        render_qa_submission_controller=render_qa_submission_controller,
+        render_assistant_ops_tabs=render_assistant_ops_tabs,
+        render_result_overview=_render_result_overview,
+        render_single_stock_eval_tab=render_single_stock_eval_tab,
+        notification_service_cls=NotificationService,
+        airivo_has_role=_airivo_has_role,
+        airivo_guard_action=_airivo_guard_action,
+        airivo_append_action_audit=_airivo_append_action_audit,
+    )
+    runtime_render_v49_task_guide_entry(
+        routes=current_routes,
+        st=st,
+        render_page_header=_render_page_header,
+    )
 
     # ==========================================================
     #  所有Tab内容已整理完毕，旧代码已清理

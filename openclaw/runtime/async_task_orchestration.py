@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 import os
 import shutil
 import subprocess
+import sys
 import traceback
 import uuid
 from typing import Any, Callable, Dict, List, Tuple
+
+import pandas as pd
 
 
 def launch_async_scan_process(
@@ -62,6 +66,7 @@ def start_async_scan_task(
     persist_async_scan_task: Callable[[str], None],
     launch_async_scan_process: Callable[[str, str, Dict[str, Any], str], Dict[str, Any]],
     merge_async_scan_task: Callable[..., Dict[str, Any]],
+    run_id_factory: Callable[[str], str] | None = None,
 ) -> Tuple[bool, str, str]:
     cleanup_async_scan_tasks()
     for rid, task in list(async_scan_tasks.items()):
@@ -76,7 +81,7 @@ def start_async_scan_task(
         if task.get("strategy") == strategy and task.get("status") == "running":
             return False, f"已有运行中任务：{rid}。请先等待完成或点击“取消当前后台任务”。", str(rid)
 
-    run_id = f"{strategy}_{datetime.now().strftime('%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    run_id = run_id_factory(strategy) if run_id_factory is not None else f"{strategy}_{datetime.now().strftime('%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
     invalidated_ids: List[str] = []
     task_data: Dict[str, Any] = {}
     with async_scan_lock:
@@ -140,6 +145,153 @@ def start_async_scan_task(
     return True, f"已提交后台扫描任务：{run_id}", run_id
 
 
+def run_async_scan_job(
+    *,
+    run_id: str,
+    strategy: str,
+    params: Dict[str, Any],
+    score_col: str,
+    result_dir: str,
+    cancelled_error: str,
+    get_async_scan_task: Callable[[str], Dict[str, Any] | None],
+    update_async_scan_task: Callable[..., None],
+    build_async_scan_env: Callable[[str, Dict[str, Any]], Dict[str, Any]],
+    run_scan: Callable[[str, Dict[str, Any], Dict[str, Any]], Tuple[pd.DataFrame | None, Dict[str, Any]]],
+    now_text: Callable[[], str],
+    now_ts: Callable[[], float],
+    set_current_run_id: Callable[[str], None] | None = None,
+    record_signal_chain: Callable[..., None] | None = None,
+) -> None:
+    current = get_async_scan_task(run_id)
+    if current and str(current.get("status", "")) == "cancelled":
+        return
+    update_async_scan_task(run_id, status="running", stage="scan", progress=1, message="任务已启动")
+    try:
+        os.makedirs(result_dir, exist_ok=True)
+        env_overrides = build_async_scan_env(strategy, params)
+        if set_current_run_id is not None:
+            set_current_run_id(run_id)
+        result_df, meta = run_scan(strategy, params, env_overrides)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        result_csv = os.path.join(result_dir, f"{strategy}_{run_id}_{ts}.csv")
+        meta_json = os.path.join(result_dir, f"{strategy}_{run_id}_{ts}.meta.json")
+        row_count = int(len(result_df)) if isinstance(result_df, pd.DataFrame) else 0
+        if isinstance(result_df, pd.DataFrame):
+            result_df.to_csv(result_csv, index=False)
+        else:
+            result_csv = ""
+        meta_out = {
+            "run_id": run_id,
+            "strategy": strategy,
+            "status": "success",
+            "score_col": score_col,
+            "row_count": row_count,
+            "finished_at": now_text(),
+            "params": params,
+            "meta": meta or {},
+            "result_csv": result_csv,
+            "meta_json": meta_json,
+        }
+        with open(meta_json, "w", encoding="utf-8") as f:
+            json.dump(meta_out, f, ensure_ascii=False, indent=2)
+        if record_signal_chain is not None:
+            record_signal_chain(
+                run_id=run_id,
+                strategy=strategy,
+                params=params,
+                score_col=score_col,
+                result_df=result_df,
+                meta=meta or {},
+                result_csv=result_csv,
+                meta_json=meta_json,
+                row_count=row_count,
+            )
+        update_async_scan_task(
+            run_id,
+            status="success",
+            stage="done",
+            progress=100,
+            message=f"扫描完成：{row_count} 条结果",
+            ended_at=now_ts(),
+            result_csv=result_csv,
+            meta_json=meta_json,
+            row_count=row_count,
+            meta=meta or {},
+        )
+    except Exception as exc:
+        if cancelled_error in str(exc):
+            update_async_scan_task(
+                run_id,
+                status="cancelled",
+                stage="cancelled",
+                progress=100,
+                message="任务已取消（参数变更或新任务替代）",
+                ended_at=now_ts(),
+            )
+            return
+        update_async_scan_task(
+            run_id,
+            status="failed",
+            stage="error",
+            progress=100,
+            message=f"任务失败: {exc}",
+            error=traceback.format_exc(limit=12),
+            ended_at=now_ts(),
+        )
+    finally:
+        if set_current_run_id is not None:
+            set_current_run_id("")
+
+
+def run_async_scan_worker_main(
+    *,
+    load_async_scan_state: Callable[[str], Dict[str, Any]],
+    update_async_scan_task: Callable[..., None],
+    run_async_scan_job: Callable[[str, str, Dict[str, Any], str], None],
+    now_text: Callable[[], str],
+    now_ts: Callable[[], float],
+    process_id: Callable[[], int] = os.getpid,
+    stderr_write: Callable[[str], Any] = sys.stderr.write,
+    set_current_run_id: Callable[[str], None] | None = None,
+) -> int:
+    run_id = str(os.getenv("OPENCLAW_ASYNC_SCAN_RUN_ID", "") or "").strip()
+    strategy = str(os.getenv("OPENCLAW_ASYNC_SCAN_STRATEGY", "") or "").strip().lower()
+    score_col = str(os.getenv("OPENCLAW_ASYNC_SCAN_SCORE_COL", "综合评分") or "综合评分")
+    if not run_id or not strategy:
+        stderr_write("missing async scan worker env\n")
+        return 2
+    if set_current_run_id is not None:
+        set_current_run_id(run_id)
+    try:
+        update_async_scan_task(
+            run_id,
+            status="running",
+            stage="scan",
+            progress=1,
+            message="任务已启动",
+            pid=process_id(),
+            worker_started_at=now_text(),
+        )
+        state = load_async_scan_state(run_id)
+        run_async_scan_job(run_id, strategy, dict(state.get("params") or {}), score_col)
+        return 0
+    except Exception:
+        update_async_scan_task(
+            run_id,
+            status="failed",
+            stage="error",
+            progress=100,
+            message="任务失败: worker crashed",
+            error=traceback.format_exc(limit=20),
+            ended_at=now_ts(),
+            pid=process_id(),
+        )
+        return 1
+    finally:
+        if set_current_run_id is not None:
+            set_current_run_id("")
+
+
 def launch_async_backtest_process(
     *,
     app_root: str,
@@ -183,12 +335,13 @@ def start_async_backtest_job(
     now_text: Callable[[], str],
     merge_async_backtest_job: Callable[..., Dict[str, Any]],
     launch_async_backtest_process: Callable[[str, str, Dict[str, Any]], Dict[str, Any]],
+    run_id_factory: Callable[[str], str] | None = None,
 ) -> Tuple[bool, str, str]:
     with async_backtest_lock:
         for rid, job in list(async_backtest_jobs.items()):
             if str(job.get("status")) == "running":
                 return False, "已有回测任务在运行，请等待完成", ""
-        run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
+        run_id = run_id_factory(str(job_kind)) if run_id_factory is not None else datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
         job_data = {
             "run_id": run_id,
             "job_kind": str(job_kind),
@@ -224,6 +377,76 @@ def start_async_backtest_job(
         )
         return False, f"后台回测启动失败：{exc}", run_id
     return True, f"后台回测已启动（任务ID={run_id}）", run_id
+
+
+def run_async_backtest_worker_main(
+    *,
+    load_async_backtest_state: Callable[[str], Dict[str, Any]],
+    merge_async_backtest_job: Callable[..., Dict[str, Any]],
+    run_single_backtest_worker: Callable[[Dict[str, Any]], Dict[str, Any]],
+    run_comparison_backtest_worker: Callable[[Dict[str, Any]], Dict[str, Any]],
+    now_text: Callable[[], str],
+    now_ts: Callable[[], float],
+    process_id: Callable[[], int] = os.getpid,
+    stderr_write: Callable[[str], Any] = sys.stderr.write,
+    record_backtest_chain: Callable[..., None] | None = None,
+) -> int:
+    run_id = str(os.getenv("OPENCLAW_ASYNC_BACKTEST_RUN_ID", "") or "").strip()
+    job_kind = str(os.getenv("OPENCLAW_ASYNC_BACKTEST_JOB_KIND", "") or "").strip().lower()
+    if not run_id or not job_kind:
+        stderr_write("missing async backtest worker env\n")
+        return 2
+    job = load_async_backtest_state(run_id)
+    payload = dict(job.get("payload") or {})
+    try:
+        merge_async_backtest_job(
+            run_id,
+            job,
+            status="running",
+            pid=process_id(),
+            worker_started_at=now_text(),
+        )
+        out = run_single_backtest_worker(payload) if job_kind == "single" else run_comparison_backtest_worker(payload)
+        out_error = str(out.get("error", "") or "")
+        if not out_error:
+            nested = out.get("result")
+            if isinstance(nested, dict):
+                out_error = str(nested.get("error", "") or "")
+        success = bool(out.get("success"))
+        merge_async_backtest_job(
+            run_id,
+            job,
+            status="success" if success else "failed",
+            result=out,
+            error=out_error if not success else "",
+            traceback=str(out.get("traceback", "")) if not success else "",
+            ended_at=now_ts(),
+            pid=process_id(),
+        )
+        if record_backtest_chain is not None:
+            record_backtest_chain(run_id=run_id, job_kind=job_kind, payload=payload, result=out)
+        return 0 if success else 1
+    except Exception:
+        failed_result = {
+            "success": False,
+            "error": "后台回测 worker crashed",
+            "traceback": traceback.format_exc(),
+        }
+        merge_async_backtest_job(
+            run_id,
+            job,
+            status="failed",
+            error=str(failed_result["error"]),
+            traceback=str(failed_result["traceback"]),
+            ended_at=now_ts(),
+            pid=process_id(),
+        )
+        if record_backtest_chain is not None:
+            try:
+                record_backtest_chain(run_id=run_id, job_kind=job_kind, payload=payload, result=failed_result)
+            except Exception:
+                pass
+        return 1
 
 
 def restore_recent_async_task_refs(

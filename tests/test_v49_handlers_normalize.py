@@ -108,6 +108,36 @@ def test_backtest_handler_reuses_module_analyzer_and_frame_cache(monkeypatch):
     assert frame_calls["n"] == 1
 
 
+def test_combo_scan_handler_maps_score_threshold_to_combo_threshold(monkeypatch):
+    seen_env = {}
+
+    def fake_load_module(_path: Path):
+        import os
+
+        def run_offline_all():
+            seen_env["COMBO_SCORE_THRESHOLD"] = os.environ.get("COMBO_SCORE_THRESHOLD")
+            seen_env["COMBO_THRESHOLD"] = os.environ.get("COMBO_THRESHOLD")
+            seen_env["COMBO_THR_V5"] = os.environ.get("COMBO_THR_V5")
+            seen_env["COMBO_THR_V8"] = os.environ.get("COMBO_THR_V8")
+            seen_env["COMBO_THR_V9"] = os.environ.get("COMBO_THR_V9")
+            return {"combo": (pd.DataFrame(), {"status": "ok"})}
+
+        return SimpleNamespace(run_offline_all=run_offline_all)
+
+    monkeypatch.setattr(v49_handlers, "_load_module", fake_load_module)
+    monkeypatch.setattr(v49_handlers, "_resolve_db_path", lambda preferred: Path("/tmp/fake.db"))
+
+    handler = HandlerFactory(module_path=Path("/tmp/fake_module.py")).create_scan_handler("combo")
+    out = handler({"score_threshold": 65, "thr_v5": 70, "thr_v8": 45, "thr_v9": 65, "offline_stock_limit": 10})
+
+    assert out["metrics"]["raw_rows"] == 0
+    assert seen_env["COMBO_SCORE_THRESHOLD"] == "65"
+    assert seen_env["COMBO_THRESHOLD"] == "65"
+    assert seen_env["COMBO_THR_V5"] == "70"
+    assert seen_env["COMBO_THR_V8"] == "45"
+    assert seen_env["COMBO_THR_V9"] == "65"
+
+
 def test_combo_ensemble_default_components_skip_v7():
     calls = {"v7": 0, "v8": 0, "v9": 0, "legacy": 0}
 

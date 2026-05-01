@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import importlib.util
 import logging
 import os
@@ -24,6 +24,25 @@ JsonDict = Dict[str, Any]
 _ENV_LOCK = threading.RLock()
 
 
+def execute_offline_scan_strategy(
+    *,
+    strategy: str,
+    env_overrides: Dict[str, Any],
+    analyzer_factory: Callable[[], Any],
+    scan_handlers: Dict[str, Callable[[Any], Tuple[Optional[pd.DataFrame], Dict[str, Any]]]],
+    v7_scan_handler: Callable[[], Tuple[Optional[pd.DataFrame], Dict[str, Any]]],
+    temp_environ: Callable[[Dict[str, Any]], Any],
+) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    normalized = str(strategy or "").strip().lower()
+    with temp_environ(env_overrides):
+        if normalized == "v7":
+            return v7_scan_handler()
+        handler = scan_handlers.get(normalized)
+        if handler is None:
+            raise ValueError(f"不支持的后台扫描策略: {normalized}")
+        return handler(analyzer_factory())
+
+
 @dataclass
 class HandlerFactory:
     module_path: Path
@@ -33,6 +52,7 @@ class HandlerFactory:
 
         def _handler(params: Optional[JsonDict] = None) -> JsonDict:
             params = params or {}
+            run_id = str(params.get("run_id") or "")
             db_path = _resolve_db_path(params.get("db_path"))
             offline_limit = int(params.get("offline_stock_limit", 300))
             temp_env = {
@@ -44,6 +64,13 @@ class HandlerFactory:
             }
             if "score_threshold" in params:
                 temp_env[f"{strategy.upper()}_SCORE_THRESHOLD"] = str(params["score_threshold"])
+                if strategy == "combo":
+                    temp_env["COMBO_THRESHOLD"] = str(params["score_threshold"])
+            if strategy == "combo":
+                for component in ("v5", "v8", "v9"):
+                    key = f"thr_{component}"
+                    if key in params:
+                        temp_env[f"COMBO_THR_{component.upper()}"] = str(params[key])
 
             with _temp_environ(temp_env):
                 module = _load_module(self.module_path)
@@ -53,6 +80,9 @@ class HandlerFactory:
 
             raw = out.get(strategy)
             df, meta = _extract_df_and_meta(raw)
+            meta = dict(meta or {})
+            if run_id:
+                meta["run_id"] = run_id
 
             picks = _df_to_picks(df, strategy, limit=int(params.get("limit", 30)))
             return {
@@ -106,6 +136,7 @@ class HandlerFactory:
 
         def _handler(params: Optional[JsonDict] = None) -> JsonDict:
             params = params or {}
+            run_id = str(params.get("run_id") or "")
             db_path = _resolve_db_path(params.get("db_path"))
 
             if strategy == "v6":
@@ -127,7 +158,7 @@ class HandlerFactory:
                         bt.conn.close()
                     except Exception:
                         pass
-                return {"summary": _normalize_summary(result), "raw": result}
+                return {"summary": _normalize_summary(result), "raw": result, "meta": {"run_id": run_id} if run_id else {}}
 
             if strategy == "v5":
                 v5_mod = _import_backtest_module(
@@ -154,7 +185,7 @@ class HandlerFactory:
                         bt.conn.close()
                     except Exception:
                         pass
-                return {"summary": _normalize_summary(result), "raw": result}
+                return {"summary": _normalize_summary(result), "raw": result, "meta": {"run_id": run_id} if run_id else {}}
 
             if strategy in {"v7", "v8", "v9", "combo"}:
                 analyzer = _get_analyzer(db_path)
@@ -167,6 +198,7 @@ class HandlerFactory:
                     return {
                         "summary": _default_skip_summary(strategy),
                         "raw": {"status": "skipped", "reason": "empty_backtest_frame"},
+                        "meta": {"run_id": run_id} if run_id else {},
                     }
 
                 if strategy == "v7":
@@ -206,7 +238,7 @@ class HandlerFactory:
 
                 stats_src = (result or {}).get("stats") if isinstance(result, dict) else None
                 summary = _normalize_summary(stats_src if isinstance(stats_src, dict) else result)
-                return {"summary": summary, "raw": result}
+                return {"summary": summary, "raw": result, "meta": {"run_id": run_id} if run_id else {}}
 
             if strategy in {"v4", "stable"}:
                 return {
@@ -216,6 +248,7 @@ class HandlerFactory:
                         "reason": "backtest_not_implemented",
                         "strategy": strategy,
                     },
+                    "meta": {"run_id": run_id} if run_id else {},
                 }
 
             raise RuntimeError(f"backtest handler not implemented for strategy={strategy}")

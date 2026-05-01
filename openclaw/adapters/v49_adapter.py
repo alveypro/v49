@@ -15,6 +15,15 @@ import importlib.util
 import json
 import uuid
 
+from data.dao import resolve_db_path
+from openclaw.services.data_version_service import build_code_version, build_data_version, build_param_version
+from openclaw.services.lineage_service import (
+    apply_professional_migrations,
+    insert_signal_run,
+    new_run_id as lineage_new_run_id,
+    replace_signal_items,
+)
+
 
 JsonDict = Dict[str, Any]
 Handler = Callable[..., JsonDict]
@@ -61,11 +70,16 @@ class V49Adapter:
     def run_scan(self, strategy: str, params: Optional[JsonDict] = None) -> JsonDict:
         params = params or {}
         run_id = self._new_run_id("scan", strategy)
+        payload = dict(params)
+        payload["run_id"] = run_id
+        trade_date = str(payload.get("trade_date", "") or "")
+        versions = self._build_versions(payload)
 
         handler = self.scan_handlers.get(strategy)
         if handler is None:
             return {
                 "run_id": run_id,
+                **versions,
                 "status": "failed",
                 "error": f"scan handler not registered for strategy={strategy}",
                 "hints": [
@@ -75,16 +89,28 @@ class V49Adapter:
             }
 
         try:
-            output = handler(params)
-            return {
+            output = handler(payload)
+            result = {
                 "run_id": run_id,
+                **versions,
                 "status": "success",
                 "strategy": strategy,
                 "result": output,
             }
+            self._persist_signal_chain(
+                run_id=run_id,
+                run_type="scan",
+                strategy=strategy,
+                trade_date=trade_date,
+                versions=versions,
+                params=payload,
+                output=output,
+            )
+            return result
         except Exception as exc:  # noqa: BLE001
             return {
                 "run_id": run_id,
+                **versions,
                 "status": "failed",
                 "strategy": strategy,
                 "error": str(exc),
@@ -99,28 +125,43 @@ class V49Adapter:
     ) -> JsonDict:
         params = params or {}
         run_id = self._new_run_id("backtest", strategy)
+        payload = {"date_from": date_from, "date_to": date_to, **params, "run_id": run_id}
+        trade_date = str(payload.get("trade_date", "") or date_to or date_from or "")
+        versions = self._build_versions(payload)
 
         handler = self.backtest_handlers.get(strategy)
         if handler is None:
             return {
                 "run_id": run_id,
+                **versions,
                 "status": "failed",
                 "error": f"backtest handler not registered for strategy={strategy}",
                 "hints": ["register handler with register_backtest_handler"],
             }
 
-        payload = {"date_from": date_from, "date_to": date_to, **params}
         try:
             output = handler(payload)
-            return {
+            result = {
                 "run_id": run_id,
+                **versions,
                 "status": "success",
                 "strategy": strategy,
                 "result": output,
             }
+            self._persist_signal_chain(
+                run_id=run_id,
+                run_type="backtest",
+                strategy=strategy,
+                trade_date=trade_date,
+                versions=versions,
+                params=payload,
+                output=output,
+            )
+            return result
         except Exception as exc:  # noqa: BLE001
             return {
                 "run_id": run_id,
+                **versions,
                 "status": "failed",
                 "strategy": strategy,
                 "error": str(exc),
@@ -394,5 +435,103 @@ class V49Adapter:
 
     @staticmethod
     def _new_run_id(stage: str, strategy: str) -> str:
-        token = uuid.uuid4().hex[:8]
-        return f"{stage}_{strategy}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{token}"
+        return lineage_new_run_id(stage, strategy)
+
+    def _build_versions(self, params: JsonDict) -> JsonDict:
+        versions = {
+            "data_version": "",
+            "code_version": build_code_version(root=self.module_path.resolve().parent),
+            "param_version": build_param_version(params),
+        }
+        conn = self._connect_lineage_db(params)
+        if conn is None:
+            return versions
+        try:
+            versions["data_version"] = build_data_version(conn)
+            return versions
+        finally:
+            conn.close()
+
+    def _persist_signal_chain(
+        self,
+        *,
+        run_id: str,
+        run_type: str,
+        strategy: str,
+        trade_date: str,
+        versions: JsonDict,
+        params: JsonDict,
+        output: JsonDict,
+    ) -> None:
+        conn = self._connect_lineage_db(params)
+        if conn is None:
+            return
+        try:
+            apply_professional_migrations(conn)
+            artifact_path = self._extract_artifact_path(output)
+            summary = {
+                "params": params,
+                "metrics": output.get("metrics", {}),
+                "summary": output.get("summary", {}),
+                "meta": output.get("meta", {}),
+            }
+            insert_signal_run(
+                conn,
+                run_id=run_id,
+                run_type=run_type,
+                strategy=strategy,
+                trade_date=trade_date,
+                data_version=str(versions.get("data_version", "") or ""),
+                code_version=str(versions.get("code_version", "") or ""),
+                param_version=str(versions.get("param_version", "") or ""),
+                parent_run_id=str(params.get("parent_run_id", "") or ""),
+                status="success",
+                artifact_path=artifact_path,
+                summary=summary,
+            )
+            replace_signal_items(conn, run_id=run_id, items=self._extract_signal_items(output, strategy))
+        finally:
+            conn.close()
+
+    def _connect_lineage_db(self, params: JsonDict):
+        preferred = str(params.get("db_path") or params.get("lineage_db_path") or "").strip() or None
+        try:
+            db_path = resolve_db_path(preferred)
+        except Exception:
+            return None
+        import sqlite3
+
+        return sqlite3.connect(str(db_path), timeout=10)
+
+    @staticmethod
+    def _extract_artifact_path(output: JsonDict) -> str:
+        for key in ("artifact_path", "markdown"):
+            value = str(output.get(key, "") or "").strip()
+            if value:
+                return value
+        csv_paths = output.get("csv_paths")
+        if isinstance(csv_paths, list) and csv_paths:
+            return str(csv_paths[0] or "")
+        meta = output.get("meta")
+        if isinstance(meta, dict):
+            value = str(meta.get("artifact_path", "") or "").strip()
+            if value:
+                return value
+        return ""
+
+    @staticmethod
+    def _extract_signal_items(output: JsonDict, strategy: str) -> List[JsonDict]:
+        picks = output.get("picks")
+        if isinstance(picks, list):
+            items = []
+            for idx, row in enumerate(picks, start=1):
+                item = dict(row or {})
+                item.setdefault("strategy", strategy)
+                item.setdefault("rank_idx", idx)
+                reason = item.get("reason_codes")
+                if reason is None and item.get("reason"):
+                    reason = [str(item.get("reason"))]
+                item["reason_codes"] = list(reason or [])
+                items.append(item)
+            return items
+        return []
