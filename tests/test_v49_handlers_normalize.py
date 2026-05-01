@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,6 +9,7 @@ import pandas as pd
 from openclaw.runtime import v49_handlers
 from openclaw.runtime.v49_handlers import (
     HandlerFactory,
+    _load_backtest_frame,
     _normalize_summary,
     _run_combo_ensemble_backtest,
     _weighted_combo_summary,
@@ -106,6 +108,52 @@ def test_backtest_handler_reuses_module_analyzer_and_frame_cache(monkeypatch):
     assert module_calls["n"] == 1
     assert analyzer_inits["n"] == 1
     assert frame_calls["n"] == 1
+
+
+def test_load_backtest_frame_uses_recent_liquidity_pool(tmp_path):
+    db = tmp_path / "sample.db"
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute("CREATE TABLE stock_basic (ts_code TEXT PRIMARY KEY, name TEXT, industry TEXT)")
+        conn.execute(
+            """
+            CREATE TABLE daily_trading_data (
+                ts_code TEXT,
+                trade_date TEXT,
+                close_price REAL,
+                high_price REAL,
+                low_price REAL,
+                vol REAL,
+                amount REAL,
+                pct_chg REAL,
+                turnover_rate REAL
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO stock_basic(ts_code, name, industry) VALUES (?, ?, ?)",
+            [("000001.SZ", "low", "bank"), ("600111.SH", "high", "metal")],
+        )
+        rows = []
+        for i in range(70):
+            day = f"202604{i + 1:02d}"
+            rows.append(("000001.SZ", day, 10, 11, 9, 100, 1000, 0.1, 1.0))
+            rows.append(("600111.SH", day, 20, 22, 18, 100, 9000, 0.1, 1.0))
+        conn.executemany(
+            """
+            INSERT INTO daily_trading_data(
+                ts_code, trade_date, close_price, high_price, low_price, vol, amount, pct_chg, turnover_rate
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    out = _load_backtest_frame(db, lookback_days=120, sample_size=1)
+
+    assert set(out["ts_code"].unique()) == {"600111.SH"}
 
 
 def test_combo_scan_handler_maps_score_threshold_to_combo_threshold(monkeypatch):

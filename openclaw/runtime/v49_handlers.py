@@ -418,10 +418,24 @@ def _load_backtest_frame(db_path: Path, lookback_days: int = 320, sample_size: i
             conn = sqlite3.connect(str(db_path), timeout=30)
             try:
                 code_df = pd.read_sql_query(
-                    "SELECT ts_code FROM stock_basic ORDER BY ts_code LIMIT ?",
+                    """
+                    SELECT d.ts_code
+                    FROM daily_trading_data d
+                    WHERE d.trade_date >= ?
+                    GROUP BY d.ts_code
+                    HAVING COUNT(*) >= 60
+                    ORDER BY AVG(COALESCE(d.amount, 0)) DESC, MAX(d.trade_date) DESC, d.ts_code
+                    LIMIT ?
+                    """,
                     conn,
-                    params=(int(sample_size),),
+                    params=(start_s, int(sample_size)),
                 )
+                if code_df.empty:
+                    code_df = pd.read_sql_query(
+                        "SELECT ts_code FROM stock_basic ORDER BY ts_code LIMIT ?",
+                        conn,
+                        params=(int(sample_size),),
+                    )
                 codes = [str(x) for x in code_df["ts_code"].dropna().tolist()]
                 if not codes:
                     return pd.DataFrame()
