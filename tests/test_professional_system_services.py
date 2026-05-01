@@ -26,6 +26,7 @@ from openclaw.services.lineage_service import (
     record_backtest_result_chain,
     replace_signal_items,
 )
+from openclaw.services.legacy_fact_chain_backfill_service import backfill_legacy_fact_chains
 from openclaw.services.professional_audit_service import audit_professional_fact_chains
 from openclaw.services.release_gate_service import (
     build_release_gate_payload,
@@ -166,6 +167,137 @@ def test_record_backtest_result_chain_writes_failed_signal_run(tmp_db, tmp_path)
     ).fetchone()
     assert row[0:4] == ("backtest", "v9", "2026-05-01", "failed")
     assert "无法获取历史数据" in row[4]
+    conn.close()
+
+
+def test_legacy_fact_chain_backfill_builds_release_readiness_evidence(tmp_db, tmp_path):
+    conn = sqlite3.connect(str(tmp_db))
+    conn.execute(
+        """
+        CREATE TABLE strategy_signal_tracking (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            strategy TEXT NOT NULL,
+            signal_trade_date TEXT NOT NULL,
+            ts_code TEXT NOT NULL,
+            score REAL DEFAULT 0,
+            rank_idx INTEGER DEFAULT 0,
+            target_weight REAL DEFAULT 0,
+            reason TEXT DEFAULT '',
+            source TEXT DEFAULT 'oc_daily',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(run_id, strategy, ts_code)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO strategy_signal_tracking
+        (run_id, strategy, signal_trade_date, ts_code, score, rank_idx, reason)
+        VALUES ('scan_v9_20260501_demo', 'v9', '20260501', '000001.SZ', 80, 1, 'risk_pass')
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE overnight_decision_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            decision_date TEXT NOT NULL UNIQUE,
+            trade_date TEXT NOT NULL,
+            risk_level TEXT DEFAULT '',
+            candidate_pool_size INTEGER DEFAULT 0,
+            selected_count INTEGER DEFAULT 0,
+            max_picks INTEGER DEFAULT 0,
+            policy_json TEXT DEFAULT '{}',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            source_type TEXT DEFAULT 'overnight',
+            source_run_id TEXT DEFAULT '',
+            source_label TEXT DEFAULT '',
+            release_status TEXT DEFAULT 'active',
+            release_note TEXT DEFAULT '',
+            rollback_reason TEXT DEFAULT '',
+            approved_by TEXT DEFAULT '',
+            approved_at TEXT DEFAULT '',
+            replaces_decision_date TEXT DEFAULT '',
+            replaced_by_decision_date TEXT DEFAULT '',
+            is_active INTEGER DEFAULT 0,
+            activated_at TEXT DEFAULT ''
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO overnight_decision_runs
+        (decision_date, trade_date, risk_level, candidate_pool_size, selected_count, source_run_id, release_status, approved_by)
+        VALUES ('2026-05-01', '2026-05-04', 'orange', 1, 1, 'scan_v9_20260501_demo', 'active', 'alice')
+        """
+    )
+    _create_overnight_feedback_table(conn)
+    conn.execute(
+        """
+        INSERT INTO overnight_execution_feedback (
+            decision_date, trade_date, ts_code, stock_name, planned_action, final_action,
+            execution_status, execution_note, operator_name, system_suggested_action,
+            system_confidence, decision_bucket
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "2026-05-01",
+            "2026-05-04",
+            "000001.SZ",
+            "平安银行",
+            "buy",
+            "watch",
+            "skipped",
+            "人工观察，不进入执行",
+            "alice",
+            "watch",
+            "0.88",
+            "observe",
+        ),
+    )
+    conn.execute(
+        """
+        CREATE TABLE trading_kernel_governance_audit (
+            audit_id TEXT PRIMARY KEY,
+            decision_date TEXT NOT NULL,
+            account_id TEXT NOT NULL DEFAULT 'default',
+            strategy TEXT NOT NULL DEFAULT '',
+            event_type TEXT NOT NULL DEFAULT 'system_decision',
+            system_next_action TEXT NOT NULL DEFAULT 'continue',
+            effective_next_action TEXT NOT NULL DEFAULT 'continue',
+            final_disposition TEXT NOT NULL DEFAULT '',
+            publish_requested INTEGER NOT NULL DEFAULT 0,
+            publish_status TEXT NOT NULL DEFAULT '',
+            fallback_execution_mode TEXT NOT NULL DEFAULT '',
+            override_applied INTEGER NOT NULL DEFAULT 0,
+            override_reason TEXT NOT NULL DEFAULT '',
+            operator_name TEXT NOT NULL DEFAULT '',
+            risk_level TEXT NOT NULL DEFAULT '',
+            validation_gates_json TEXT NOT NULL DEFAULT '[]',
+            kernel_gates_json TEXT NOT NULL DEFAULT '[]',
+            context_json TEXT NOT NULL DEFAULT '{}',
+            run_summary_path TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO trading_kernel_governance_audit
+        (audit_id, decision_date, publish_status, effective_next_action, operator_name, risk_level)
+        VALUES ('tkgov_demo', '20260501', 'skipped', 'manual_review_required', 'alice', 'orange')
+        """
+    )
+    conn.commit()
+
+    result = backfill_legacy_fact_chains(conn, code_root=tmp_path)
+    audit = audit_professional_fact_chains(conn)
+
+    assert result["counts"]["signal_runs"] == 1
+    assert result["counts"]["decision_events"] == 1
+    assert result["counts"]["execution_orders"] == 1
+    assert result["counts"]["release_events"] == 1
+    assert audit["passed"] is True
     conn.close()
 
 
