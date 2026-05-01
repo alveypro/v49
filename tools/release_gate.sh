@@ -34,19 +34,73 @@ while [[ $# -gt 0 ]]; do
 done
 
 PASS=true
+RELEASE_FACT_GATE_STATUS="skipped"
 GIT_GATE_STATUS="failed"
 REGRESSION_GATE_STATUS="failed"
 HEALTH_GATE_STATUS="failed"
 PROFESSIONAL_AUDIT_GATE_STATUS="failed"
 LOG_FILE="$ROOT_DIR/logs/release_gate_$(date +%Y%m%d_%H%M%S).log"
+RELEASE_READINESS_PAYLOAD_FILE="${LOG_FILE%.log}.release_readiness.json"
 PROFESSIONAL_AUDIT_SUMMARY_FILE="${LOG_FILE%.log}.professional_audit.json"
 mkdir -p "$(dirname "$LOG_FILE")"
 
 log() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG_FILE"; }
 
+resolve_python_bin() {
+  local c
+  for c in \
+    "${PY_BIN:-}" \
+    "$ROOT_DIR/.venv/bin/python" \
+    "$ROOT_DIR/venv311/bin/python" \
+    "/opt/openclaw/venv311/bin/python" \
+    "/opt/airivo/app/.venv/bin/python" \
+    "$(command -v python3 2>/dev/null || true)"; do
+    [[ -n "${c}" && -x "${c}" ]] && { echo "${c}"; return 0; }
+  done
+  echo "python3"
+}
+
+assert_python_ge_311() {
+  "$1" - <<'PY'
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 11) else 1)
+PY
+}
+
 log "=========================================="
 log "  发布门槛验证  rounds=$ROUNDS"
 log "=========================================="
+
+PY_BIN="$(resolve_python_bin)"
+if ! assert_python_ge_311 "$PY_BIN"; then
+  log "  ❌ Python 版本过低: $("$PY_BIN" -V 2>&1) (要求 >=3.11)"
+  exit 2
+fi
+
+# ── 关0: 显式发布事实链 readiness 硬门 ───────────────────
+log ""
+log "▶ 关0: 发布事实链 readiness 硬门"
+
+if [[ "${AIRIVO_ENABLE_RELEASE_FACT_GATE:-0}" == "1" ]]; then
+  if [[ -z "${AIRIVO_RELEASE_DB_PATH:-}" ]]; then
+    log "  ❌ 关0 失败: AIRIVO_RELEASE_DB_PATH 未设置"
+    exit 2
+  fi
+  if "$PY_BIN" "$ROOT_DIR/tools/release_dry_run_audit.py" \
+    --db "$AIRIVO_RELEASE_DB_PATH" \
+    --code-root "$ROOT_DIR" \
+    --output "$RELEASE_READINESS_PAYLOAD_FILE" \
+    --operator release_gate 2>&1 | tee -a "$LOG_FILE"; then
+    log "  ✅ 关0 通过: release readiness payload 允许进入真实发布门"
+    RELEASE_FACT_GATE_STATUS="passed"
+  else
+    log "  ❌ 关0 失败: release readiness payload 阻断真实发布门"
+    log "  payload: $RELEASE_READINESS_PAYLOAD_FILE"
+    exit 1
+  fi
+else
+  log "  ⏭️  关0 跳过: AIRIVO_ENABLE_RELEASE_FACT_GATE 未设置为 1"
+fi
 
 # ── 关1: 哈希一致性 ──────────────────────────────────────
 log ""
@@ -95,33 +149,6 @@ fi
 # ── 关2: 默认组合多轮成功 ────────────────────────────────
 log ""
 log "▶ 关2: 默认组合回归验证 ($ROUNDS 轮)"
-
-resolve_python_bin() {
-  local c
-  for c in \
-    "${PY_BIN:-}" \
-    "$ROOT_DIR/.venv/bin/python" \
-    "$ROOT_DIR/venv311/bin/python" \
-    "/opt/openclaw/venv311/bin/python" \
-    "/opt/airivo/app/.venv/bin/python" \
-    "$(command -v python3 2>/dev/null || true)"; do
-    [[ -n "${c}" && -x "${c}" ]] && { echo "${c}"; return 0; }
-  done
-  echo "python3"
-}
-
-assert_python_ge_311() {
-  "$1" - <<'PY'
-import sys
-raise SystemExit(0 if sys.version_info >= (3, 11) else 1)
-PY
-}
-
-PY_BIN="$(resolve_python_bin)"
-if ! assert_python_ge_311 "$PY_BIN"; then
-  log "  ❌ Python 版本过低: $("$PY_BIN" -V 2>&1) (要求 >=3.11)"
-  exit 2
-fi
 
 if "$PY_BIN" "$ROOT_DIR/tools/regression_combo_gate.py" --rounds "$ROUNDS" 2>&1 | tee -a "$LOG_FILE"; then
   log "  ✅ 关2 通过: $ROUNDS 轮全部成功"
@@ -186,6 +213,7 @@ record_release_ledger() {
   RELEASE_GATE_OVERALL="$overall" \
   RELEASE_GATE_ROUNDS="$ROUNDS" \
   RELEASE_GATE_SKIP_REMOTE="$SKIP_REMOTE" \
+  RELEASE_GATE_FACT_STATUS="$RELEASE_FACT_GATE_STATUS" \
   RELEASE_GATE_GIT_STATUS="$GIT_GATE_STATUS" \
   RELEASE_GATE_REGRESSION_STATUS="$REGRESSION_GATE_STATUS" \
   RELEASE_GATE_HEALTH_STATUS="$HEALTH_GATE_STATUS" \
@@ -207,6 +235,7 @@ overall = os.environ.get("RELEASE_GATE_OVERALL", "failed")
 log_file = os.environ.get("RELEASE_GATE_LOG_FILE", "")
 audit_summary = load_release_gate_audit_summary(os.environ.get("RELEASE_GATE_PROFESSIONAL_AUDIT_SUMMARY_FILE", ""))
 validations = {
+        "release_fact_readiness": os.environ.get("RELEASE_GATE_FACT_STATUS", "skipped"),
         "git_hash": os.environ.get("RELEASE_GATE_GIT_STATUS", "failed"),
         "regression_combo": os.environ.get("RELEASE_GATE_REGRESSION_STATUS", "failed"),
         "health_gate": os.environ.get("RELEASE_GATE_HEALTH_STATUS", "failed"),

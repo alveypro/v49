@@ -153,6 +153,14 @@
 - 环境缺失被视为生产事实链失败。
 - 无回滚引用的失败进入硬门候选。
 
+真实发布硬门接入边界：
+
+- `tools/release_gate.sh` 只允许通过显式环境变量开启事实链 readiness 硬门。
+- 开启条件为 `AIRIVO_ENABLE_RELEASE_FACT_GATE=1` 且提供 `AIRIVO_RELEASE_DB_PATH`。
+- 该 DB 必须是发布候选环境的只读事实库，不得使用 CI 自动生成的 fixture DB 伪装生产事实。
+- 开启后必须去掉 `--non-blocking`，`allow_release_gate=false` 即在远端哈希、组合回归、健康检查之前阻断。
+- 默认未开启时只保留观察与人工审计结论，不宣称生产发布已放行。
+
 验收：
 
 - 观察期报告能明确给出 `continue_observe`、`fix_fact_chain_gap` 或 `promote_to_release_gate_candidate`。
