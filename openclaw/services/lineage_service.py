@@ -64,9 +64,117 @@ def new_release_id() -> str:
 def apply_professional_migrations(conn: sqlite3.Connection, *, root: Optional[Path] = None) -> None:
     base = root or project_root()
     for rel in MIGRATION_FILES:
+        if rel.endswith("002_decision.sql"):
+            _ensure_decision_schema_compat(conn)
+        if rel.endswith("003_execution.sql"):
+            _ensure_execution_schema_compat(conn)
         sql = (base / rel).read_text(encoding="utf-8")
         conn.executescript(sql)
     conn.commit()
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (str(table_name or ""),),
+    ).fetchone()
+    return row is not None
+
+
+def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    if not _table_exists(conn, table_name):
+        return set()
+    return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
+
+
+def _add_missing_columns(conn: sqlite3.Connection, table_name: str, columns: Dict[str, str]) -> None:
+    existing = _table_columns(conn, table_name)
+    if not existing:
+        return
+    for name, ddl in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {name} {ddl}")
+    conn.commit()
+
+
+def _ensure_decision_schema_compat(conn: sqlite3.Connection) -> None:
+    _add_missing_columns(
+        conn,
+        "decision_events",
+        {
+            "decision_type": "TEXT NOT NULL DEFAULT ''",
+            "based_on_run_id": "TEXT NOT NULL DEFAULT ''",
+            "risk_gate_state": "TEXT NOT NULL DEFAULT '{}'",
+            "release_gate_state": "TEXT NOT NULL DEFAULT '{}'",
+            "approval_reason_codes": "TEXT NOT NULL DEFAULT '[]'",
+            "approval_note": "TEXT NOT NULL DEFAULT ''",
+            "operator_name": "TEXT NOT NULL DEFAULT ''",
+            "decision_payload_json": "TEXT NOT NULL DEFAULT '{}'",
+            "created_at": "TEXT NOT NULL DEFAULT ''",
+        },
+    )
+    _add_missing_columns(
+        conn,
+        "decision_snapshot",
+        {
+            "decision_status": "TEXT NOT NULL DEFAULT 'created'",
+            "effective_trade_date": "TEXT NOT NULL DEFAULT ''",
+            "selected_count": "INTEGER NOT NULL DEFAULT 0",
+            "active_flag": "INTEGER NOT NULL DEFAULT 0",
+            "updated_at": "TEXT NOT NULL DEFAULT ''",
+        },
+    )
+
+
+def _ensure_execution_schema_compat(conn: sqlite3.Connection) -> None:
+    _add_missing_columns(
+        conn,
+        "execution_orders",
+        {
+            "decision_id": "TEXT NOT NULL DEFAULT ''",
+            "ts_code": "TEXT NOT NULL DEFAULT ''",
+            "side": "TEXT NOT NULL DEFAULT 'buy'",
+            "target_qty": "INTEGER NOT NULL DEFAULT 0",
+            "decision_price": "REAL NOT NULL DEFAULT 0",
+            "submitted_price": "REAL NOT NULL DEFAULT 0",
+            "submitted_at": "TEXT NOT NULL DEFAULT ''",
+            "status": "TEXT NOT NULL DEFAULT 'created'",
+            "cancel_reason": "TEXT NOT NULL DEFAULT ''",
+            "broker_ref": "TEXT NOT NULL DEFAULT ''",
+            "source_type": "TEXT NOT NULL DEFAULT ''",
+            "created_at": "TEXT NOT NULL DEFAULT ''",
+            "updated_at": "TEXT NOT NULL DEFAULT ''",
+        },
+    )
+    _add_missing_columns(
+        conn,
+        "execution_fills",
+        {
+            "order_id": "TEXT NOT NULL DEFAULT ''",
+            "fill_price": "REAL NOT NULL DEFAULT 0",
+            "fill_qty": "INTEGER NOT NULL DEFAULT 0",
+            "fill_time": "TEXT NOT NULL DEFAULT ''",
+            "fill_fee": "REAL NOT NULL DEFAULT 0",
+            "fill_slippage_bp": "REAL NOT NULL DEFAULT 0",
+            "venue": "TEXT NOT NULL DEFAULT ''",
+            "created_at": "TEXT NOT NULL DEFAULT ''",
+        },
+    )
+    _add_missing_columns(
+        conn,
+        "execution_attribution",
+        {
+            "decision_price": "REAL NOT NULL DEFAULT 0",
+            "submit_price": "REAL NOT NULL DEFAULT 0",
+            "avg_fill_price": "REAL NOT NULL DEFAULT 0",
+            "close_price": "REAL NOT NULL DEFAULT 0",
+            "delay_sec": "REAL NOT NULL DEFAULT 0",
+            "fill_ratio": "REAL NOT NULL DEFAULT 0",
+            "slippage_bp": "REAL NOT NULL DEFAULT 0",
+            "miss_reason_code": "TEXT NOT NULL DEFAULT ''",
+            "updated_at": "TEXT NOT NULL DEFAULT ''",
+        },
+    )
 
 
 def insert_signal_run(

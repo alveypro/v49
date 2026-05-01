@@ -70,6 +70,23 @@ def test_apply_professional_migrations_and_signal_chain(tmp_db):
     conn.close()
 
 
+def test_apply_professional_migrations_backfills_legacy_execution_columns(tmp_db):
+    conn = sqlite3.connect(str(tmp_db))
+    conn.execute("CREATE TABLE execution_orders (order_id TEXT PRIMARY KEY, ts_code TEXT)")
+    conn.execute("INSERT INTO execution_orders (order_id, ts_code) VALUES ('legacy_order', '000001.SZ')")
+    conn.commit()
+
+    apply_professional_migrations(conn)
+
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(execution_orders)").fetchall()}
+    assert {"decision_id", "status", "target_qty", "submitted_price", "source_type"}.issubset(columns)
+    row = conn.execute(
+        "SELECT decision_id, status, target_qty, source_type FROM execution_orders WHERE order_id = 'legacy_order'"
+    ).fetchone()
+    assert row == ("", "created", 0, "")
+    conn.close()
+
+
 def test_record_signal_dataframe_chain_writes_versions_and_items(tmp_db, tmp_path):
     run_id = new_run_id("scan", "v9")
     frame = pd.DataFrame(
