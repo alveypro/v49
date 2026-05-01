@@ -139,8 +139,8 @@ def test_create_execution_order_supports_legacy_required_columns(tmp_db):
     assert row == (
         row[0],
         "default",
-        "overnight_feedback",
-        "market",
+        "overnight",
+        "market_like",
         100,
         "cancelled",
         "dec_legacy",

@@ -32,6 +32,20 @@ def _date_from_text(value: str) -> str:
     return datetime.now().strftime("%Y-%m-%d")
 
 
+def _uses_legacy_order_constraints(columns: set[str]) -> bool:
+    return {"intent_source", "order_type", "order_qty"}.issubset(columns)
+
+
+def _legacy_status(status: str) -> str:
+    mapping = {
+        "created": "draft",
+        "partial_fill": "partially_filled",
+        "expired": "cancelled",
+        "manual_override": "cancelled",
+    }
+    return mapping.get(str(status or "").lower(), str(status or "").lower())
+
+
 def create_execution_order(
     conn: sqlite3.Connection,
     *,
@@ -51,6 +65,8 @@ def create_execution_order(
     normalized_status = str(status or "created").lower()
     if normalized_status not in ALLOWED_ORDER_STATUSES:
         raise ValueError(f"unsupported execution order status: {normalized_status}")
+    table_columns = _table_columns(conn, "execution_orders")
+    stored_status = _legacy_status(normalized_status) if _uses_legacy_order_constraints(table_columns) else normalized_status
     now = _now_text()
     submitted_at_text = str(submitted_at or now)
     row = {
@@ -62,7 +78,7 @@ def create_execution_order(
         "decision_price": float(decision_price or 0.0),
         "submitted_price": float(submitted_price or 0.0),
         "submitted_at": submitted_at_text,
-        "status": normalized_status,
+        "status": stored_status,
         "cancel_reason": str(cancel_reason or ""),
         "broker_ref": str(broker_ref or ""),
         "source_type": str(source_type or ""),
@@ -72,16 +88,16 @@ def create_execution_order(
         "decision_date": _date_from_text(submitted_at_text),
         "trade_date": _date_from_text(submitted_at_text),
         "account_id": "default",
-        "intent_source": str(source_type or "professional_fact_chain"),
-        "order_type": "market",
+        "intent_source": "overnight" if str(source_type or "") == "overnight_feedback" else "manual",
+        "order_type": "market_like",
         "order_price": float(submitted_price or decision_price or 0.0),
-        "order_qty": int(target_qty or 0),
+        "order_qty": max(1, int(target_qty or 0)),
         "reason": str(cancel_reason or ""),
         "source_ref_type": str(source_type or ""),
         "source_ref_id": str(broker_ref or ""),
         "metadata_json": "{}",
     }
-    columns = [name for name in row if name in _table_columns(conn, "execution_orders")]
+    columns = [name for name in row if name in table_columns]
     placeholders = ", ".join("?" for _ in columns)
     conn.execute(
         f"""
@@ -105,19 +121,24 @@ def update_execution_order_status(
     normalized_status = str(status or "").lower()
     if normalized_status not in ALLOWED_ORDER_STATUSES:
         raise ValueError(f"unsupported execution order status: {normalized_status}")
+    table_columns = _table_columns(conn, "execution_orders")
+    stored_status = _legacy_status(normalized_status) if _uses_legacy_order_constraints(table_columns) else normalized_status
+    assignments = ["status = ?", "cancel_reason = ?", "broker_ref = COALESCE(?, broker_ref)", "updated_at = ?"]
+    values = [stored_status, str(cancel_reason or ""), broker_ref, _now_text()]
+    if "reason" in table_columns:
+        assignments.append("reason = CASE WHEN ? != '' THEN ? ELSE COALESCE(reason, '') END")
+        values.extend([str(cancel_reason or ""), str(cancel_reason or "")])
+    if "source_ref_id" in table_columns:
+        assignments.append("source_ref_id = COALESCE(?, source_ref_id)")
+        values.append(broker_ref)
+    values.append(str(order_id or ""))
     conn.execute(
-        """
+        f"""
         UPDATE execution_orders
-        SET status = ?, cancel_reason = ?, broker_ref = COALESCE(?, broker_ref), updated_at = ?
+        SET {", ".join(assignments)}
         WHERE order_id = ?
         """,
-        (
-            normalized_status,
-            str(cancel_reason or ""),
-            broker_ref,
-            _now_text(),
-            str(order_id or ""),
-        ),
+        tuple(values),
     )
     conn.commit()
     return order_id
