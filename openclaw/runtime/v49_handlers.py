@@ -64,6 +64,8 @@ class HandlerFactory:
             }
             if "score_threshold" in params:
                 temp_env[f"{strategy.upper()}_SCORE_THRESHOLD"] = str(params["score_threshold"])
+                if strategy == "combo":
+                    temp_env["COMBO_THRESHOLD"] = str(params["score_threshold"])
 
             with _temp_environ(temp_env):
                 module = _load_module(self.module_path)
