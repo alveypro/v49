@@ -231,6 +231,9 @@ class HandlerFactory:
                             holding_days=int(params.get("holding_days", 10)),
                             combo_threshold=combo_threshold,
                             min_agree=int(params.get("min_agree", 2)),
+                            thr_v5=float(params.get("thr_v5", 60)),
+                            thr_v8=float(params.get("thr_v8", 65)),
+                            thr_v9=float(params.get("thr_v9", 60)),
                         )
                     else:
                         # Legacy fallback: use an ensemble of available strategy backtests.

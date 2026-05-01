@@ -156,6 +156,67 @@ def test_load_backtest_frame_uses_recent_liquidity_pool(tmp_path):
     assert set(out["ts_code"].unique()) == {"600111.SH"}
 
 
+def test_combo_backtest_handler_passes_explicit_runtime_thresholds(monkeypatch):
+    seen = {}
+
+    class FakeAnalyzer:
+        def __init__(self, db_path: str):
+            pass
+
+        def backtest_combo_production(
+            self,
+            df_bt,
+            *,
+            sample_size,
+            holding_days,
+            combo_threshold,
+            min_agree,
+            thr_v5,
+            thr_v8,
+            thr_v9,
+        ):
+            seen.update(
+                {
+                    "sample_size": sample_size,
+                    "holding_days": holding_days,
+                    "combo_threshold": combo_threshold,
+                    "min_agree": min_agree,
+                    "thr_v5": thr_v5,
+                    "thr_v8": thr_v8,
+                    "thr_v9": thr_v9,
+                }
+            )
+            return {"success": True, "stats": {"win_rate": 50.0, "max_drawdown": 0.0, "total_signals": 2, "sample_size": 100}}
+
+    monkeypatch.setattr(v49_handlers, "_load_module", lambda _path: SimpleNamespace(CompleteVolumePriceAnalyzer=FakeAnalyzer))
+    monkeypatch.setattr(v49_handlers, "_load_backtest_frame", lambda *args, **kwargs: pd.DataFrame({"ts_code": ["000001.SZ"], "trade_date": ["20260101"], "close_price": [10.0]}))
+    monkeypatch.setattr(v49_handlers, "_resolve_db_path", lambda preferred: Path("/tmp/fake.db"))
+
+    handler = HandlerFactory(module_path=Path("/tmp/fake_module.py")).create_backtest_handler("combo")
+    out = handler(
+        {
+            "sample_size": 80,
+            "holding_days": 6,
+            "score_threshold": 55,
+            "min_agree": 2,
+            "thr_v5": 60,
+            "thr_v8": 65,
+            "thr_v9": 60,
+        }
+    )
+
+    assert out["summary"]["win_rate"] == 0.5
+    assert seen == {
+        "sample_size": 80,
+        "holding_days": 6,
+        "combo_threshold": 55.0,
+        "min_agree": 2,
+        "thr_v5": 60.0,
+        "thr_v8": 65.0,
+        "thr_v9": 60.0,
+    }
+
+
 def test_combo_scan_handler_maps_score_threshold_to_combo_threshold(monkeypatch):
     seen_env = {}
 

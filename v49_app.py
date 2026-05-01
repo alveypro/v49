@@ -8369,8 +8369,11 @@ class CompleteVolumePriceAnalyzer:
             return {'success': False, 'error': str(e), 'traceback': tb}
 
     def backtest_combo_production(self, df: pd.DataFrame, sample_size: int = 600,
-                                  holding_days: int = 10, combo_threshold: float = 68.0,
-                                  min_agree: int = 2) -> dict:
+                                  holding_days: int = 10, combo_threshold: Optional[float] = None,
+                                  min_agree: Optional[int] = None,
+                                  thr_v5: Optional[float] = None,
+                                  thr_v8: Optional[float] = None,
+                                  thr_v9: Optional[float] = None) -> dict:
         """组合策略回测（生产对齐版）：v5/v8/v9 共识评分。"""
         try:
             if df is None or df.empty:
@@ -8385,6 +8388,16 @@ class CompleteVolumePriceAnalyzer:
 
             combo_evo = _load_evolve_params("combo_best.json")
             combo_params = (combo_evo.get("params", {}) if isinstance(combo_evo, dict) else {}) or {}
+            if combo_threshold is not None:
+                combo_params["combo_threshold"] = float(combo_threshold)
+            if min_agree is not None:
+                combo_params["min_agree"] = int(min_agree)
+            if thr_v5 is not None:
+                combo_params["thr_v5"] = float(thr_v5)
+            if thr_v8 is not None:
+                combo_params["thr_v8"] = float(thr_v8)
+            if thr_v9 is not None:
+                combo_params["thr_v9"] = float(thr_v9)
             production_only = str(os.getenv("COMBO_PRODUCTION_ONLY", "1")) == "1"
             market_env = "oscillation"
             try:
