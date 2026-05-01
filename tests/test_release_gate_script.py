@@ -29,3 +29,12 @@ def test_release_gate_fact_readiness_gate_is_blocking_when_enabled():
     assert "--db \"$AIRIVO_RELEASE_DB_PATH\"" in match.group("body")
     assert "--non-blocking" not in match.group("body")
     assert "exit 1" in script
+
+
+def test_release_gate_supports_explicit_local_remote_hash_mode():
+    script = (ROOT / "tools" / "release_gate.sh").read_text(encoding="utf-8")
+
+    assert "AIRIVO_RELEASE_REMOTE_MODE" in script
+    assert '== "local"' in script
+    assert 'git -C "$REMOTE_APP_DIR" rev-parse HEAD' in script
+    assert "local:$REMOTE_APP_DIR" in script

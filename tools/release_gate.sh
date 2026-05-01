@@ -121,6 +121,14 @@ log "  GitHub: $GITHUB_SHORT"
 if [[ "$SKIP_REMOTE" == "true" ]]; then
   log "  服务器: 跳过 (--skip-remote)"
   SERVER_SHORT="(跳过)"
+elif [[ "${AIRIVO_RELEASE_REMOTE_MODE:-ssh}" == "local" ]]; then
+  SERVER_HASH="$(git -C "$REMOTE_APP_DIR" rev-parse HEAD 2>/dev/null)" || true
+  SERVER_SHORT="${SERVER_HASH:0:12}"
+  if [[ -z "$SERVER_SHORT" ]]; then
+    log "  ⚠️  无法获取本机部署目录哈希: $REMOTE_APP_DIR"
+    SERVER_SHORT="(未知)"
+  fi
+  log "  服务器: $SERVER_SHORT (local:$REMOTE_APP_DIR)"
 else
   _run_ssh() {
     AIRIVO_REMOTE_TARGET="$REMOTE_HOST" \
