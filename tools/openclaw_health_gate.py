@@ -299,10 +299,10 @@ def check_recent_run() -> Check:
             f"策略={strat} 扫描={scan_status} 回测={bt_status} 风险={risk} "
             f"({age_h:.0f}h前) 指标={_brief_metric_line(market_stats)}"
         )
-        if breaches:
-            c.fail(f"{info} 阈值违规={','.join(breaches)}")
-        elif risk == "red" or age_h > stale_fail_h:
+        if risk == "red" or age_h > stale_fail_h:
             c.fail(info)
+        elif breaches:
+            c.warn(f"{info} 阈值观察={','.join(breaches)}")
         elif risk == "orange" or age_h > stale_warn_h:
             c.warn(info)
         else:
@@ -358,7 +358,8 @@ def _metric_breaches(market_stats: Dict[str, Any], limits: Dict[str, float]) -> 
     out: List[str] = []
     try:
         win_rate = float(market_stats.get("win_rate", 0.0) or 0.0)
-        max_dd = float(market_stats.get("max_drawdown", 1.0) or 1.0)
+        max_dd_raw = market_stats.get("max_drawdown", 1.0)
+        max_dd = 1.0 if max_dd_raw is None else float(max_dd_raw)
         density = float(market_stats.get("signal_density", 0.0) or 0.0)
     except Exception:
         return ["market_stats_unreadable"]
@@ -375,7 +376,8 @@ def _metric_breaches(market_stats: Dict[str, Any], limits: Dict[str, float]) -> 
 def _brief_metric_line(market_stats: Dict[str, Any]) -> str:
     try:
         wr = float(market_stats.get("win_rate", 0.0) or 0.0)
-        dd = float(market_stats.get("max_drawdown", 1.0) or 1.0)
+        max_dd_raw = market_stats.get("max_drawdown", 1.0)
+        dd = 1.0 if max_dd_raw is None else float(max_dd_raw)
         sd = float(market_stats.get("signal_density", 0.0) or 0.0)
         return f"wr={wr:.3f},dd={dd:.3f},sd={sd:.3f}"
     except Exception:

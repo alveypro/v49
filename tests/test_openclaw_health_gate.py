@@ -34,6 +34,13 @@ def test_metric_breaches_no_breach():
     assert out == []
 
 
+def test_metric_breaches_preserves_zero_drawdown():
+    limits = {"win_rate_min": 0.4, "max_drawdown_max": 0.5, "signal_density_min": 0.01}
+    stats = {"win_rate": 0.42, "max_drawdown": 0.0, "signal_density": 0.05}
+    out = gate._metric_breaches(stats, limits)
+    assert "max_drawdown" not in out
+
+
 def test_run_summary_dir_prefers_explicit_env(tmp_path, monkeypatch):
     explicit = tmp_path / "real_ops_logs"
     explicit.mkdir()
@@ -75,6 +82,28 @@ def test_recent_run_accepts_real_summary_dir(tmp_path, monkeypatch):
 
     assert out.status == "green"
     assert "策略=combo" in out.detail
+
+
+def test_recent_run_respects_frozen_orange_risk_level(tmp_path, monkeypatch):
+    logs = tmp_path / "ops_logs"
+    logs.mkdir()
+    summary = {
+        "strategy": "combo",
+        "scan": {"status": "success"},
+        "backtest": {"status": "success"},
+        "risk": {
+            "risk_level": "orange",
+            "evidence": {"market_stats": {"win_rate": 0.0, "max_drawdown": 0.0, "signal_density": 0.0}},
+        },
+    }
+    (logs / "run_summary_20260502_010000.json").write_text(json.dumps(summary), encoding="utf-8")
+    monkeypatch.setenv("OPENCLAW_RUN_SUMMARY_DIR", str(logs))
+    monkeypatch.setattr(gate, "_load_strategy_center_config", lambda: {})
+
+    out = gate.check_recent_run()
+
+    assert out.status == "orange"
+    assert "阈值观察" in out.detail
 
 
 def test_systemd_timer_check_uses_enabled_active_units(monkeypatch):
