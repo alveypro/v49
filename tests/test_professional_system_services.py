@@ -88,6 +88,70 @@ def test_apply_professional_migrations_backfills_legacy_execution_columns(tmp_db
     conn.close()
 
 
+def test_create_execution_order_supports_legacy_required_columns(tmp_db):
+    conn = sqlite3.connect(str(tmp_db))
+    conn.execute(
+        """
+        CREATE TABLE execution_orders (
+            order_id TEXT PRIMARY KEY,
+            trade_date TEXT NOT NULL,
+            account_id TEXT NOT NULL,
+            ts_code TEXT NOT NULL,
+            side TEXT NOT NULL,
+            intent_source TEXT NOT NULL,
+            order_type TEXT NOT NULL,
+            order_qty INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            decision_id TEXT NOT NULL DEFAULT '',
+            target_qty INTEGER NOT NULL DEFAULT 0,
+            decision_price REAL NOT NULL DEFAULT 0,
+            submitted_price REAL NOT NULL DEFAULT 0,
+            submitted_at TEXT NOT NULL DEFAULT '',
+            cancel_reason TEXT NOT NULL DEFAULT '',
+            broker_ref TEXT NOT NULL DEFAULT '',
+            source_type TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT ''
+        )
+        """
+    )
+    create_execution_order(
+        conn,
+        order_id="ord_legacy",
+        decision_id="dec_legacy",
+        ts_code="000001.SZ",
+        target_qty=100,
+        status="cancelled",
+        cancel_reason="manual_cancel",
+        broker_ref="legacy:1",
+        source_type="overnight_feedback",
+    )
+
+    row = conn.execute(
+        """
+        SELECT trade_date, account_id, intent_source, order_type, order_qty, status,
+               decision_id, target_qty, broker_ref, source_type
+        FROM execution_orders
+        WHERE order_id = 'ord_legacy'
+        """
+    ).fetchone()
+    assert row == (
+        row[0],
+        "default",
+        "overnight_feedback",
+        "market",
+        100,
+        "cancelled",
+        "dec_legacy",
+        100,
+        "legacy:1",
+        "overnight_feedback",
+    )
+    assert row[0]
+    conn.close()
+
+
 def test_record_signal_dataframe_chain_writes_versions_and_items(tmp_db, tmp_path):
     run_id = new_run_id("scan", "v9")
     frame = pd.DataFrame(
