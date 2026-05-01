@@ -50,7 +50,7 @@ def summarize_execution_evidence(
         LEFT JOIN execution_fills f ON f.order_id = o.order_id
         {where_clause}
         GROUP BY o.order_id
-        ORDER BY o.created_at ASC
+        ORDER BY o.created_at ASC, o.rowid ASC
         """,
         tuple(params),
     ).fetchall()

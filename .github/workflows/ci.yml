@@ -77,6 +77,8 @@ jobs:
             --code-root "$GITHUB_WORKSPACE" \
             --operator ci \
             --overwrite
+          mkdir -p data
+          cp artifacts/release_dry_run/fixture.db data/openclaw.db
           python tools/release_dry_run_audit.py \
             --db "${AIRIVO_DB_PATH:-data/openclaw.db}" \
             --code-root "$GITHUB_WORKSPACE" \

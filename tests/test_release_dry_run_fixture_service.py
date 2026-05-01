@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 
 from openclaw.services.release_dry_run_fixture_service import build_release_dry_run_fixture
+from openclaw.services.release_dry_run_service import run_release_dry_run_audit, summarize_release_dry_run_trend
 
 
 def test_build_release_dry_run_fixture_creates_rehearsal_evidence(tmp_path):
@@ -103,3 +104,33 @@ def test_build_release_dry_run_fixture_refuses_existing_db_without_overwrite(tmp
             report_path=tmp_path / "dry_run.md",
             payload_path=tmp_path / "dry_run.json",
         )
+
+
+def test_release_dry_run_fixture_can_back_ci_current_readiness_payload(tmp_path):
+    db_path = tmp_path / "artifacts" / "release_dry_run" / "fixture.db"
+    fixture_payload_path = tmp_path / "artifacts" / "release_dry_run" / "fixture_payload.json"
+    current_payload_path = tmp_path / "artifacts" / "release_dry_run" / "current_readiness_payload.json"
+
+    build_release_dry_run_fixture(
+        db_path=db_path,
+        code_root=tmp_path,
+        report_path=tmp_path / "artifacts" / "release_dry_run" / "fixture_report.md",
+        payload_path=fixture_payload_path,
+        operator_name="ci",
+    )
+    current_payload = run_release_dry_run_audit(
+        db_path=db_path,
+        code_root=tmp_path,
+        output_path=current_payload_path,
+        operator_name="ci",
+    )
+    summary = summarize_release_dry_run_trend(
+        payload_paths=[tmp_path / "artifacts" / "release_dry_run"],
+        stable_threshold=2,
+    )
+
+    assert current_payload["allow_release_gate"] is True
+    assert current_payload["blocking_reasons"] == []
+    assert summary["total_payloads"] == 2
+    assert summary["blocked_payloads"] == 0
+    assert summary["hard_gate_upgrade_candidates"] == []
