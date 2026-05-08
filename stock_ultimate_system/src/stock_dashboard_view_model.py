@@ -74,6 +74,28 @@ def _display_candidate_score(value: object) -> str:
     return text
 
 
+def _display_health_score_label(value: object) -> str:
+    text = _text(value)
+    if not text or text == "-":
+        return "健康评分待生成"
+    score_text = text.split("/", 1)[0].strip()
+    try:
+        score_value = float(score_text)
+    except Exception:
+        return f"健康分 {text}"
+    if score_value == 0:
+        return "健康评分待生成"
+    return f"健康分 {text}"
+
+
+def _display_terminal_status(*, disabled_reason: str, invalid_reason: str) -> str:
+    if _text(disabled_reason):
+        return "当前存在制度阻断"
+    if _text(invalid_reason):
+        return _text(invalid_reason)
+    return "终局结论暂缺"
+
+
 def _display_research_surface_status(value: object) -> str:
     text = _text(value)
     if not text or text == "-":
@@ -433,6 +455,14 @@ def build_stock_home_view_model(
     primary_progress_label = _display_progress_status(cockpit_model.get("primary_progress"))
     basket_progress_label = _display_progress_status(cockpit_model.get("basket_progress"))
     candidate_score_label = _display_candidate_score(candidate_score)
+    health_score_label = _display_health_score_label(health_score)
+    terminal_status_label = _display_terminal_status(
+        disabled_reason=disabled_reason,
+        invalid_reason=invalid_reason,
+    )
+    candidate_subject = _join_parts([top_code, candidate_name]).replace(" · ", " ")
+    if not candidate_subject:
+        candidate_subject = "候选待形成"
     home_hero_facts = {
         "headline_tone": headline_tone,
         "headline_detail": headline_detail,
@@ -440,6 +470,7 @@ def build_stock_home_view_model(
         "latest_basket_attempt_label": latest_basket_attempt_label,
         "health_status": health_status,
         "health_score": health_score,
+        "health_score_label": health_score_label,
         "top_code": top_code,
         "candidate_name": candidate_name,
         "candidate_generated_at": candidate_generated_at,
@@ -468,7 +499,7 @@ def build_stock_home_view_model(
         {
             "label": "研究状态",
             "value": health_status,
-            "sub_lines": [f"健康分 {health_score}"],
+            "sub_lines": [health_score_label],
         },
         {
             "label": "自动链路",
@@ -560,6 +591,17 @@ def build_stock_home_view_model(
         "basket_needed": _display_progress_note(cockpit_model.get("basket_progress"), cockpit_model.get("basket_needed")),
         "promotion_decision_label": "未开放行动" if promotion_decision_label == "晋级锁定" else promotion_decision_label,
         "boundary": "仅供观察，不构成买卖建议。",
+        "current_conclusion_sentence": (
+            "当前结论：继续观察，暂不行动"
+            if primary_progress_label == "样本积累中" and basket_progress_label == "样本积累中"
+            else f"当前结论：{_display_missing(cockpit_model.get('decision_status'), '状态待复核')}，暂不行动"
+        ),
+        "primary_result_sentence": f"主结果对象：{result_subject or '对象暂缺'}，{stage_label or '阶段待确认'}，{terminal_status_label}",
+        "candidate_basket_sentence": f"候选篮第一：{candidate_subject}，仅为观察候选，不覆盖主结果",
+        "risk_status_sentence": (
+            f"风险状态：系统健康{health_status or '待确认'}，"
+            f"行动门{'未开放行动' if promotion_decision_label == '晋级锁定' else promotion_decision_label or '待确认'}"
+        ),
     }
     return {
         "home_hero_facts": home_hero_facts,
@@ -779,8 +821,9 @@ def build_stock_summary_view_model(
     ai_explainer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     recent_timeline = (governance_semantics.get("governance_recent_timeline") or [{}])[0]
+    health_score_label = _display_health_score_label(health_score)
     evidence_chips = [
-        f"健康分 {health_score}",
+        health_score_label,
         f"候选生成 {candidate_generated_at}",
         f"数据 {str(execution_semantics.get('db_latest_trade_date', '-'))}",
     ]
@@ -788,7 +831,7 @@ def build_stock_summary_view_model(
         "display_contract": {
             "conclusion_title": f"{health_status} · {backtest_conclusion}",
             "conclusion_sub": _display_current_candidate_summary(top_code, candidate_name),
-            "evidence_title": f"健康分 {health_score}",
+            "evidence_title": health_score_label,
             "evidence_sub": f"回测口径 {backtest_scope_label}",
             "boundary_title": "研究参考",
             "boundary_sub": "不构成收益保证；等待期以第一屏行动锁为准。",
@@ -910,6 +953,12 @@ def build_stock_overview_chrome_view_model(
         "hero_side": {
             "health_status": str(home_hero_facts.get("health_status", "-")),
             "health_score": str(home_hero_facts.get("health_score", "-")),
+            "health_score_label": str(
+                home_hero_facts.get(
+                    "health_score_label",
+                    _display_health_score_label(home_hero_facts.get("health_score", "-")),
+                )
+            ),
             "health_tag": health_tag,
             "top_code": str(home_hero_facts.get("top_code", "暂无")),
             "candidate_name": str(home_hero_facts.get("candidate_name", "-")),
@@ -958,12 +1007,13 @@ def build_stock_overview_kpi_view_model(
     cockpit_model: dict[str, Any],
     governance_semantics: dict[str, Any],
 ) -> dict[str, Any]:
+    health_score_label = _display_health_score_label(health_score)
     return {
         "kpi_rows": [[
             {
                 "label": "系统状态",
                 "value": health_status,
-                "sub": f"健康分 {health_score} ｜ 自动链路 {update_status_label}",
+                "sub": f"{health_score_label} ｜ 自动链路 {update_status_label}",
             },
             {
                 "label": "推进决策",

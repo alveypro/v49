@@ -134,35 +134,50 @@ def render_home_headline_section(hero_facts: dict[str, str]) -> str:
 
 
 def render_external_decision_spine_section(spine: dict[str, str]) -> str:
+    decision_sentence = spine.get(
+        "current_conclusion_sentence",
+        f'当前结论：{spine["decision_status"]}，暂不行动',
+    )
+    primary_sentence = spine.get(
+        "primary_result_sentence",
+        f'主结果对象：{spine["primary_progress"]}，等待证据补齐',
+    )
+    candidate_sentence = spine.get(
+        "candidate_basket_sentence",
+        f'观察名单：{spine["basket_progress"]}，不是买入建议',
+    )
+    risk_sentence = spine.get(
+        "risk_status_sentence",
+        f'风险状态：行动门{spine["promotion_decision_label"]}',
+    )
     return (
         '<section class="external-decision-spine external-decision-public" id="external-decision-spine" aria-label="当前判断">'
         '<div class="external-spine-lead">'
-        '<div class="external-spine-kicker">对外决策脊柱</div>'
+        '<div class="external-spine-kicker">对外结论</div>'
         '<div class="muted">先读这里</div>'
-        '<div class="muted">数据门通过前保持制度锁定</div>'
         f'<h2>{html.escape(spine["decision_status"])}</h2>'
         f'<p>{html.escape(spine["decision_reason"])}。{html.escape(spine["decision_summary"])}。</p>'
         '</div>'
         '<div class="external-spine-grid">'
         '<div class="external-spine-fact">'
-        '<span>下一步</span>'
-        f'<strong>{html.escape(spine["next_check"])}</strong>'
-        '<small>更新后再看</small>'
+        '<span>当前结论</span>'
+        f'<strong>{html.escape(decision_sentence)}</strong>'
+        '<small>第一屏只给行动结论</small>'
         '</div>'
         '<div class="external-spine-fact">'
-        '<span>当前关注</span>'
-        f'<strong>{html.escape(spine["primary_progress"])}</strong>'
-        '<small>只作观察</small>'
+        '<span>主结果对象</span>'
+        f'<strong>{html.escape(primary_sentence)}</strong>'
+        '<small>制度主结果，不由候选篮覆盖</small>'
         '</div>'
         '<div class="external-spine-fact">'
-        '<span>观察名单</span>'
-        f'<strong>{html.escape(spine["basket_progress"])}</strong>'
-        '<small>不是买入建议</small>'
+        '<span>候选篮第一</span>'
+        f'<strong>{html.escape(candidate_sentence)}</strong>'
+        '<small>只作观察候选</small>'
         '</div>'
         '<div class="external-spine-fact external-spine-lock">'
-        '<span>行动状态</span>'
-        f'<strong>{html.escape(spine["promotion_decision_label"])}</strong>'
-        '<small>暂不行动</small>'
+        '<span>风险状态</span>'
+        f'<strong>{html.escape(risk_sentence)}</strong>'
+        '<small>行动门未开放前不推进</small>'
         '</div>'
         '</div>'
         f'<div class="external-spine-boundary">{html.escape(spine["boundary"])}</div>'
@@ -633,7 +648,7 @@ def render_hero_side_section(*, hero_side_view_model: dict[str, str], basket_dua
         '<div class="hero-status">'
         '<div class="status-label">系统状态</div>'
         f'<div class="status-value">{html.escape(str(hero_side_view_model.get("health_status", "")))}</div>'
-        f'<div class="tag {html.escape(str(hero_side_view_model.get("health_tag", "")))}">健康分 {html.escape(str(hero_side_view_model.get("health_score", "")))}</div>'
+        f'<div class="tag {html.escape(str(hero_side_view_model.get("health_tag", "")))}">{html.escape(str(hero_side_view_model.get("health_score_label") or ("健康分 " + str(hero_side_view_model.get("health_score", "")))))}</div>'
         '</div>'
         '<div class="hero-stack">'
         '<div class="hero-metric">'

@@ -268,9 +268,12 @@ def test_dashboard_overview_places_evidence_cockpit_before_primary_result(tmp_pa
     assert external_spine_index < control_strip_index
     assert cockpit_index < primary_result_index
     assert primary_result_index < kpi_index
-    assert "对外决策脊柱" in html_text
+    assert "对外结论" in html_text
     assert "先读这里" in html_text
-    assert "数据门通过前保持制度锁定" in html_text
+    assert "当前结论：" in html_text
+    assert "主结果对象：" in html_text
+    assert "候选篮第一：" in html_text
+    assert "风险状态：" in html_text
     assert "受控等待" in html_text
     assert "观察窗口尚未开始" in html_text
     assert "所有样本闭合动作已锁定" in html_text

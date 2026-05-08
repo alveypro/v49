@@ -117,6 +117,9 @@ def test_build_stock_home_view_model_keeps_pointer_chain_as_primary_home_subject
     assert view_model["primary_result_home_facts"]["result_id"] == "primary:000001.SZ"
     assert view_model["primary_result_home_facts"]["blocker_title"] == "等待观察"
     assert view_model["external_decision_spine"]["primary_progress"] == "6/20"
+    assert view_model["external_decision_spine"]["current_conclusion_sentence"] == "当前结论：观察，暂不行动"
+    assert view_model["external_decision_spine"]["primary_result_sentence"] == "主结果对象：000001.SZ 平安银行，L4，终局结论暂缺"
+    assert view_model["external_decision_spine"]["candidate_basket_sentence"] == "候选篮第一：000001.SZ 平安银行，仅为观察候选，不覆盖主结果"
     assert view_model["control_strip_cards"][2]["sub_lines"][1].startswith("当前生效篮子")
     assert view_model["validation_basket_kpis"][0]["value"] == "已对齐"
     assert view_model["validation_basket_kpis"][1]["value"] == "待复核"
@@ -171,6 +174,56 @@ def test_build_stock_home_view_model_softens_zero_progress_as_sample_accumulatin
     assert view_model["external_decision_spine"]["decision_reason"] == "证据还不够"
     assert view_model["external_decision_spine"]["promotion_decision_label"] == "未开放行动"
     assert "首批 20 个正式样本仍在积累" == view_model["external_decision_spine"]["primary_needed"]
+
+
+def test_build_stock_home_view_model_displays_zero_health_as_pending_score():
+    view_model = build_stock_home_view_model(
+        headline_tone="继续观察",
+        headline_detail="主结果保持锁定",
+        current_basket_pointer_label="",
+        latest_basket_attempt_label="",
+        current_basket_pointer_status="approved",
+        current_basket_pointer_basket_id="basket-001",
+        latest_basket_attempt_status="blocked",
+        latest_basket_attempt_blocking_reason="gate blocked",
+        health_status="告警",
+        health_score="0.00/100",
+        top_code="300395.SZ",
+        candidate_name="菲利华",
+        candidate_generated_at="2026-05-08 01:24:02",
+        generation_mode_label="正式结果",
+        update_status_label="待补齐",
+        update_stage_label="已完成",
+        candidate_count=5,
+        candidate_score="148.26",
+        candidate_timeline_label="2026-05-08 01:24:02",
+        run_freshness="fresh",
+        db_latest_trade_date="2026-05-07",
+        observation_timeline_label="等待形成",
+        prefilter_freshness_label="预筛待补齐",
+        backtest_scope_label="够研究",
+        governance_cycle_state="observe_only",
+        governance_recommended_action_label="继续观察",
+        governance_ready_for_release=False,
+        governance_fully_release_ready=False,
+        result_id="primary:300750.SZ",
+        stage_label="执行准备阶段",
+        result_subject="300750.SZ 宁德时代",
+        dominant_regime="震荡",
+        risk_preference="中性",
+        backtest_conclusion="可继续观察",
+        avg_risk_pressure="0.0",
+        disabled_reason="",
+        invalid_reason="",
+        blocker_semantics={},
+        cockpit_model={"decision_status": "状态待复核", "primary_progress": "0/20", "basket_progress": "0/20"},
+        promotion_decision_label="晋级锁定",
+    )
+
+    assert view_model["home_hero_facts"]["health_score_label"] == "健康评分待生成"
+    assert view_model["control_strip_cards"][0]["sub_lines"] == ["健康评分待生成"]
+    assert view_model["external_decision_spine"]["primary_result_sentence"] == "主结果对象：300750.SZ 宁德时代，执行准备阶段，终局结论暂缺"
+    assert view_model["external_decision_spine"]["candidate_basket_sentence"] == "候选篮第一：300395.SZ 菲利华，仅为观察候选，不覆盖主结果"
 
 
 def test_build_stock_validation_view_model_keeps_basket_guard_and_runtime_facts():
