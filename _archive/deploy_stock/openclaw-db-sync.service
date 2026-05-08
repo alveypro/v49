@@ -1,0 +1,10 @@
+[Unit]
+Description=Sync stock DB from A server to B server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/sync_db_from_a.sh
+User=root
+

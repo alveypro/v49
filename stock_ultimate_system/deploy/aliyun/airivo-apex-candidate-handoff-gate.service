@@ -1,0 +1,15 @@
+[Unit]
+Description=Airivo Apex Candidate Lifecycle Handoff Gate
+After=network-online.target airivo-apex-update.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/airivo-apex/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/airivo-apex/app
+TimeoutStartSec=10m
+ExecStart=/opt/airivo-apex/.venv/bin/python /opt/airivo-apex/app/scripts/build_primary_result_candidate_handoff_gate.py --exp-dir /opt/airivo-apex/app/data/experiments --lifecycles-dir /opt/airivo-apex/app/artifacts/primary_result_lifecycle --output /opt/airivo-apex/app/artifacts/primary_result_candidate_handoff_gate_latest.json --zero-on-blocked --json
+StandardOutput=append:/var/log/airivo-apex/candidate_handoff_gate.log
+StandardError=append:/var/log/airivo-apex/candidate_handoff_gate.err.log

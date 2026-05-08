@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Airivo Apex Operations Artifact Refresh and Daily Scoreboard
+
+[Timer]
+OnCalendar=*-*-* 19:00:00 Asia/Shanghai
+Persistent=true
+Unit=airivo-apex-daily-operations-scoreboard.service
+
+[Install]
+WantedBy=timers.target

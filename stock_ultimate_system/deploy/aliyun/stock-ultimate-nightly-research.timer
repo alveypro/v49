@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Stock Ultimate Nightly Research at 21:45 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 21:45:00 Asia/Shanghai
+Persistent=true
+Unit=stock-ultimate-nightly-research.service
+
+[Install]
+WantedBy=timers.target

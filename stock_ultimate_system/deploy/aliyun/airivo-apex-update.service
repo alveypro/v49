@@ -1,0 +1,15 @@
+[Unit]
+Description=Airivo Apex Daily Update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/airivo-apex/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/airivo-apex/app
+TimeoutStartSec=12h
+ExecStart=/opt/airivo-apex/.venv/bin/python /opt/airivo-apex/app/run_update_database.py --config-dir config/server --post-top-candidates --no-post-daily-research --post-universe-size 120 --post-top-n 20
+StandardOutput=append:/var/log/airivo-apex/update.log
+StandardError=append:/var/log/airivo-apex/update.err.log

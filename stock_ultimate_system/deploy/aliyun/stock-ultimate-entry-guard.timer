@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Stock Ultimate Entry Guard
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+Unit=stock-ultimate-entry-guard.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

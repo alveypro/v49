@@ -1,0 +1,15 @@
+[Unit]
+Description=Stock Ultimate Daily Research
+After=network-online.target stock-ultimate-update.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/stock-ultimate/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/stock-ultimate/app
+TimeoutStartSec=12h
+ExecStart=/opt/stock-ultimate/.venv/bin/python /opt/stock-ultimate/app/run_daily_research.py --config-dir config/server --profiles short medium --out data/experiments/daily_research_latest.md
+StandardOutput=append:/var/log/stock-ultimate/daily_research.log
+StandardError=append:/var/log/stock-ultimate/daily_research.err.log

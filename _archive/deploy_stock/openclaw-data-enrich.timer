@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily enrich stock DB sources
+
+[Timer]
+OnCalendar=*-*-* 06:40:00
+Persistent=true
+Unit=openclaw-data-enrich.service
+
+[Install]
+WantedBy=timers.target
+

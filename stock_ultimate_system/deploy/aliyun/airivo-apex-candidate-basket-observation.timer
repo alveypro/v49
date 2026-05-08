@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Airivo Apex Candidate Basket Observation at 18:50 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 18:50:00 Asia/Shanghai
+Persistent=true
+Unit=airivo-apex-candidate-basket-observation.service
+
+[Install]
+WantedBy=timers.target

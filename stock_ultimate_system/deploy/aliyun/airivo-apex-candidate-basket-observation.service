@@ -1,0 +1,15 @@
+[Unit]
+Description=Airivo Apex Candidate Basket Observation
+After=network-online.target airivo-apex-update.service airivo-apex-primary-result-daily-closure.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/airivo-apex/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/airivo-apex/app
+TimeoutStartSec=30m
+ExecStart=/opt/airivo-apex/.venv/bin/python /opt/airivo-apex/app/scripts/run_current_candidate_basket_observation.py --config /opt/airivo-apex/app/config/settings.yaml --exp-dir /opt/airivo-apex/app/data/experiments --baskets-dir /opt/airivo-apex/app/artifacts/primary_result_candidate_baskets --output /opt/airivo-apex/app/artifacts/primary_result_candidate_baskets/observation_latest.json --zero-on-blocked --json
+StandardOutput=append:/var/log/airivo-apex/candidate_basket_observation.log
+StandardError=append:/var/log/airivo-apex/candidate_basket_observation.err.log

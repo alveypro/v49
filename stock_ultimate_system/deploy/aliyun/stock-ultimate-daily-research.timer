@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Stock Ultimate Daily Research at 00:20 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 00:20:00 Asia/Shanghai
+Persistent=true
+Unit=stock-ultimate-daily-research.service
+
+[Install]
+WantedBy=timers.target

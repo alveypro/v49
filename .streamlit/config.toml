@@ -1,0 +1,19 @@
+[server]
+enableCORS = true
+enableXsrfProtection = false
+port = 8501
+headless = true
+runOnSave = false
+fileWatcherType = "none"
+disconnectedSessionTTL = 900
+maxMessageSize = 500
+enableWebsocketCompression = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#FF6B6B"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#262730"

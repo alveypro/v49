@@ -1,0 +1,9 @@
+main_board_limit: 0.10
+st_limit: 0.05
+chinext_limit: 0.20
+star_limit: 0.20
+t_plus_one: true
+filter_st: true
+filter_new_stock_days: 60
+liquidity_min_turnover: 1000000
+execution_liquidity_min_turnover: 300000

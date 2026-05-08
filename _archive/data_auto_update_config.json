@@ -1,0 +1,10 @@
+{
+  "auto_update_enabled": true,
+  "update_time": "18:00",
+  "update_stock_basic_weekly": true,
+  "update_daily_data": true,
+  "max_stocks": 5000,
+  "lookback_days": 30,
+  "last_update_time": null,
+  "last_stock_basic_update": "2025-10-23 21:10:30"
+}

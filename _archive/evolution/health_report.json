@@ -1,0 +1,42 @@
+{
+  "run_at": "2026-03-09 19:31:12",
+  "ok": true,
+  "warnings": [],
+  "stats": {
+    "db_path": "/Users/mac/2026Qlin/permanent_stock_database.db",
+    "daily_table": "daily_trading_data",
+    "last_trade_date": "20260306",
+    "records_last_trade_date": 5477,
+    "recent_trade_dates": [
+      "20260306",
+      "20260305",
+      "20260304",
+      "20260303",
+      "20260302",
+      "20260227",
+      "20260226",
+      "20260225",
+      "20260224",
+      "20260213"
+    ],
+    "recent_counts": {
+      "20260306": 5477,
+      "20260305": 5476,
+      "20260304": 5449
+    },
+    "northbound_flow_max_date": "20260304",
+    "northbound_flow_lag_trading_days": 2,
+    "margin_summary_max_date": "20260303",
+    "margin_summary_lag_trading_days": 3,
+    "margin_detail_max_date": "20260303",
+    "margin_detail_lag_trading_days": 3,
+    "moneyflow_daily_max_date": "20260304",
+    "moneyflow_daily_lag_trading_days": 2,
+    "moneyflow_ind_ths_max_date": "20260304",
+    "moneyflow_ind_ths_lag_trading_days": 2,
+    "top_list_max_date": "20260304",
+    "top_list_lag_trading_days": 2,
+    "top_inst_max_date": "20260304",
+    "top_inst_lag_trading_days": 2
+  }
+}

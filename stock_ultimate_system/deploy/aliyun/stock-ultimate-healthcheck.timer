@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Stock Ultimate Automation Health Check at 18:10 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 18:10:00 Asia/Shanghai
+Persistent=true
+Unit=stock-ultimate-healthcheck.service
+
+[Install]
+WantedBy=timers.target

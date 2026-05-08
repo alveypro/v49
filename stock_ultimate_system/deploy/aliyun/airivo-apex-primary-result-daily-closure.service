@@ -1,0 +1,15 @@
+[Unit]
+Description=Airivo Apex Primary Result Daily Closure
+After=network-online.target airivo-apex-update.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/airivo-apex/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/airivo-apex/app
+TimeoutStartSec=30m
+ExecStart=/opt/airivo-apex/.venv/bin/python /opt/airivo-apex/app/scripts/run_current_primary_result_daily_closure.py --config /opt/airivo-apex/app/config/settings.yaml --exp-dir /opt/airivo-apex/app/data/experiments --output /opt/airivo-apex/app/data/experiments/primary_result_daily_closure_latest.json --zero-on-blocked --json
+StandardOutput=append:/var/log/airivo-apex/primary_result_daily_closure.log
+StandardError=append:/var/log/airivo-apex/primary_result_daily_closure.err.log

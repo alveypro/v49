@@ -1,0 +1,18 @@
+[Unit]
+Description=Stock Ultimate Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/stock-ultimate/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/stock-ultimate/app
+ExecStart=/opt/stock-ultimate/.venv/bin/python /opt/stock-ultimate/app/run_dashboard.py --host 127.0.0.1 --port 8765 --base-path /stock
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/stock-ultimate/dashboard.log
+StandardError=append:/var/log/stock-ultimate/dashboard.err.log
+
+[Install]
+WantedBy=multi-user.target
