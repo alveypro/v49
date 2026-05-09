@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 
-ROLE_LABELS = {"viewer": "Viewer", "operator": "Operator", "admin": "Admin"}
+ROLE_LABELS = {"viewer": "查看者", "operator": "操作员", "admin": "管理员"}
 
 
 def build_sidebar_session_caption(session_meta: Dict[str, Any]) -> str:
@@ -82,4 +82,10 @@ def render_v49_sidebar(
     st.caption("生产策略：v9 / v8 / v5 / combo")
     st.caption("主流程：今日决策 -> 执行中心 -> 策略演进")
     st.caption(build_sidebar_session_caption(session_meta))
+    
+    # 添加登出按钮
+    if st.button("退出登录", key="sidebar_logout", use_container_width=True):
+        from openclaw.services.airivo_auth_middleware import logout as auth_logout
+        auth_logout()
+    
     return status
