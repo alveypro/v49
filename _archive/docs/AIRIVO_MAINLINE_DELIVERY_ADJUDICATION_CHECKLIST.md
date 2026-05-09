@@ -8,7 +8,10 @@ Authoritative references:
 - `docs/AIRIVO_30_DAY_EXECUTION_PLAN.md`
 - `docs/AIRIVO_PROFESSIONAL_SYSTEM_BLUEPRINT.md`
 - `docs/AIRIVO_CURRENT_STAGE_STRATEGY_PRODUCTION_READINESS_PLAN.md`
+- `docs/AIRIVO_STRATEGY_OPTIMIZATION_UPGRADE_EXECUTION_PLAN.md`
 - `docs/AIRIVO_CODE_REVIEW_REJECTION_STANDARD.md`
+- `_archive/docs/AIRIVO_GOVERNANCE_GATE_RUNBOOK.md`
+- `_archive/docs/AIRIVO_GOVERNANCE_ONE_PAGE_FLOW.md`
 
 Any change that cannot pass this checklist must not enter the production mainline.
 
@@ -26,6 +29,7 @@ Any change that cannot pass this checklist must not enter the production mainlin
 - The request does not require a second entry, second mainline, or second truth source.
 - The request does not break existing `daily outputs`.
 - If the request concerns production strategy, experimental strategy, execution evidence, or release readiness, it follows `docs/AIRIVO_CURRENT_STAGE_STRATEGY_PRODUCTION_READINESS_PLAN.md`.
+- If the request concerns strategy optimization, parameter sweep, unified strategy competition, observation pool, or production/experimental strategy promotion, it follows `docs/AIRIVO_STRATEGY_OPTIMIZATION_UPGRADE_EXECUTION_PLAN.md`.
 
 Reject at intake if any item above is unclear.
 
@@ -54,6 +58,8 @@ If any answer is uncertain, the review result is `reject`, not `follow up later`
 ## 4. Release
 
 - `tools/governance_gate.py` passes.
+- CI/发布入口使用 `_archive/tools/run_governance_gate_ci.sh`，并显式注入 `GOVERNANCE_BASE_SHA/GOVERNANCE_HEAD_SHA` 做增量差异审计。
+- 执行归因卫生门默认启用 dry-run：`AIRIVO_ENABLE_EXECUTION_ATTRIBUTION_HYGIENE_GATE=1`，若发现可补录缺口必须先修复再合入。
 - Release authority still maps to:
   - `docs/AIRIVO_UNIQUE_MAINLINE_DELIVERY_STANDARD.md`
   - `docs/AIRIVO_30_DAY_EXECUTION_PLAN.md`

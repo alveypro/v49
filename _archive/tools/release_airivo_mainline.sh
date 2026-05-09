@@ -54,6 +54,14 @@ LOCAL_HEAD="$(git rev-parse HEAD)"
 if ! git merge-base --is-ancestor "$REMOTE_BEFORE" "$LOCAL_HEAD"; then
   die "HEAD is not a fast-forward from ${REMOTE_NAME}/${REMOTE_BRANCH}"
 fi
+
+msg "step 2.5/6: governance gate against release diff"
+AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_DB_PATH="${AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_DB_PATH:-${AIRIVO_RELEASE_DB_PATH:-data/openclaw.db}}" \
+AIRIVO_ENABLE_EXECUTION_ATTRIBUTION_HYGIENE_GATE="${AIRIVO_ENABLE_EXECUTION_ATTRIBUTION_HYGIENE_GATE:-1}" \
+GOVERNANCE_BASE_SHA="$REMOTE_BEFORE" \
+GOVERNANCE_HEAD_SHA="$LOCAL_HEAD" \
+bash tools/run_governance_gate_ci.sh || die "governance gate failed for release diff"
+
 git push "$REMOTE_NAME" "$LOCAL_HEAD:$REMOTE_BRANCH"
 
 msg "step 3/5: ensure server git worktree exists"
