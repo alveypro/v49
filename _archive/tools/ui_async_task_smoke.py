@@ -9,9 +9,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from streamlit.testing.v1 import AppTest
-
-
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -63,14 +60,14 @@ def _app_path() -> str:
     return str(ROOT_DIR / "v49_app.py")
 
 
-def _collect_metric_map(at: AppTest) -> Dict[str, str]:
+def _collect_metric_map(at: Any) -> Dict[str, str]:
     out: Dict[str, str] = {}
     for metric in at.metric:
         out[str(metric.label)] = str(metric.value)
     return out
 
 
-def _find_strategy_radio(at: AppTest) -> int:
+def _find_strategy_radio(at: Any) -> int:
     for idx, radio in enumerate(at.radio):
         options = [str(opt) for opt in radio.options]
         if any("v9.0 中线均衡版" in opt for opt in options):
@@ -85,7 +82,7 @@ def _metric_int(metric_text: str) -> int:
     return int(match.group(1))
 
 
-def _collect_page_texts(at: AppTest) -> List[str]:
+def _collect_page_texts(at: Any) -> List[str]:
     texts: List[str] = []
     for bucket in (at.markdown, at.text, at.caption, at.success, at.info, at.warning, at.error):
         for item in bucket:
@@ -95,7 +92,7 @@ def _collect_page_texts(at: AppTest) -> List[str]:
     return texts
 
 
-def _assert_task_panel_visible(at: AppTest, strategy: str) -> Dict[str, Any]:
+def _assert_task_panel_visible(at: Any, strategy: str) -> Dict[str, Any]:
     metrics = _collect_metric_map(at)
     page_text = "\n".join(_collect_page_texts(at))
     title = TASK_TITLES[strategy]
@@ -119,6 +116,8 @@ def _assert_task_panel_visible(at: AppTest, strategy: str) -> Dict[str, Any]:
 
 
 def _run_strategy_page_smoke(strategy: str, run_id: str) -> Dict[str, Any]:
+    from streamlit.testing.v1 import AppTest
+
     at = AppTest.from_file(_app_path(), default_timeout=120)
     at.session_state["desired_main_tab"] = "今日决策"
     at.session_state["desired_production_tab"] = "今日决策"

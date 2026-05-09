@@ -195,10 +195,16 @@ from openclaw.runtime.backtest_workers import (
 from openclaw.runtime.backtest_stats import calculate_backtest_stats as runtime_calculate_backtest_stats
 from openclaw.runtime.v9_signal_evaluator import calculate_v9_score_from_history as runtime_calculate_v9_score_from_history
 from openclaw.runtime.combo_signal_evaluator import (
+    evaluate_combo_component_scores as runtime_evaluate_combo_component_scores,
     evaluate_combo_signal as runtime_evaluate_combo_signal,
     evaluate_combo_score_components as runtime_evaluate_combo_score_components,
     finalize_combo_scan_score as runtime_finalize_combo_scan_score,
+    freeze_combo_component_diagnostics as runtime_freeze_combo_component_diagnostics,
+    prewarm_v8_base_context as runtime_prewarm_v8_base_context,
+    record_combo_component_diagnostics as runtime_record_combo_component_diagnostics,
+    record_combo_gate_diagnostics as runtime_record_combo_gate_diagnostics,
     resolve_combo_signal_config as runtime_resolve_combo_signal_config,
+    slice_index_data_for_combo_history as runtime_slice_index_data_for_combo_history,
 )
 from openclaw.runtime.dataframe_utils import (
     ensure_price_aliases as runtime_ensure_price_aliases,
@@ -335,6 +341,7 @@ from openclaw.services.airivo_rebalance_service import (
     precheck_production_rebalance_orders as service_precheck_production_rebalance_orders,
     production_rebalance_audit_log_path as service_production_rebalance_audit_log_path,
     production_rollback_state_path as service_production_rollback_state_path,
+    production_strategy_health_evidence as service_production_strategy_health_evidence,
     production_strategy_health_multipliers as service_production_strategy_health_multipliers,
     resolve_market_regime as service_resolve_market_regime,
     run_auto_rebalance_pipeline as service_run_auto_rebalance_pipeline,
@@ -1655,6 +1662,10 @@ def _auto_rebalance_scheduler_tick() -> Dict[str, Any]:
 
 def _production_strategy_health_multipliers() -> Dict[str, float]:
     return service_production_strategy_health_multipliers(_load_latest_production_backtest_audit)
+
+
+def _production_strategy_health_evidence() -> Dict[str, Any]:
+    return service_production_strategy_health_evidence(_load_latest_production_backtest_audit)
 
 
 def _production_baseline_params(profile: str = "稳健标准", strict_full_market: bool = False) -> Dict[str, Dict[str, Any]]:
@@ -4271,6 +4282,7 @@ class UnifiedBacktestEngine:
         self.fee_bps = float(os.getenv("OPENCLAW_BACKTEST_FEE_BPS", "3")) if fee_bps is None else float(fee_bps)
         self.slippage_bps = float(os.getenv("OPENCLAW_BACKTEST_SLIPPAGE_BPS", "5")) if slippage_bps is None else float(slippage_bps)
         self.stock_groups: Dict[str, pd.DataFrame] = {}
+        self.filter_stats = {"skip_untradeable": 0, "skip_volume": 0, "skip_limit": 0}
         if not self.df.empty and "trade_date" in self.df.columns:
             self.df["trade_date"] = self.df["trade_date"].astype(str)
         if not self.df.empty and "ts_code" in self.df.columns and self.sample_size > 0:
@@ -4293,6 +4305,29 @@ class UnifiedBacktestEngine:
         round_trip_cost_pct = (2.0 * total_bps) / 100.0
         return float(gross_return_pct - round_trip_cost_pct), float(round_trip_cost_pct)
 
+    def _is_tradeable_row(self, row: pd.Series) -> bool:
+        vol = float(row.get("vol", row.get("volume", 0)) or 0)
+        amount = float(row.get("amount", 0) or 0)
+        if vol <= 0 or amount <= 0:
+            self.filter_stats["skip_volume"] += 1
+            self.filter_stats["skip_untradeable"] += 1
+            return False
+        pct = abs(float(row.get("pct_chg", 0) or 0))
+        if pct >= 9.8:
+            self.filter_stats["skip_limit"] += 1
+            self.filter_stats["skip_untradeable"] += 1
+            return False
+        return True
+
+    def execution_constraints_summary(self) -> Dict[str, Any]:
+        return {
+            "tradeability_filter_enabled": True,
+            "volume_constraint_enabled": True,
+            "skip_untradeable": int(self.filter_stats.get("skip_untradeable", 0) or 0),
+            "skip_volume": int(self.filter_stats.get("skip_volume", 0) or 0),
+            "skip_limit": int(self.filter_stats.get("skip_limit", 0) or 0),
+        }
+
     def _sample_stocks(self) -> List[str]:
         if self.stock_groups:
             all_stocks = list(self.stock_groups.keys())
@@ -4313,9 +4348,12 @@ class UnifiedBacktestEngine:
         step: int,
         signal_fn: Callable[[str, pd.DataFrame, int, pd.DataFrame], Optional[Dict[str, Any]]],
         stop_on_first_signal: bool = False,
+        max_evaluations: Optional[int] = None,
     ) -> Tuple[pd.DataFrame, int]:
         records: List[Dict[str, Any]] = []
         analyzed = 0
+        evaluated = 0
+        eval_limit = int(max_evaluations or 0)
         for ts_code in self._sample_stocks():
             g = self.stock_groups.get(str(ts_code))
             if g is None:
@@ -4325,7 +4363,12 @@ class UnifiedBacktestEngine:
             analyzed += 1
             max_idx = len(g) - self.holding_days
             for i in range(int(window), max_idx, int(step)):
+                if eval_limit > 0 and evaluated >= eval_limit:
+                    return pd.DataFrame(records), analyzed
+                if not self._is_tradeable_row(g.iloc[i]):
+                    continue
                 hist = g.iloc[i - int(window):i].copy()
+                evaluated += 1
                 sig = signal_fn(ts_code, g, i, hist)
                 if not sig:
                     continue
@@ -4334,9 +4377,46 @@ class UnifiedBacktestEngine:
                     exit_offset = 1
                 if i + exit_offset >= len(g):
                     continue
+                forced_exit_price_raw = sig.pop("__exit_price", None)
+                stop_loss_pct_raw = sig.pop("__stop_loss_pct", None)
+                take_profit_pct_raw = sig.pop("__take_profit_pct", None)
+                stop_loss_pct = None
+                take_profit_pct = None
+                try:
+                    if stop_loss_pct_raw is not None:
+                        stop_loss_pct = max(0.0, float(stop_loss_pct_raw))
+                except Exception:
+                    stop_loss_pct = None
+                try:
+                    if take_profit_pct_raw is not None:
+                        take_profit_pct = max(0.0, float(take_profit_pct_raw))
+                except Exception:
+                    take_profit_pct = None
                 close_col = "close_price" if "close_price" in g.columns else "close"
                 entry_price = float(g.iloc[i][close_col])
+                exit_reason = str(sig.get("exit_reason", "holding_period") or "holding_period")
+                if entry_price > 0 and (stop_loss_pct is not None or take_profit_pct is not None):
+                    for day in range(1, int(exit_offset) + 1):
+                        if i + day >= len(g):
+                            break
+                        current_price = float(g.iloc[i + day][close_col])
+                        path_return = current_price / entry_price - 1.0
+                        if stop_loss_pct is not None and path_return <= -float(stop_loss_pct):
+                            exit_offset = int(day)
+                            exit_reason = "stop_loss"
+                            break
+                        if take_profit_pct is not None and path_return >= float(take_profit_pct):
+                            exit_offset = int(day)
+                            exit_reason = "take_profit"
+                            break
+                if not self._is_tradeable_row(g.iloc[i + exit_offset]):
+                    continue
                 exit_price = float(g.iloc[i + exit_offset][close_col])
+                try:
+                    if forced_exit_price_raw is not None:
+                        exit_price = float(forced_exit_price_raw)
+                except Exception:
+                    pass
                 gross_return = (exit_price / entry_price - 1.0) * 100 if entry_price else 0.0
                 future_return, cost_pct = self._apply_costs(gross_return)
                 record = {
@@ -4346,6 +4426,7 @@ class UnifiedBacktestEngine:
                     "gross_return": float(gross_return),
                     "round_trip_cost_pct": cost_pct,
                     "holding_days_realized": int(exit_offset),
+                    "exit_reason": exit_reason,
                 }
                 record.update(sig)
                 records.append(record)
@@ -4371,6 +4452,8 @@ class UnifiedBacktestEngine:
             i = len(g) - self.holding_days - 1
             if i < int(min_hist_idx):
                 continue
+            if not self._is_tradeable_row(g.iloc[i]):
+                continue
             hist = g.iloc[: i + 1].copy()
             sig = signal_fn(ts_code, g, i, hist)
             if not sig:
@@ -4379,6 +4462,8 @@ class UnifiedBacktestEngine:
             if exit_offset < 1:
                 exit_offset = 1
             if i + exit_offset >= len(g):
+                continue
+            if not self._is_tradeable_row(g.iloc[i + exit_offset]):
                 continue
             close_col = "close_price" if "close_price" in g.columns else "close"
             entry_price = float(g.iloc[i][close_col])
@@ -8257,6 +8342,7 @@ class CompleteVolumePriceAnalyzer:
             stats['avg_round_trip_cost_pct'] = round(float(backtest_df['round_trip_cost_pct'].mean()), 4)
         if 'gross_return' in backtest_df.columns:
             stats['avg_gross_return'] = round(float(backtest_df['gross_return'].mean()), 2)
+        stats.update(engine.execution_constraints_summary())
         
         logger.info(f"v8.0回测完成: 胜率{win_rate:.1f}%, 平均收益{avg_return:.2f}%, 信号数{total_signals}")
         
@@ -8359,6 +8445,7 @@ class CompleteVolumePriceAnalyzer:
             if backtest_df.empty:
                 return {'success': False, 'error': '未产生有效信号', 'stats': {'analyzed_stocks': analyzed}}
             stats = self._calculate_backtest_stats(backtest_df, analyzed, holding_days)
+            stats.update(engine.execution_constraints_summary())
             return {'success': True, 'strategy': 'v9.0 中线均衡版', 'stats': stats}
 
         except Exception as e:
@@ -8373,7 +8460,11 @@ class CompleteVolumePriceAnalyzer:
                                   min_agree: Optional[int] = None,
                                   thr_v5: Optional[float] = None,
                                   thr_v8: Optional[float] = None,
-                                  thr_v9: Optional[float] = None) -> dict:
+                                  thr_v9: Optional[float] = None,
+                                  combo_replay_step: Optional[int] = None,
+                                  max_evaluations: Optional[int] = None,
+                                  max_stop_loss_pct: Optional[float] = None,
+                                  max_take_profit_pct: Optional[float] = None) -> dict:
         """组合策略回测（生产对齐版）：v5/v8/v9 共识评分。"""
         try:
             if df is None or df.empty:
@@ -8398,6 +8489,26 @@ class CompleteVolumePriceAnalyzer:
                 combo_params["thr_v8"] = float(thr_v8)
             if thr_v9 is not None:
                 combo_params["thr_v9"] = float(thr_v9)
+            if combo_replay_step is not None:
+                combo_params["combo_replay_step"] = int(combo_replay_step)
+            if max_evaluations is not None:
+                combo_params["max_evaluations"] = int(max_evaluations)
+            if max_stop_loss_pct is not None:
+                combo_params["max_stop_loss_pct"] = float(max_stop_loss_pct)
+            if max_take_profit_pct is not None:
+                combo_params["max_take_profit_pct"] = float(max_take_profit_pct)
+            v5_candidate_aligned = str(combo_params.get("v5_candidate_aligned", os.getenv("COMBO_V5_CANDIDATE_ALIGNED", "1"))).strip().lower() not in {"0", "false", "no", "off"}
+            combo_max_stop_loss_pct = max(
+                0.01,
+                min(
+                    0.30,
+                    float(combo_params.get("max_stop_loss_pct", os.getenv("COMBO_MAX_STOP_LOSS_PCT", "0.08")) or 0.08),
+                ),
+            )
+            raw_combo_take_profit_pct = combo_params.get("max_take_profit_pct", os.getenv("COMBO_MAX_TAKE_PROFIT_PCT", "") or None)
+            combo_max_take_profit_pct = None
+            if raw_combo_take_profit_pct is not None:
+                combo_max_take_profit_pct = max(0.02, min(0.80, float(raw_combo_take_profit_pct)))
             production_only = str(os.getenv("COMBO_PRODUCTION_ONLY", "1")) == "1"
             market_env = "oscillation"
             try:
@@ -8433,29 +8544,104 @@ class CompleteVolumePriceAnalyzer:
                 index_data = None
 
             engine = UnifiedBacktestEngine(df, sample_size=sample_size, holding_days=holding_days)
+            combo_diagnostics = {
+                "type": "combo_consensus",
+                "strategy": "combo",
+                "evaluated": 0,
+                "active_components": ["v5", "v8", "v9"],
+                "thresholds": thresholds,
+                "base_weights": dict(combo_config.get("base_weights", {})),
+                "health_multipliers": dict(combo_config.get("health_multipliers", {})),
+                "health_evidence": _production_strategy_health_evidence(),
+                "pre_normalized_weights": dict(combo_config.get("pre_normalized_weights", {})),
+                "weights": weights,
+                "combo_threshold": float(combo_threshold),
+                "min_agree": int(min_agree),
+                "market_env": market_env,
+                "v5_candidate_aligned": bool(v5_candidate_aligned),
+                "component_available": {"v5": 0, "v8": 0, "v9": 0},
+                "component_pass": {"v5": 0, "v8": 0, "v9": 0},
+                "agree_count_histogram": {},
+                "drop_reasons": {},
+            }
+            combo_score_cache = {}
+            runtime_prewarm_v8_base_context(self.evaluator_v8, combo_diagnostics, top_n=8)
 
             def _signal_combo(ts_code: str, g: pd.DataFrame, i: int, current_data: pd.DataFrame) -> Optional[Dict[str, Any]]:
-                return runtime_evaluate_combo_signal(
+                scores = runtime_evaluate_combo_component_scores(
                     ts_code=ts_code,
                     current_data=current_data,
                     v5_evaluator=self.evaluator_v5,
                     v8_evaluator=self.evaluator_v8,
                     v9_score_fn=lambda hist: self._calc_v9_score_from_hist(hist, industry_strength=0.0),
-                    index_data=index_data,
+                    index_data=runtime_slice_index_data_for_combo_history(index_data, current_data),
+                    timing_sink=combo_diagnostics,
+                    score_cache=combo_score_cache,
+                    v5_candidate_aligned=bool(v5_candidate_aligned),
+                    v5_threshold=float(thresholds.get("v5", combo_threshold)),
+                )
+                combo_diagnostics["evaluated"] = int(combo_diagnostics.get("evaluated", 0) or 0) + 1
+                runtime_record_combo_component_diagnostics(
+                    combo_diagnostics,
+                    scores=scores,
+                    thresholds=thresholds,
+                    combo_threshold=combo_threshold,
+                )
+                gate_diag = runtime_record_combo_gate_diagnostics(
+                    combo_diagnostics,
+                    scores=scores,
+                    thresholds=thresholds,
+                    weights=weights,
+                    combo_threshold=combo_threshold,
+                    min_agree=min_agree,
+                )
+                agree_count = int(gate_diag.get("agree_count", 0) or 0)
+                active_count = 0
+                for key in ("v5", "v8", "v9"):
+                    if scores.get(key) is None:
+                        continue
+                    active_count += 1
+                    combo_diagnostics["component_available"][key] = int(combo_diagnostics["component_available"].get(key, 0) or 0) + 1
+                    if float(scores[key]) >= float(thresholds.get(key, combo_threshold)):
+                        combo_diagnostics["component_pass"][key] = int(combo_diagnostics["component_pass"].get(key, 0) or 0) + 1
+                hist_key = str(agree_count)
+                combo_diagnostics["agree_count_histogram"][hist_key] = int(combo_diagnostics["agree_count_histogram"].get(hist_key, 0) or 0) + 1
+                result = runtime_evaluate_combo_score_components(
+                    scores=scores,
                     thresholds=thresholds,
                     weights=weights,
                     combo_threshold=combo_threshold,
                     min_agree=min_agree,
                     market_env=market_env,
                 )
+                if result is None:
+                    reason = "not_enough_component_agreement" if agree_count < max(1, min(int(min_agree), max(1, active_count))) else "weighted_consensus_below_threshold"
+                    combo_diagnostics["drop_reasons"][reason] = int(combo_diagnostics["drop_reasons"].get(reason, 0) or 0) + 1
+                else:
+                    result["__stop_loss_pct"] = float(combo_max_stop_loss_pct)
+                    result["risk_stop_loss_pct_cap"] = round(float(combo_max_stop_loss_pct) * 100.0, 4)
+                    if combo_max_take_profit_pct is not None:
+                        result["__take_profit_pct"] = float(combo_max_take_profit_pct)
+                        result["risk_take_profit_pct_cap"] = round(float(combo_max_take_profit_pct) * 100.0, 4)
+                return result
 
-            backtest_df, analyzed = engine.run_last_point(
+            combo_replay_step = int(combo_params.get("combo_replay_step", os.getenv("COMBO_BACKTEST_REPLAY_STEP", "20")) or 20)
+            max_evaluations = int(combo_params.get("max_evaluations", 0) or 0)
+            backtest_df, analyzed = engine.run_rolling(
                 min_rows=80 + holding_days,
-                min_hist_idx=80,
+                window=80,
+                step=max(1, combo_replay_step),
                 signal_fn=_signal_combo,
+                stop_on_first_signal=True,
+                max_evaluations=max_evaluations if max_evaluations > 0 else None,
             )
             if backtest_df.empty:
-                return {'success': False, 'error': '组合策略回测未产生有效信号', 'stats': {'analyzed_stocks': analyzed}}
+                return {
+                    'success': False,
+                    'error': '组合策略回测未产生有效信号',
+                    'stats': {'analyzed_stocks': analyzed},
+                    'backtest_diagnostics': runtime_freeze_combo_component_diagnostics(combo_diagnostics),
+                }
 
             # 与扫描口径保持一致：应用组合级风险预算（持仓上限+行业集中度上限）。
             try:
@@ -8487,12 +8673,23 @@ class CompleteVolumePriceAnalyzer:
                     float(rb.get("max_industry_ratio", 0.35)),
                 )
                 if backtest_df is None or backtest_df.empty:
-                    return {'success': False, 'error': '组合策略回测在风险预算约束后无有效信号', 'stats': {'analyzed_stocks': analyzed}}
+                    return {
+                        'success': False,
+                        'error': '组合策略回测在风险预算约束后无有效信号',
+                        'stats': {'analyzed_stocks': analyzed},
+                        'backtest_diagnostics': runtime_freeze_combo_component_diagnostics(combo_diagnostics),
+                    }
 
             stats = self._calculate_backtest_stats(backtest_df.copy(), analyzed, holding_days)
+            stats.update(engine.execution_constraints_summary())
+            stats["replay_step"] = int(max(1, combo_replay_step))
             stats["risk_budget_enabled"] = bool(rb.get("enabled", False))
             stats["risk_budget_max_positions"] = int(rb.get("max_positions", 20))
             stats["risk_budget_max_industry_ratio"] = float(rb.get("max_industry_ratio", 0.35))
+            risk_control = {"max_stop_loss_pct": float(combo_max_stop_loss_pct)}
+            if combo_max_take_profit_pct is not None:
+                risk_control["max_take_profit_pct"] = float(combo_max_take_profit_pct)
+            stats["risk_control"] = risk_control
             details = []
             for _, r in backtest_df.head(100).iterrows():
                 details.append({
@@ -8514,6 +8711,7 @@ class CompleteVolumePriceAnalyzer:
                 'stats': stats,
                 'backtest_data': backtest_df,
                 'details': details,
+                'backtest_diagnostics': runtime_freeze_combo_component_diagnostics(combo_diagnostics),
             }
         except Exception as e:
             logger.error(f"组合策略回测失败: {e}")
