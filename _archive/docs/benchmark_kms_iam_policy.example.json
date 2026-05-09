@@ -1,0 +1,29 @@
+{
+  "schema_version": "benchmark_kms_iam_policy.v1",
+  "principals": {
+    "benchmark_governance_gate": {
+      "allowed_actions": [
+        "verify"
+      ],
+      "allowed_algos": [
+        "pkcs1_sha256_detached_v1",
+        "kms_hmac_sha256_v1"
+      ],
+      "allowed_key_ids": [
+        "benchmark_default_key",
+        "benchmark_rotating_key_2026q3"
+      ]
+    },
+    "benchmark_release_drill": {
+      "allowed_actions": [
+        "verify"
+      ],
+      "allowed_algos": [
+        "pkcs1_sha256_detached_v1"
+      ],
+      "allowed_key_ids": [
+        "benchmark_rotating_key_2026q3"
+      ]
+    }
+  }
+}
