@@ -1,0 +1,36 @@
+{
+  "schema_version": "benchmark_contract_keyring.v1",
+  "keys": {
+    "benchmark_default_key": {
+      "status": "active",
+      "allowed_algos": [
+        "sha256_secret_v1",
+        "pkcs1_sha256_detached_v1",
+        "kms_hmac_sha256_v1"
+      ],
+      "verify_mode": "hook",
+      "verify_hook_command": "python3 tools/verify_benchmark_contract_signature_hook.py",
+      "delegate_verify_command": "python3 tools/kms_pki_delegate_verifier.py",
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\\nREPLACE_WITH_REAL_KEY\\n-----END PUBLIC KEY-----"
+    },
+    "benchmark_rotating_key_2026q3": {
+      "status": "active",
+      "allowed_algos": [
+        "pkcs1_sha256_detached_v1"
+      ],
+      "verify_mode": "hook",
+      "verify_hook_command": "python3 tools/verify_benchmark_contract_signature_hook.py",
+      "delegate_verify_command": "python3 tools/kms_pki_delegate_verifier.py",
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\\nREPLACE_WITH_ROTATED_KEY\\n-----END PUBLIC KEY-----"
+    },
+    "benchmark_revoked_key_example": {
+      "status": "revoked",
+      "allowed_algos": [
+        "pkcs1_sha256_detached_v1"
+      ],
+      "verify_mode": "hook",
+      "verify_hook_command": "python3 tools/verify_benchmark_contract_signature_hook.py",
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\\nREVOKED_KEY\\n-----END PUBLIC KEY-----"
+    }
+  }
+}
