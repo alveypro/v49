@@ -199,8 +199,8 @@ def render_today_v5_strategy_page(
     if "v5_cache" not in st.session_state:
         st.session_state["v5_cache"] = True
     st.session_state["v5_async_scan"] = True
-    use_cache_v5 = st.checkbox("优先使用离线缓存结果", value=True, key="v5_cache")
-    async_scan_v5 = st.checkbox("后台运行（生产默认，已强制开启）", value=True, key="v5_async_scan", disabled=True)
+    use_cache_v5 = st.checkbox("优先使用离线缓存结果", key="v5_cache")
+    async_scan_v5 = st.checkbox("后台运行（生产默认，已强制开启）", key="v5_async_scan", disabled=True)
     st.caption("生产策略扫描已强制后台化：任务进入后台队列，页面刷新或短暂断线后仍可继续查看结果。")
     st.info("v5.0策略将扫描所有符合市值条件的股票（无数量限制）")
     evo_hold = evolve_v5_core.get("params", {}).get("holding_days")
