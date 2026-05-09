@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Stock Ultimate Weekly Long Backtest on Sunday 02:30 Asia/Shanghai
+
+[Timer]
+OnCalendar=Sun *-*-* 02:30:00 Asia/Shanghai
+Persistent=true
+Unit=stock-ultimate-weekly-long.service
+
+[Install]
+WantedBy=timers.target

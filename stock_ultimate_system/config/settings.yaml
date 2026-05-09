@@ -1,0 +1,70 @@
+project:
+  name: stock_ultimate_system
+  market: CN_A
+  version: '1.0.0'
+
+data:
+  provider: sqlite
+  qlib_provider_uri: '~/.qlib/qlib_data/cn_data'
+  tushare_token_file: '../.tushare_token'
+  sqlite_db_path: '../_archive/permanent_stock_database.db'
+  sqlite_table: 'daily_trading_data'
+  benchmark_indices:
+    - '000001.SH'
+  fallback_provider: tushare
+  start_date: '2020-01-01'
+  end_date: '2026-12-31'
+  stock_pool:
+    - '000001.SZ'
+    - '000002.SZ'
+    - '600000.SH'
+    - '600036.SH'
+
+training:
+  train_ratio: 0.7
+  valid_ratio: 0.15
+  random_state: 42
+  enable_deep_models: false
+
+risk:
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.10
+  risk_per_trade: 0.01
+  max_position_pct: 0.20
+  max_drawdown_protection: 0.10
+  volatility_filter_threshold: 0.04
+  liquidity_min_turnover: 10000000
+
+backtest:
+  initial_cash: 1000000
+  commission_rate: 0.0003
+  slippage_rate: 0.0005
+  stamp_tax_rate: 0.001
+  t_plus_one: true
+  price_limit_check: true
+
+evolution:
+  n_trials: 50
+  metric: 'trade_objective'
+  top_k_models: 3
+  factor_decay_threshold: 0.3
+  walk_forward_folds: 3
+  promotion_min_improvement: 0.02
+  promotion_min_walk_forward_score: 0.12
+  promotion_min_stability: 0.55
+
+runtime:
+  batch_prediction_max_runtime_sec: 12
+  batch_prediction_max_symbols: 0
+  candidate_timeout_sec: 45
+  candidate_quick_enabled_models:
+    - logistic
+    - random_forest
+  candidate_quick_logistic_max_iter: 200
+  candidate_quick_rf_estimators: 80
+  candidate_quick_rf_max_depth: 4
+  candidate_retry_universe_sizes:
+    - 15
+    - 40
+    - 120
+    - 300

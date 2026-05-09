@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from openclaw.runtime.v8_signal_evaluator import (
+    build_v8_suppression_diagnostics,
     build_v8_evaluation_result,
     calculate_v8_final_score,
     calculate_v8_star_rating,
@@ -17,6 +18,8 @@ def test_calculate_v8_final_score_freezes_weighting_and_market_penalty():
 
     assert result["advanced_score"] == 80.0
     assert result["v7_score"] == 50.0
+    assert result["pre_market_score"] == 77.0
+    assert result["market_penalty"] == 0.5
     assert result["final_score"] == 38.5
     assert result["v7_weight"] == 0.1
     assert result["advanced_weight"] == 0.9
@@ -43,8 +46,32 @@ def test_build_v8_evaluation_result_freezes_public_payload():
 
     assert result["success"] is True
     assert result["final_score"] == 88.0
+    assert result["pre_market_score"] == 88.0
+    assert result["market_penalty"] == 1.0
     assert result["grade"] == "SSS"
     assert result["star_rating"] == 5
     assert result["position_suggestion"] == 0.25
     assert result["advanced_factors"]["factors"]["smart_money"]["score"] == 10
     assert result["timestamp"] == "2026-05-01 09:30:00"
+
+
+def test_build_v8_suppression_diagnostics_flags_market_and_factor_pressure():
+    diag = build_v8_suppression_diagnostics(
+        {
+            "threshold": 60.0,
+            "evaluated": 3,
+            "pass_rate": 0.0,
+            "avg_score": 48.0,
+            "score_breakdown": {
+                "pre_market_score": {"avg": 66.0},
+                "market_penalty": {"avg": 0.72},
+                "advanced_score": {"avg": 42.0},
+                "factor:relative_strength": {"avg": 3.0},
+                "factor:smart_money": {"avg": 8.0},
+            },
+        }
+    )
+
+    assert diag["suppressed_by_market_penalty"] is True
+    assert diag["suppressed_by_factor_distribution"] is True
+    assert diag["low_factor_averages"] == [{"factor": "relative_strength", "avg": 3.0}]

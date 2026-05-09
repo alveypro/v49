@@ -1,0 +1,16 @@
+max_drawdown_protection: 0.10
+volatility_filter_threshold: 0.30
+liquidity_min_turnover: 1000000
+execution_liquidity_min_turnover: 300000
+range_confidence_min: 0.05
+atr_stop_loss_multiplier: 2.0
+atr_take_profit_multiplier: 3.0
+drawdown_protection_position_scale: 0.30
+drawdown_recovery_ratio: 0.50
+environment_weak_score_threshold: 0.45
+environment_weak_position_scale: 0.60
+environment_risk_off_position_scale: 0.35
+environment_risk_off_regimes:
+  - extreme
+  - extreme_volatile
+  - range_volatile

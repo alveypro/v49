@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.airivo.openclaw.dingtalk-bridge</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/mac/.pyenv/versions/3.10.12/bin/python3</string>
+      <string>/Users/mac/2026Qlin/deploy_stock/dingtalk_bridge_server.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mac/2026Qlin</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>DINGTALK_BRIDGE_HOST</key>
+      <string>0.0.0.0</string>
+      <key>DINGTALK_BRIDGE_PORT</key>
+      <string>8601</string>
+      <key>DINGTALK_AGENT_TIMEOUT_SEC</key>
+      <string>18</string>
+      <key>DINGTALK_CALLBACK_SECRET</key>
+      <string></string>
+      <key>DINGTALK_CALLBACK_TOKEN</key>
+      <string></string>
+      <key>DINGTALK_CALLBACK_AES_KEY</key>
+      <string></string>
+      <key>DINGTALK_CALLBACK_APP_KEY</key>
+      <string>dingdbqrxeuebuckvgkm</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mac/2026Qlin/logs/openclaw/dingtalk_bridge.launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mac/2026Qlin/logs/openclaw/dingtalk_bridge.launchd.err.log</string>
+  </dict>
+</plist>

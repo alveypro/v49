@@ -4,7 +4,7 @@
 
 - Delivery standard: `docs/AIRIVO_UNIQUE_MAINLINE_DELIVERY_STANDARD.md`
 - 30-day execution plan: `docs/AIRIVO_30_DAY_EXECUTION_PLAN.md`
-- Adjudication checklist: `docs/AIRIVO_MAINLINE_DELIVERY_ADJUDICATION_CHECKLIST.md`
+- Adjudication checklist: `_archive/docs/AIRIVO_MAINLINE_DELIVERY_ADJUDICATION_CHECKLIST.md`
 - Review rejection standard: `docs/AIRIVO_CODE_REVIEW_REJECTION_STANDARD.md`
 
 ## Scope Declaration
@@ -54,6 +54,48 @@
 - [ ] `python3 tools/governance_gate.py`
 - [ ] Relevant tests or smoke checks were run
 - [ ] Release / rollback impact was reviewed
+
+## Governance Gate Checklist
+
+- Runbook followed: `_archive/docs/AIRIVO_GOVERNANCE_GATE_RUNBOOK.md`
+  - [ ] Yes
+- Gate execution mode:
+  - [ ] local full scan (`bash _archive/tools/run_governance_gate_ci.sh`)
+  - [ ] diff scan (`GOVERNANCE_BASE_SHA/GOVERNANCE_HEAD_SHA`)
+- Governance artifact (if produced by gate tooling):
+- Execution attribution hygiene dry-run artifact (`execution_attribution_backfill_dry_run_*.json`):
+- If hygiene dry-run found gaps (`patched_count > 0`), remediation evidence:
+  - [ ] `python tools/backfill_execution_attribution.py --apply ...` executed in controlled step
+  - [ ] post-remediation gate rerun passed
+- Required gate env values used in this PR context:
+  - `AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_DB_PATH`:
+  - `AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_STATUSES`:
+  - `AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_STALE_MINUTES`:
+  - `AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_MAX_ORDERS`:
+
+## Strategy Optimization Evidence
+
+- Is this PR changing strategy optimization, backtest selection, combo/v8/v6 logic, or promotion governance?
+  - [ ] No
+  - [ ] Yes, evidence below is required
+- Evidence manifest (`AIRIVO_STRATEGY_PR_EVIDENCE_FILE`):
+- Backtest sweep artifact path:
+- `backtest_credibility` confirmed in sweep artifact:
+  - [ ] Yes
+- `strategy_backtest_diagnostics` confirmed in sweep artifact:
+  - [ ] Yes
+- `strategy_optimization_stage_audit` JSON path:
+- `strategy_optimization_stage_audit` Markdown path:
+- Rejected artifact ledger path:
+- Gate tests run (`full` or `specified`):
+- Gate test result artifact path(s):
+- If strategy moves from `observation` to `candidate`, linked evidence must include:
+  - [ ] `decision_id`
+  - [ ] `order / fill / attribution`
+  - [ ] `slippage`
+  - [ ] `miss reason`
+  - [ ] `manual override` record
+  - [ ] linked `run_id`
 
 ## Reviewer Focus
 

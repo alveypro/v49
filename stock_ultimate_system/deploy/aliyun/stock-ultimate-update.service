@@ -1,0 +1,15 @@
+[Unit]
+Description=Stock Ultimate Daily Update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/stock-ultimate/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/stock-ultimate/app
+TimeoutStartSec=12h
+ExecStart=/opt/stock-ultimate/.venv/bin/python /opt/stock-ultimate/app/run_update_database.py --config-dir config/server --post-top-candidates --no-post-daily-research --post-universe-size 0 --post-top-n 20
+StandardOutput=append:/var/log/stock-ultimate/update.log
+StandardError=append:/var/log/stock-ultimate/update.err.log

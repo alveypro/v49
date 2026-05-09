@@ -1,0 +1,18 @@
+[Unit]
+Description=Airivo Apex Stock
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/airivo-apex/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/airivo-apex/app
+ExecStart=/opt/airivo-apex/.venv/bin/python /opt/airivo-apex/app/run_dashboard.py --host 127.0.0.1 --port 18765 --base-path /apex/stock
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/airivo-apex/stock.log
+StandardError=append:/var/log/airivo-apex/stock.err.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 import types
@@ -7,6 +8,7 @@ import types
 import pandas as pd
 
 from openclaw.services.airivo_batch_service import build_manual_scan_opportunities, publish_manual_scan_to_execution_queue
+from openclaw.services.airivo_rebalance_service import production_strategy_health_evidence
 from openclaw.services.data_version_service import build_data_version, build_param_version
 from openclaw.services.data_quality_service import evaluate_data_quality
 from openclaw.services.decision_service import record_decision_event, upsert_decision_snapshot
@@ -34,6 +36,36 @@ from openclaw.services.release_gate_service import (
     run_professional_fact_audit_gate,
 )
 from openclaw.services.release_event_service import record_release_event, record_release_validation
+
+
+def test_production_strategy_health_evidence_explains_multiplier_source():
+    def _load_audit():
+        return (
+            pd.DataFrame(
+                [
+                    {
+                        "策略": "v9",
+                        "样本": 80,
+                        "胜率(%)": 48.0,
+                        "最大回撤(%)": 22.0,
+                        "信号密度": 0.4,
+                        "滚动失败窗": "0/6",
+                        "参数(阈值/持仓)": "60/4",
+                        "评估风险": "GREEN",
+                        "建议晋升": "NO",
+                        "建议动作": "observe",
+                    }
+                ]
+            ),
+            "v9_latest.json",
+        )
+
+    evidence = production_strategy_health_evidence(_load_audit)
+
+    assert evidence["source"] == "v9_latest.json"
+    assert evidence["strategies"]["v9"]["multiplier"] == 0.8
+    assert evidence["strategies"]["v9"]["promotion"] == "NO"
+    assert evidence["strategies"]["v9"]["next_action"] == "observe"
 
 
 def test_apply_professional_migrations_and_signal_chain(tmp_db):
@@ -192,24 +224,38 @@ def test_record_signal_dataframe_chain_writes_versions_and_items(tmp_db, tmp_pat
 
 def test_record_backtest_result_chain_writes_signal_run(tmp_db, tmp_path):
     run_id = new_run_id("backtest", "single")
+    audit = {
+        "point_in_time_data": True,
+        "suspension_and_limit_handling": True,
+        "volume_constraint": True,
+        "cost_model": True,
+        "slippage_model": True,
+        "in_sample_out_of_sample_split": True,
+        "parameter_sensitivity": True,
+        "failed_backtests_recorded": True,
+        "sample": {"in_sample": "2025Q1", "out_of_sample": "2025Q2"},
+        "metrics": {"win_rate": 60},
+    }
     record_backtest_result_chain(
         connect_db=lambda: sqlite3.connect(str(tmp_db)),
         code_root=tmp_path,
         run_id=run_id,
         job_kind="single",
         payload={"strategy": "v9", "sample_size": 10, "date_to": "2026-05-01"},
-        result={"success": True, "result": {"stats": {"win_rate": 60}}},
+        result={"success": True, "result": {"stats": {"win_rate": 60}}, "backtest_credibility": audit},
     )
 
     conn = sqlite3.connect(str(tmp_db))
     row = conn.execute(
-        "SELECT run_type, strategy, trade_date, status, data_version, code_version, param_version FROM signal_runs WHERE run_id = ?",
+        "SELECT run_type, strategy, trade_date, status, data_version, code_version, param_version, summary_json FROM signal_runs WHERE run_id = ?",
         (run_id,),
     ).fetchone()
+    summary = json.loads(row[7])
     assert row[0:4] == ("backtest", "v9", "2026-05-01", "success")
     assert row[4].startswith("trade_date:")
     assert row[5].startswith("git:")
     assert row[6].startswith("param:sha256:")
+    assert summary["backtest_credibility"]["cost_model"] is True
     conn.close()
 
 

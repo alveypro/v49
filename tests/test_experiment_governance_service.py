@@ -23,6 +23,7 @@ from openclaw.services.lineage_service import (
     new_fill_id,
     new_order_id,
     new_run_id,
+    replace_signal_items,
 )
 
 
@@ -45,7 +46,7 @@ def _complete_evidence():
                 "in_sample": {"start": "2025-01-01", "end": "2025-12-31"},
                 "out_of_sample": {"start": "2026-01-01", "end": "2026-04-30"},
             },
-            "metrics": {"win_rate": 0.56, "max_drawdown": 0.08},
+            "metrics": {"win_rate": 0.56, "max_drawdown": 0.08, "signal_density": 0.04, "test_windows": 3},
         },
         "execution_evidence": {
             "mode": "shadow",
@@ -68,6 +69,11 @@ def _seed_shadow_execution_decision(conn: sqlite3.Connection) -> tuple[str, str]
         code_version="git:test:dirty0",
         param_version="param:sha256:test",
         status="success",
+    )
+    replace_signal_items(
+        conn,
+        run_id=run_id,
+        items=[{"ts_code": "000001.SZ", "score": 90.0, "rank_idx": 1, "reason_codes": ["shadow_fixture"]}],
     )
     decision_id = new_decision_id()
     record_decision_event(

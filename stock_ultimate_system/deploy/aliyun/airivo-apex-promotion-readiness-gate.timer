@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Airivo Apex Promotion Readiness Gate
+
+[Timer]
+OnCalendar=*-*-* 18:59:00 Asia/Shanghai
+Persistent=true
+Unit=airivo-apex-promotion-readiness-gate.service
+
+[Install]
+WantedBy=timers.target

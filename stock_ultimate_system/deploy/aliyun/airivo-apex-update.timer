@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Airivo Apex Daily Update at 17:30 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 17:30:00 Asia/Shanghai
+Persistent=true
+Unit=airivo-apex-update.service
+
+[Install]
+WantedBy=timers.target

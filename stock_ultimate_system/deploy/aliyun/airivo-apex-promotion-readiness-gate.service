@@ -1,0 +1,15 @@
+[Unit]
+Description=Airivo Apex Promotion Readiness Gate
+After=network-online.target airivo-apex-performance-evidence.service airivo-apex-primary-result-feedback-loop.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/airivo-apex/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/airivo-apex/app
+TimeoutStartSec=10m
+ExecStart=/opt/airivo-apex/.venv/bin/python /opt/airivo-apex/app/scripts/build_primary_result_promotion_readiness_gate.py --performance-evidence-json /opt/airivo-apex/app/artifacts/primary_result_performance_evidence_latest.json --feedback-queue-summary-json /opt/airivo-apex/app/artifacts/primary_result_feedback_review_queue/summary.json --baseline-current-json /opt/airivo-apex/app/artifacts/baselines/current.json --output /opt/airivo-apex/app/artifacts/primary_result_promotion_readiness_gate_latest.json --zero-on-blocked --json
+StandardOutput=append:/var/log/airivo-apex/promotion_readiness_gate.log
+StandardError=append:/var/log/airivo-apex/promotion_readiness_gate.err.log

@@ -1,0 +1,15 @@
+[Unit]
+Description=Airivo Apex Primary Result Feedback Loop
+After=network-online.target airivo-apex-primary-result-daily-closure.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/airivo-apex/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/airivo-apex/app
+TimeoutStartSec=10m
+ExecStart=/opt/airivo-apex/.venv/bin/python /opt/airivo-apex/app/scripts/run_primary_result_feedback_loop.py --observation-json /opt/airivo-apex/app/data/experiments/primary_result_observation_latest.json --terminal-json /opt/airivo-apex/app/data/experiments/primary_result_terminal_latest.json --ledger-jsonl /opt/airivo-apex/app/artifacts/primary_result_performance/ledger.jsonl --attribution-output /opt/airivo-apex/app/data/experiments/primary_result_failure_attribution_latest.json --feedback-output /opt/airivo-apex/app/data/experiments/primary_result_learning_feedback_latest.json --queue-dir /opt/airivo-apex/app/artifacts/primary_result_feedback_review_queue --output /opt/airivo-apex/app/data/experiments/primary_result_feedback_loop_latest.json --json
+StandardOutput=append:/var/log/airivo-apex/primary_result_feedback_loop.log
+StandardError=append:/var/log/airivo-apex/primary_result_feedback_loop.err.log

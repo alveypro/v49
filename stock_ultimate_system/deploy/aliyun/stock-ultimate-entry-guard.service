@@ -1,0 +1,13 @@
+[Unit]
+Description=Stock Ultimate Entry Guard Refresh
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/stock-ultimate/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/stock-ultimate/app
+ExecStart=/opt/stock-ultimate/.venv/bin/python /opt/stock-ultimate/app/scripts/run_stock_entry_guard.py --exp-dir /opt/stock-ultimate/app/data/experiments --artifacts-dir /opt/stock-ultimate/app/artifacts --output /opt/stock-ultimate/app/artifacts/stock_entry_guard_latest.json
+StandardOutput=append:/var/log/stock-ultimate/entry_guard.log
+StandardError=append:/var/log/stock-ultimate/entry_guard.err.log

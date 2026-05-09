@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Airivo Apex Performance Evidence Report
+
+[Timer]
+OnCalendar=*-*-* 18:58:00 Asia/Shanghai
+Persistent=true
+Unit=airivo-apex-performance-evidence.service
+
+[Install]
+WantedBy=timers.target

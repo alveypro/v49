@@ -1,0 +1,14 @@
+[Unit]
+Description=Stock Ultimate Weekly Long Backtest
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/stock-ultimate/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/stock-ultimate/app
+ExecStart=/opt/stock-ultimate/.venv/bin/python /opt/stock-ultimate/app/run_grid_backtest.py --config-dir config/server --profile long --research-pool-size 150
+StandardOutput=append:/var/log/stock-ultimate/weekly_long.log
+StandardError=append:/var/log/stock-ultimate/weekly_long.err.log

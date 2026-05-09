@@ -2,11 +2,18 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 import tempfile
 from pathlib import Path
 from typing import Generator
 
 import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+ARCHIVE_ROOT = ROOT / "_archive"
+if ARCHIVE_ROOT.exists():
+    sys.path.insert(0, str(ARCHIVE_ROOT))
 
 
 @pytest.fixture()

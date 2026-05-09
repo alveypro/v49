@@ -49,14 +49,119 @@ class TestAggregate:
 
     def test_averages_correctly(self):
         summaries = [
-            {"win_rate": 0.50, "max_drawdown": 0.10, "signal_density": 0.04},
-            {"win_rate": 0.60, "max_drawdown": 0.06, "signal_density": 0.06},
+            {
+                "win_rate": 0.50,
+                "max_drawdown": 0.10,
+                "signal_density": 0.04,
+                "tradeability_filter_enabled": True,
+                "volume_constraint_enabled": True,
+                "trading_cost": {"slippage_bp": 10.0},
+                "risk_control": {"max_stop_loss_pct": 0.08},
+            },
+            {
+                "win_rate": 0.60,
+                "max_drawdown": 0.06,
+                "signal_density": 0.06,
+                "tradeability_filter_enabled": True,
+                "volume_constraint_enabled": True,
+                "trading_cost": {"slippage_bp": 10.0},
+            },
         ]
         result = _aggregate(summaries)
         assert abs(result["win_rate"] - 0.55) < 1e-9
         assert abs(result["max_drawdown"] - 0.08) < 1e-9
         assert abs(result["signal_density"] - 0.05) < 1e-9
         assert result["samples"] == 2
+        assert result["tradeability_filter_enabled"] is True
+        assert result["volume_constraint_enabled"] is True
+        assert result["trading_cost"]["slippage_bp"] == 10.0
+        assert result["risk_control"] == {"max_stop_loss_pct": 0.08}
+
+    def test_aggregate_preserves_window_risk_diagnostics(self):
+        summaries = [
+            {
+                "win_rate": 0.50,
+                "max_drawdown": 0.10,
+                "signal_density": 0.04,
+                "risk_diagnostics": {
+                    "exit_reason_counts": {"stop_loss": 1},
+                    "tail_loss_count_5pct": 1,
+                    "tail_loss_count_8pct": 0,
+                    "worst_return_pct": -6.0,
+                    "worst_trades": [{"ts_code": "000001.SZ", "future_return": -6.0}],
+                },
+            },
+            {
+                "win_rate": 0.60,
+                "max_drawdown": 0.06,
+                "signal_density": 0.06,
+                "risk_diagnostics": {
+                    "exit_reason_counts": {"holding_period": 2},
+                    "tail_loss_count_5pct": 0,
+                    "tail_loss_count_8pct": 1,
+                    "worst_return_pct": -9.0,
+                    "worst_trades": [{"ts_code": "000002.SZ", "future_return": -9.0}],
+                },
+            },
+        ]
+
+        result = _aggregate(summaries)
+
+        risk = result["risk_diagnostics"]
+        assert risk["window_count"] == 2
+        assert risk["exit_reason_counts"] == {"stop_loss": 1, "holding_period": 2}
+        assert risk["tail_loss_count_5pct"] == 1
+        assert risk["tail_loss_count_8pct"] == 1
+        assert risk["worst_return_pct"] == -9.0
+        assert risk["worst_trades"][0]["ts_code"] == "000002.SZ"
+
+    def test_aggregate_preserves_stable_defensive_allocator_review(self):
+        summaries = [
+            {
+                "win_rate": 0.0,
+                "max_drawdown": 0.02,
+                "signal_density": 0.02,
+                "defensive_allocator": {
+                    "available": True,
+                    "contract": {"role": "defensive_allocator_overlay"},
+                    "promotion_eligible": False,
+                    "blocking_reasons": ["missing_formal_pool_benchmark_return_series"],
+                    "drawdown_reduction": 0.04,
+                    "excess_return_pct": -1.2,
+                    "overlay_max_drawdown": 0.01,
+                    "full_exposure_max_drawdown": 0.05,
+                },
+            },
+            {
+                "win_rate": 0.0,
+                "max_drawdown": 0.03,
+                "signal_density": 0.02,
+                "defensive_allocator": {
+                    "available": True,
+                    "contract": {"role": "defensive_allocator_overlay"},
+                    "promotion_eligible": False,
+                    "blocking_reasons": ["non_negative_excess_return_not_proven"],
+                    "drawdown_reduction": 0.02,
+                    "excess_return_pct": -0.8,
+                    "overlay_max_drawdown": 0.02,
+                    "full_exposure_max_drawdown": 0.04,
+                },
+            },
+        ]
+
+        result = _aggregate(summaries)
+
+        allocator = result["defensive_allocator"]
+        assert allocator["contract"]["role"] == "defensive_allocator_overlay"
+        assert allocator["promotion_eligible"] is False
+        assert allocator["allocator_candidate_eligible"] is False
+        assert allocator["success_metric_passed"] is False
+        assert allocator["avg_drawdown_reduction"] == 0.03
+        assert allocator["avg_excess_return_pct"] == -1.0
+        assert allocator["blocking_reasons"] == [
+            "missing_formal_pool_benchmark_return_series",
+            "non_negative_excess_return_not_proven",
+        ]
 
 
 class TestBacktestEngine:
@@ -111,3 +216,85 @@ class TestBacktestEngine:
         assert result["status"] == "failed"
         assert "0 successful test windows" in result.get("error", "")
         assert result["result"]["rolling"]["failed_windows"]
+        assert result["backtest_credibility"]["failed_backtests_recorded"] is True
+
+    def test_rolling_failed_windows_preserve_handler_diagnostics(self):
+        adapter = V49Adapter(module_path=Path("/tmp/fake.py"))
+
+        def _fail_with_diagnostics(_params: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                "status": "failed",
+                "summary": {"win_rate": 0.0, "max_drawdown": 1.0, "signal_density": 0.0},
+                "raw": {
+                    "success": False,
+                    "error": "no signal",
+                    "backtest_diagnostics": {
+                        "type": "score_distribution",
+                        "strategy": "v8",
+                        "evaluated": 10,
+                        "passed_threshold": 0,
+                        "max_score": 39.5,
+                    },
+                },
+            }
+
+        adapter.register_backtest_handler("v8", _fail_with_diagnostics)
+        engine = BacktestEngine(adapter)
+        result = engine.run(
+            "v8",
+            "2025-01-01",
+            "2025-12-31",
+            {
+                "mode": "rolling",
+                "train_window_days": 180,
+                "test_window_days": 60,
+                "step_days": 60,
+            },
+        )
+
+        failed = result["result"]["rolling"]["failed_windows"]
+        assert failed
+        assert failed[0]["backtest_diagnostics"]["type"] == "score_distribution"
+        assert failed[0]["backtest_diagnostics"]["max_score"] == 39.5
+
+    def test_rolling_applies_global_evaluation_budget_across_windows(self):
+        adapter = V49Adapter(module_path=Path("/tmp/fake.py"))
+        limits: list[int] = []
+
+        def _window_backtest(params: Dict[str, Any]) -> Dict[str, Any]:
+            limit = int(params.get("max_evaluations", 0) or 0)
+            limits.append(limit)
+            return {
+                "summary": {"win_rate": 0.50, "max_drawdown": 0.10, "signal_density": 0.01},
+                "raw": {
+                    "success": True,
+                    "backtest_diagnostics": {
+                        "type": "score_distribution",
+                        "evaluated": limit,
+                        "passed_threshold": 0,
+                    },
+                },
+            }
+
+        adapter.register_backtest_handler("v6", _window_backtest)
+        engine = BacktestEngine(adapter)
+        result = engine.run(
+            "v6",
+            "2025-01-01",
+            "2025-12-31",
+            {
+                "mode": "rolling",
+                "train_window_days": 180,
+                "test_window_days": 60,
+                "step_days": 60,
+                "max_evaluations": 30,
+                "max_evaluations_global": 35,
+            },
+        )
+
+        assert limits == [30, 5]
+        rolling = result["result"]["rolling"]
+        assert rolling["evaluation_budget"] == {"global_max_evaluations": 35, "remaining": 0}
+        assert rolling["failed_windows"][-1]["error"] == "global evaluation budget exhausted"
+        assert rolling["train_windows"] == 1
+        assert rolling["test_windows"] == 1

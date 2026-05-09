@@ -1,0 +1,15 @@
+[Unit]
+Description=Airivo Apex Operations Artifact Refresh and Daily Scoreboard
+After=network-online.target airivo-apex-update.service stock-ultimate-healthcheck.service airivo-apex-primary-result-daily-closure.service airivo-apex-candidate-basket-observation.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/airivo-apex/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/airivo-apex/app
+TimeoutStartSec=10m
+ExecStart=/opt/airivo-apex/.venv/bin/python /opt/airivo-apex/app/scripts/refresh_primary_result_operations_artifacts.py --exp-dir /opt/airivo-apex/app/data/experiments --artifacts-dir /opt/airivo-apex/app/artifacts --output /opt/airivo-apex/app/artifacts/primary_result_operations_refresh_latest.json --json
+StandardOutput=append:/var/log/airivo-apex/daily_operations_scoreboard.log
+StandardError=append:/var/log/airivo-apex/daily_operations_scoreboard.err.log

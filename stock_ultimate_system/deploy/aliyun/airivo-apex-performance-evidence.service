@@ -1,0 +1,15 @@
+[Unit]
+Description=Airivo Apex Performance Evidence Report
+After=network-online.target airivo-apex-primary-result-daily-closure.service airivo-apex-candidate-basket-observation.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/airivo-apex/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/airivo-apex/app
+TimeoutStartSec=10m
+ExecStart=/opt/airivo-apex/.venv/bin/python /opt/airivo-apex/app/scripts/build_primary_result_performance_evidence.py --primary-ledger-jsonl /opt/airivo-apex/app/artifacts/primary_result_performance/ledger.jsonl --basket-ledger-jsonl /opt/airivo-apex/app/artifacts/primary_result_candidate_baskets/performance_ledger.jsonl --output /opt/airivo-apex/app/artifacts/primary_result_performance_evidence_latest.json --zero-on-failed --json
+StandardOutput=append:/var/log/airivo-apex/performance_evidence.log
+StandardError=append:/var/log/airivo-apex/performance_evidence.err.log

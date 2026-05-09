@@ -1,0 +1,18 @@
+lightgbm:
+  objective: binary
+  learning_rate: 0.05
+  n_estimators: 100
+  num_leaves: 31
+xgboost:
+  objective: binary:logistic
+  learning_rate: 0.05
+  n_estimators: 100
+random_forest:
+  n_estimators: 200
+  max_depth: 6
+logistic:
+  max_iter: 500
+lstm:
+  seq_len: 20
+transformer:
+  seq_len: 20

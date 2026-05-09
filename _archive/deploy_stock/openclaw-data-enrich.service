@@ -1,0 +1,9 @@
+[Unit]
+Description=OpenClaw stock DB enrich (minute/fundamental/valuation/events)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/openclaw/qaenv/bin/python /opt/openclaw/qa-stock/enrich_stock_db_sources.py --db /opt/openclaw/permanent_stock_database.db --codes 300 --days 180 --provider auto

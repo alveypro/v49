@@ -1,0 +1,19 @@
+strong_buy_score: 50
+buy_score: 38
+watch_score: 28
+sell_score: 20
+buy_position_multiplier: 0.45
+strong_buy_position_multiplier: 1.0
+low_confidence_skip_threshold: 0.55
+regime_overrides:
+  trend:
+    strong_buy_score_delta: -1
+    buy_score_delta: -1
+  trend_volatile:
+    strong_buy_score_delta: 3
+    buy_score_delta: 2
+    score_delta: -2
+  extreme:
+    strong_buy_score_delta: 4
+    buy_score_delta: 3
+    score_delta: -3

@@ -1,0 +1,15 @@
+[Unit]
+Description=Stock Ultimate Nightly Research Batch
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/stock-ultimate/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/stock-ultimate/app
+TimeoutStartSec=12h
+ExecStart=/opt/stock-ultimate/.venv/bin/python /opt/stock-ultimate/app/run_research_batch.py --config-dir config/server --skip-candidates --skip-daily-research --backtest-profile medium --research-pool-size 50
+StandardOutput=append:/var/log/stock-ultimate/nightly_research.log
+StandardError=append:/var/log/stock-ultimate/nightly_research.err.log

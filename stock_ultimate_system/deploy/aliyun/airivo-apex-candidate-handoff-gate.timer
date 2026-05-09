@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Airivo Apex Candidate Lifecycle Handoff Gate
+
+[Timer]
+OnCalendar=*-*-* 18:35:00 Asia/Shanghai
+Persistent=true
+Unit=airivo-apex-candidate-handoff-gate.service
+
+[Install]
+WantedBy=timers.target

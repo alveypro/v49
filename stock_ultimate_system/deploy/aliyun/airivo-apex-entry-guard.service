@@ -1,0 +1,13 @@
+[Unit]
+Description=Airivo Apex Entry Guard Refresh
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/airivo-apex/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/airivo-apex/app
+ExecStart=/opt/airivo-apex/.venv/bin/python /opt/airivo-apex/app/scripts/run_stock_entry_guard.py --exp-dir /opt/airivo-apex/app/data/experiments --artifacts-dir /opt/airivo-apex/app/artifacts --output /opt/airivo-apex/app/artifacts/stock_entry_guard_latest.json
+StandardOutput=append:/var/log/airivo-apex/entry_guard.log
+StandardError=append:/var/log/airivo-apex/entry_guard.err.log

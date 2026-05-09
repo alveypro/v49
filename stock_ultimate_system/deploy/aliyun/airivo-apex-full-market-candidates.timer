@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Airivo Apex Full-Market Candidate Refresh at 21:10 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 21:10:00 Asia/Shanghai
+Persistent=true
+Unit=airivo-apex-full-market-candidates.service
+
+[Install]
+WantedBy=timers.target

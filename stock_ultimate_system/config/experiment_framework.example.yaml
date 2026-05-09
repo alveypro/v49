@@ -1,0 +1,118 @@
+experiment_framework:
+  schema_version: 1
+
+  levels:
+    smoke:
+      allow_promotion: false
+      require_validation_window: false
+    research:
+      allow_promotion: false
+      require_validation_window: true
+    validation:
+      allow_promotion: false
+      require_validation_window: true
+    champion_evaluation:
+      allow_promotion: true
+      require_validation_window: true
+    staging_observation:
+      allow_promotion: true
+      require_validation_window: true
+    production:
+      allow_promotion: true
+      require_validation_window: true
+
+  windows:
+    train_window:
+      start: "2020-01-01"
+      end: "2023-12-31"
+    search_window:
+      start: "2024-01-01"
+      end: "2024-12-31"
+    validation_window:
+      start: "2025-01-01"
+      end: "2025-06-30"
+    observation_window:
+      start: "2025-07-01"
+      end: "2025-12-31"
+    require_non_overlapping_search_validation: true
+
+  governance:
+    allowed_actions:
+      - reject
+      - observe
+      - promote_to_staging
+      - promote_to_production
+    enforce_gates:
+      statistical: true
+      trading: true
+      robustness: true
+      production: true
+
+  gates:
+    statistical:
+      min_walk_forward_score: 0.12
+      min_trade_objective_stability: 0.55
+      min_fold_count: 3
+      min_sample_count: 100
+    trading:
+      min_cost_adjusted_total_return: 0.0
+      min_cost_adjusted_sharpe: 0.2
+      max_drawdown: 0.12
+      min_total_trades: 30
+      max_low_liquidity_block_rate: 0.15
+    robustness:
+      min_regime_coverage_score: 0.6
+      min_window_pass_ratio: 0.67
+      max_parameter_sensitivity: 0.35
+    production:
+      min_daily_health_score: 75.0
+      max_runtime_sec: 60
+      max_generation_degraded_ratio_7d: 0.1
+
+  champion_registry:
+    enable_multi_stage_champions: true
+    states:
+      - research_champion
+      - staging_champion
+      - production_champion
+    allow_direct_research_to_production: false
+    keep_history: 200
+
+  ranking:
+    mode: dual_track
+    legacy_score_column: final_score_legacy
+    candidate_rank_score_column: candidate_rank_score_v2
+    require_ab_validation_before_switch: true
+
+  tracking:
+    require_git_commit: true
+    require_random_seed: true
+    require_runtime_overrides: true
+    require_stock_pool_snapshot: true
+    require_research_pool_meta: true
+    require_data_version: true
+    require_baseline_champion_version: true
+
+  artifacts:
+    required_json:
+      - experiment_manifest.json
+      - config_snapshot.json
+      - governance_decision.json
+      - regime_coverage.json
+      - sensitivity_report.json
+    required_markdown:
+      - experiment_summary.md
+      - risk_review.md
+      - candidate_ranking_review.md
+    required_tabular:
+      - research_pool_snapshot.csv
+      - search_results.csv
+      - validation_results.csv
+      - signal_logs.csv
+
+  dashboard:
+    show_experiment_level: true
+    show_validation_window_status: true
+    show_governance_gate_status: true
+    show_ranking_version: true
+    show_champion_state_alignment: true

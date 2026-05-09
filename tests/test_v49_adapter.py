@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict
+import json
+import sqlite3
 
 from openclaw.adapters.v49_adapter import V49Adapter
 
@@ -51,6 +53,59 @@ class TestRunBacktest:
         adapter = _make_adapter()
         result = adapter.run_backtest("v99", "2025-01-01", "2025-06-01")
         assert result["status"] == "failed"
+
+    def test_persists_explicit_backtest_credibility_to_signal_run(self, tmp_path):
+        db_path = tmp_path / "lineage.db"
+        db_path.touch()
+        adapter = _make_adapter()
+        adapter.register_backtest_handler(
+            "v7",
+            lambda params: {
+                "summary": {"win_rate": 0.55},
+                "backtest_credibility": {
+                    "point_in_time_data": True,
+                    "suspension_and_limit_handling": True,
+                    "volume_constraint": True,
+                    "cost_model": True,
+                    "slippage_model": True,
+                    "in_sample_out_of_sample_split": True,
+                    "parameter_sensitivity": True,
+                    "failed_backtests_recorded": True,
+                    "sample": {"in_sample": "2025Q1", "out_of_sample": "2025Q2"},
+                    "metrics": {"win_rate": 0.55},
+                },
+            },
+        )
+
+        result = adapter.run_backtest("v7", "2025-01-01", "2025-06-01", {"lineage_db_path": str(db_path)})
+
+        conn = sqlite3.connect(str(db_path))
+        row = conn.execute("SELECT run_type, strategy, summary_json FROM signal_runs WHERE run_id = ?", (result["run_id"],)).fetchone()
+        conn.close()
+        summary = json.loads(row[2])
+        assert row[0:2] == ("backtest", "v7")
+        assert summary["backtest_credibility"]["point_in_time_data"] is True
+
+    def test_failed_handler_status_is_persisted_as_failed_signal_run(self, tmp_path):
+        db_path = tmp_path / "lineage.db"
+        db_path.touch()
+        adapter = _make_adapter()
+        adapter.register_backtest_handler(
+            "stable",
+            lambda params: {
+                "status": "failed",
+                "summary": {"win_rate": 0.0, "max_drawdown": 1.0, "signal_density": 0.0},
+                "raw": {"reason": "backtest_not_implemented"},
+            },
+        )
+
+        result = adapter.run_backtest("stable", "2025-01-01", "2025-06-01", {"lineage_db_path": str(db_path)})
+
+        conn = sqlite3.connect(str(db_path))
+        row = conn.execute("SELECT run_type, strategy, status FROM signal_runs WHERE run_id = ?", (result["run_id"],)).fetchone()
+        conn.close()
+        assert result["status"] == "failed"
+        assert row == ("backtest", "stable", "failed")
 
 
 class TestMergeSignals:
