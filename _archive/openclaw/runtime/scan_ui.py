@@ -6,6 +6,36 @@ import pandas as pd
 import streamlit as st
 
 
+def render_front_scan_summary(*, strategy: str, title: str) -> None:
+    summary = st.session_state.get(f"{strategy}_front_scan_summary")
+    results_df = st.session_state.get(f"{strategy}_front_scan_results")
+    if not isinstance(summary, dict) or not isinstance(results_df, pd.DataFrame) or results_df.empty:
+        return
+    st.markdown("---")
+    st.markdown(f"### 最近一次扫描结果（{title}）")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        st.metric("完成时间", str(summary.get("finished_at", "") or "-"))
+    with c2:
+        st.metric("候选数", int(summary.get("candidate_count", len(results_df)) or len(results_df)))
+    with c3:
+        st.metric("结果数", int(summary.get("result_count", len(results_df)) or len(results_df)))
+    with c4:
+        st.metric("过滤淘汰", int(summary.get("filter_failed", 0) or 0))
+    with c5:
+        elapsed_ms = int(summary.get("elapsed_ms", 0) or 0)
+        st.metric("耗时", f"{elapsed_ms/1000:.1f}s" if elapsed_ms > 0 else "-")
+    cache_mode = str(summary.get("cache_mode", "") or "")
+    lookback_days = int(summary.get("lookback_days", 0) or 0)
+    if cache_mode or lookback_days > 0:
+        parts = []
+        if cache_mode:
+            parts.append(f"缓存={cache_mode}")
+        if lookback_days > 0:
+            parts.append(f"窗口={lookback_days}天")
+        st.caption(" | ".join(parts))
+
+
 def render_cached_scan_results(
     *,
     title: str,
