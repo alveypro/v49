@@ -141,10 +141,11 @@ class V49Adapter:
 
         try:
             output = handler(payload)
+            output_status = "failed" if str(output.get("status", "")).lower() == "failed" else "success"
             result = {
                 "run_id": run_id,
                 **versions,
-                "status": "success",
+                "status": output_status,
                 "strategy": strategy,
                 "result": output,
             }
@@ -156,6 +157,7 @@ class V49Adapter:
                 versions=versions,
                 params=payload,
                 output=output,
+                status=output_status,
             )
             return result
         except Exception as exc:  # noqa: BLE001
@@ -447,7 +449,7 @@ class V49Adapter:
         if conn is None:
             return versions
         try:
-            versions["data_version"] = build_data_version(conn)
+            versions["data_version"] = build_data_version(conn, as_of_date=str(params.get("trade_date") or ""))
             return versions
         finally:
             conn.close()
@@ -462,6 +464,7 @@ class V49Adapter:
         versions: JsonDict,
         params: JsonDict,
         output: JsonDict,
+        status: str = "success",
     ) -> None:
         conn = self._connect_lineage_db(params)
         if conn is None:
@@ -475,6 +478,10 @@ class V49Adapter:
                 "summary": output.get("summary", {}),
                 "meta": output.get("meta", {}),
             }
+            if run_type == "backtest":
+                for key in ("backtest_credibility", "backtest_audit"):
+                    if isinstance(output.get(key), dict):
+                        summary[key] = output[key]
             insert_signal_run(
                 conn,
                 run_id=run_id,
@@ -485,7 +492,7 @@ class V49Adapter:
                 code_version=str(versions.get("code_version", "") or ""),
                 param_version=str(versions.get("param_version", "") or ""),
                 parent_run_id=str(params.get("parent_run_id", "") or ""),
-                status="success",
+                status=str(status or "success"),
                 artifact_path=artifact_path,
                 summary=summary,
             )

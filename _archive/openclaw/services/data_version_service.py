@@ -13,8 +13,12 @@ from openclaw.paths import project_root
 DEFAULT_DATA_TABLES = (
     ("daily_trading_data", "trade_date"),
     ("moneyflow_daily", "trade_date"),
+    ("moneyflow_ind_ths", "trade_date"),
     ("top_list", "trade_date"),
     ("margin_detail", "trade_date"),
+    ("stk_factor_pro_daily", "trade_date"),
+    ("cyq_perf_daily", "trade_date"),
+    ("hk_hold_daily", "trade_date"),
 )
 
 
@@ -31,14 +35,24 @@ def build_param_version(params: Optional[Dict[str, Any]]) -> str:
     return f"param:sha256:{sha256_text(body)}"
 
 
-def _table_max(conn: sqlite3.Connection, table: str, column: str) -> str:
+def _compact_date(value: Any) -> str:
+    return str(value or "").strip().replace("-", "")
+
+
+def _table_max(conn: sqlite3.Connection, table: str, column: str, *, as_of_date: str = "") -> str:
     exists = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
         (table,),
     ).fetchone()
     if not exists:
         return ""
-    row = conn.execute(f"SELECT MAX({column}) FROM {table}").fetchone()
+    if as_of_date:
+        row = conn.execute(
+            f"SELECT MAX({column}) FROM {table} WHERE REPLACE({column}, '-', '') <= ?",
+            (_compact_date(as_of_date),),
+        ).fetchone()
+    else:
+        row = conn.execute(f"SELECT MAX({column}) FROM {table}").fetchone()
     return str((row or [""])[0] or "")
 
 
@@ -46,14 +60,18 @@ def build_data_version(
     conn: sqlite3.Connection,
     *,
     tables: Iterable[tuple[str, str]] = DEFAULT_DATA_TABLES,
+    as_of_date: str = "",
 ) -> str:
     parts: list[str] = []
     latest_trade_date = ""
+    normalized_as_of = _compact_date(as_of_date)
     for table, column in tables:
-        latest = _table_max(conn, table, column)
+        latest = _table_max(conn, table, column, as_of_date=normalized_as_of)
         if table == "daily_trading_data":
             latest_trade_date = latest
         parts.append(f"max_{table}={latest}")
+    if normalized_as_of:
+        parts.append(f"as_of_date={normalized_as_of}")
     digest_src = "|".join(parts)
     digest = sha256_text(digest_src)[:12]
     return f"trade_date:{latest_trade_date}|{'|'.join(parts)}|db_hash={digest}"

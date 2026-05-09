@@ -16,6 +16,8 @@ MIGRATION_FILES = (
     "scripts/migrations/002_decision.sql",
     "scripts/migrations/003_execution.sql",
     "scripts/migrations/004_release.sql",
+    "scripts/migrations/005_research_repair_flow.sql",
+    "scripts/migrations/006_strategy_competition_audit.sql",
 )
 
 
@@ -325,7 +327,7 @@ def record_signal_dataframe_chain(
             run_type="scan",
             strategy=strategy,
             trade_date=str((meta or {}).get("trade_date") or (params or {}).get("trade_date") or ""),
-            data_version=build_data_version(conn),
+            data_version=build_data_version(conn, as_of_date=str((meta or {}).get("trade_date") or (params or {}).get("trade_date") or "")),
             code_version=build_code_version(root=code_root),
             param_version=build_param_version(params or {}),
             parent_run_id=str((params or {}).get("parent_run_id") or ""),
@@ -368,13 +370,16 @@ def record_backtest_result_chain(
             "payload": payload or {},
             "result": result or {},
         }
+        for key in ("backtest_credibility", "backtest_audit"):
+            if isinstance((result or {}).get(key), dict):
+                summary[key] = (result or {})[key]
         insert_signal_run(
             conn,
             run_id=run_id,
             run_type="backtest",
             strategy=strategy,
             trade_date=trade_date,
-            data_version=build_data_version(conn),
+            data_version=build_data_version(conn, as_of_date=trade_date),
             code_version=build_code_version(root=code_root),
             param_version=build_param_version(payload or {}),
             parent_run_id=str((payload or {}).get("parent_run_id") or ""),
