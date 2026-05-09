@@ -16,10 +16,39 @@ from openclaw.research.backtest_param_sweep import (
     default_holding_grid,
     default_sample_grid,
     default_threshold_grid,
+    parse_float_list,
     parse_int_list,
     run_param_sweep,
 )
 from strategies.registry import get_profile
+
+
+def _parse_runtime_params(items: list[str]) -> dict[str, object]:
+    out: dict[str, object] = {}
+    for raw in items or []:
+        if "=" not in str(raw):
+            raise ValueError(f"invalid runtime param: {raw}")
+        key, value = str(raw).split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            raise ValueError(f"invalid runtime param key: {raw}")
+        lowered = value.lower()
+        if lowered in {"true", "false"}:
+            out[key] = lowered == "true"
+            continue
+        try:
+            out[key] = int(value)
+            continue
+        except ValueError:
+            pass
+        try:
+            out[key] = float(value)
+            continue
+        except ValueError:
+            pass
+        out[key] = value
+    return out
 
 
 def main() -> int:
@@ -36,7 +65,17 @@ def main() -> int:
     parser.add_argument("--score-thresholds", default="", help="comma-separated, e.g. 55,60,65")
     parser.add_argument("--sample-sizes", default="", help="comma-separated, e.g. 200,300,400")
     parser.add_argument("--holding-days", default="", help="comma-separated, e.g. 3,5,8")
+    parser.add_argument("--max-stop-loss-pcts", default="0.08", help="comma-separated v8 risk caps, e.g. 0.06,0.08,0.10")
+    parser.add_argument("--max-take-profit-pcts", default="", help="optional comma-separated v8 take-profit caps, e.g. 0.10,0.14")
+    parser.add_argument("--stop-losses", default="", help="optional comma-separated return stop losses, e.g. -0.03,-0.05")
+    parser.add_argument("--take-profits", default="", help="optional comma-separated return take profits, e.g. 0.04,0.08")
     parser.add_argument("--db-path", default="", help="optional DB path override")
+    parser.add_argument(
+        "--runtime-param",
+        action="append",
+        default=[],
+        help="extra runtime parameter as key=value; may be repeated",
+    )
     parser.add_argument("--max-runs", type=int, default=0, help="limit run count for quick tests")
     parser.add_argument(
         "--per-run-timeout-sec",
@@ -55,6 +94,10 @@ def main() -> int:
     score_thresholds = parse_int_list(args.score_thresholds, default_threshold_grid(profile.default_score_threshold))
     sample_sizes = parse_int_list(args.sample_sizes, default_sample_grid(profile.default_sample_size))
     holding_days = parse_int_list(args.holding_days, default_holding_grid(profile.default_holding_days))
+    max_stop_loss_pcts = parse_float_list(args.max_stop_loss_pcts, [0.08])
+    max_take_profit_pcts = parse_float_list(args.max_take_profit_pcts, []) if args.max_take_profit_pcts.strip() else [None]
+    stop_losses = parse_float_list(args.stop_losses, []) if args.stop_losses.strip() else [None]
+    take_profits = parse_float_list(args.take_profits, []) if args.take_profits.strip() else [None]
 
     cfg = SweepConfig(
         strategy=args.strategy,
@@ -69,9 +112,14 @@ def main() -> int:
         score_thresholds=score_thresholds,
         sample_sizes=sample_sizes,
         holding_days=holding_days,
+        max_stop_loss_pcts=max_stop_loss_pcts,
+        max_take_profit_pcts=max_take_profit_pcts,
+        stop_losses=stop_losses,
+        take_profits=take_profits,
         db_path=args.db_path.strip() or None,
         max_runs=(args.max_runs if args.max_runs > 0 else None),
         per_run_timeout_sec=(args.per_run_timeout_sec if args.per_run_timeout_sec > 0 else None),
+        runtime_params=_parse_runtime_params(args.runtime_param),
     )
     out = run_param_sweep(cfg)
     print(json.dumps(out, ensure_ascii=False, indent=2))
