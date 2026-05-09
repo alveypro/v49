@@ -1,31 +1,28 @@
 auto_apply_backtest_best: true
 backtest_best_dir: logs/openclaw
-
-# 默认参数（会被最新 backtest sweep best 自动覆盖）
+rejected_backtest_artifacts_file: logs/openclaw/rejected_backtest_artifacts.jsonl
 runtime_defaults:
   v5:
-    score_threshold: 65
+    score_threshold: 70
     sample_size: 50
-    holding_days: 8
+    holding_days: 3
   v8:
     score_threshold: 50
     sample_size: 50
-    holding_days: 8
+    holding_days: 6
   v9:
-    score_threshold: 65
-    sample_size: 50
-    holding_days: 8
-  combo:
-    score_threshold: 60
+    score_threshold: 70
     sample_size: 80
     holding_days: 8
-
-# 策略中心风控线（覆盖 risk_thresholds.yaml 的对应策略阈值）
+  combo:
+    score_threshold: 65
+    sample_size: 50
+    holding_days: 6
 risk_overrides:
   v5:
     win_rate_min: 0.55
-    max_drawdown_max: 0.30
-    signal_density_min: 0.05
+    max_drawdown_max: 0.3
+    signal_density_min: 0.02
   v8:
     win_rate_min: 0.35
     max_drawdown_max: 0.38
@@ -38,15 +35,11 @@ risk_overrides:
     win_rate_min: 0.38
     max_drawdown_max: 0.35
     signal_density_min: 0.05
-
-# 多策略合并时可用（当前单策略运行时也会记录在 run_summary）
 strategy_weights:
-  v5: 0.40
-  combo: 0.30
-  v9: 0.20
-  v8: 0.10
-
-# 运行编排策略（partner_daily / 调度器）
+  v5: 0.1
+  v8: 0.3153
+  v9: 0.2916
+  combo: 0.2931
 run_policy:
   default:
     timeout_sec: 900
@@ -69,22 +62,19 @@ run_policy:
     timeout_sec: 840
     sample_size: 80
     retry_on_no_picks: 0
-
 regression_gate:
   min_picks: 1
   max_scan_sec: 600
-
 health_gate:
   stale_run_hours_warn: 48
   stale_run_hours_fail: 96
-
 weekly_sweep:
-  min_weight: 0.10
+  min_weight: 0.1
   strategies:
     v5:
       score_thresholds: [60, 65, 70]
-      sample_sizes: [50, 80]
-      holding_days: [6, 8]
+      sample_sizes: [30, 40, 50]
+      holding_days: [2, 3, 4, 5]
     v8:
       score_thresholds: [45, 50, 55]
       sample_sizes: [50, 80]
@@ -97,3 +87,12 @@ weekly_sweep:
       score_thresholds: [55, 60, 65]
       sample_sizes: [50, 80]
       holding_days: [6, 8]
+strategy_governance:
+  lookback_days: 30
+  current_primary: v5
+  recommended_primary: v5
+  governance_action: observe
+  reason: insufficient_samples
+  by_strategy: {}
+  ranked: []
+  as_of: '2026-04-26T16:14:00'

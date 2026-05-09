@@ -25,6 +25,7 @@ class StrategyProfile:
 # v6  超短周期: 噪声大, 不适合中心默认
 # v7  过渡版本: 功能被v8/v9覆盖
 # ai  AI选股: 辅助工具, 不作为中心主策略
+# ensemble_core 组合级多alpha研究线: 只作为顶层组合研究, 未满足组合归因和回测契约前不进入正式池
 
 STRATEGIES: Dict[str, StrategyProfile] = {
     # ── 生产候选池 ──
@@ -38,6 +39,14 @@ STRATEGIES: Dict[str, StrategyProfile] = {
     "v7": StrategyProfile("v7", 60, 400, 8, tier="experimental", role="过渡版本"),
     "stable": StrategyProfile("stable", 60, 300, 10, tier="experimental", role="稳健实验"),
     "ai": StrategyProfile("ai", 60, 500, 10, tier="experimental", role="AI辅助选股"),
+    "ensemble_core": StrategyProfile(
+        "ensemble_core",
+        60,
+        500,
+        10,
+        tier="experimental",
+        role="组合级多alpha研究线",
+    ),
 }
 
 

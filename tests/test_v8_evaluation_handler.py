@@ -14,6 +14,13 @@ class FakeV7Evaluator:
         return {"success": True, "final_score": 70}
 
 
+class TimedFakeV7Evaluator(FakeV7Evaluator):
+    def evaluate_stock_v7(self, stock_data, ts_code, industry):
+        out = super().evaluate_stock_v7(stock_data, ts_code, industry)
+        out["runtime_diagnostics"] = {"stage_timing_ms": {"v4_score": 12.0}}
+        return out
+
+
 class FailingV7Evaluator:
     def evaluate_stock_v7(self, stock_data, ts_code, industry):
         return {"success": False, "final_score": 0, "reason": "base failed"}
@@ -67,9 +74,18 @@ def test_evaluate_v8_signal_freezes_runtime_orchestration_happy_path():
     assert result["version"] == "8.0"
     assert result["timestamp"] == "2026-05-01 09:30:00"
     assert result["v7_score"] == 70.0
+    assert result["pre_market_score"] > 0
+    assert result["market_penalty"] in {0.5, 0.8, 1.0}
     assert result["advanced_factors"]["max_score"] == 140
     assert result["market_status"]["position_multiplier"] in {0.5, 0.7, 1.0}
     assert result["atr_stops"]["atr_value"] > 0
+    assert set(result["runtime_diagnostics"]["stage_timing_ms"]) == {
+        "sort_input",
+        "market_regime",
+        "base_evaluator",
+        "advanced_factors",
+        "atr_stops",
+    }
     assert evaluator.calls == [(0, "000001.SZ", "银行")]
 
 
@@ -93,3 +109,15 @@ def test_evaluate_v8_signal_returns_base_failure_without_freezing_v8_payload():
     )
 
     assert result == {"success": False, "final_score": 0, "reason": "base failed"}
+
+
+def test_evaluate_v8_signal_propagates_v7_stage_timing():
+    result = evaluate_v8_signal(
+        stock_data=_stock_frame(),
+        version="8.0",
+        base_evaluator=TimedFakeV7Evaluator(),
+        ts_code="000001.SZ",
+        industry="银行",
+    )
+
+    assert result["runtime_diagnostics"]["v7_stage_timing_ms"]["v4_score"] == 12.0

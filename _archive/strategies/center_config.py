@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 import json
 
+from openclaw.services.rejected_backtest_artifact_ledger_service import load_rejected_backtest_artifacts
 from strategies.registry import get_profile
 
 JsonDict = Dict[str, Any]
@@ -13,6 +15,7 @@ def default_center_config() -> JsonDict:
     return {
         "auto_apply_backtest_best": True,
         "backtest_best_dir": "logs/openclaw",
+        "rejected_backtest_artifacts_file": "logs/openclaw/rejected_backtest_artifacts.jsonl",
         "runtime_defaults": {},
         "risk_overrides": {},
         "strategy_weights": {},
@@ -47,8 +50,9 @@ def resolve_runtime_params(
     project_root: Path,
 ) -> JsonDict:
     profile = get_profile(strategy)
+    threshold_floor = int(profile.default_score_threshold)
     out = {
-        "score_threshold": int(profile.default_score_threshold),
+        "score_threshold": threshold_floor,
         "sample_size": int(profile.default_sample_size),
         "holding_days": int(profile.default_holding_days),
         "source": {
@@ -64,16 +68,31 @@ def resolve_runtime_params(
         if k in strategy_defaults:
             out[k] = int(strategy_defaults[k])
             out["source"][k] = "center_runtime_default"
+            if k == "score_threshold":
+                threshold_floor = max(threshold_floor, int(strategy_defaults[k]))
 
     if bool(center_config.get("auto_apply_backtest_best", True)):
         best_dir_raw = str(center_config.get("backtest_best_dir", "logs/openclaw"))
         best_dir = (project_root / best_dir_raw).resolve() if not Path(best_dir_raw).is_absolute() else Path(best_dir_raw)
-        best = find_latest_backtest_best(strategy=strategy, best_dir=best_dir)
+        rejected_artifacts_path = str(
+            center_config.get("rejected_backtest_artifacts_file")
+            or os.getenv("AIRIVO_REJECTED_BACKTEST_ARTIFACTS_FILE", "")
+        ).strip()
+        best = find_latest_backtest_best(
+            strategy=strategy,
+            best_dir=best_dir,
+            rejected_artifacts_path=rejected_artifacts_path,
+        )
         if best:
             for k in ("score_threshold", "sample_size", "holding_days"):
                 if k in best:
-                    out[k] = int(best[k])
-                    out["source"][k] = "latest_backtest_best"
+                    value = int(best[k])
+                    if k == "score_threshold" and value < threshold_floor:
+                        out[k] = threshold_floor
+                        out["source"][k] = "threshold_floor"
+                    else:
+                        out[k] = value
+                        out["source"][k] = "latest_backtest_best"
 
     cli_values = {
         "score_threshold": requested_score_threshold,
@@ -88,18 +107,27 @@ def resolve_runtime_params(
     return out
 
 
-def find_latest_backtest_best(strategy: str, best_dir: Path) -> Optional[JsonDict]:
+def find_latest_backtest_best(
+    strategy: str,
+    best_dir: Path,
+    rejected_artifacts_path: str = "",
+) -> Optional[JsonDict]:
+    rejected_artifacts = _load_rejected_artifacts(rejected_artifacts_path)
     try:
-        files = sorted(best_dir.glob(f"backtest_sweep_{strategy}_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        files = sorted(best_dir.rglob(f"backtest_sweep_{strategy}_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
     except Exception:
         return None
     for p in files:
+        if _artifact_is_rejected(p, rejected_artifacts):
+            continue
         try:
             obj = json.loads(p.read_text(encoding="utf-8"))
             best = obj.get("best") or {}
             if not isinstance(best, dict):
                 continue
             if str(best.get("status", "success")) != "success":
+                continue
+            if not _backtest_best_is_usable(obj, best):
                 continue
             needed = {}
             for k in ("score_threshold", "sample_size", "holding_days"):
@@ -113,6 +141,100 @@ def find_latest_backtest_best(strategy: str, best_dir: Path) -> Optional[JsonDic
         except Exception:
             continue
     return None
+
+
+def _load_rejected_artifacts(path: str) -> list[JsonDict]:
+    if not str(path or "").strip():
+        return []
+    try:
+        return load_rejected_backtest_artifacts(path)
+    except Exception:
+        return []
+
+
+def _artifact_is_rejected(path: Path, rejected_artifacts: list[JsonDict]) -> bool:
+    if not rejected_artifacts:
+        return False
+    normalized_path = str(path.resolve())
+    for item in rejected_artifacts:
+        rejected_path = str(item.get("artifact_path") or item.get("path") or "").strip()
+        if rejected_path:
+            try:
+                if Path(rejected_path).resolve() == path.resolve():
+                    return True
+            except Exception:
+                if rejected_path == normalized_path or rejected_path == str(path):
+                    return True
+        rejected_sha = str(item.get("artifact_sha256") or "").strip()
+        if rejected_sha and rejected_sha == _safe_artifact_sha(path):
+            return True
+    return False
+
+
+def _safe_artifact_sha(path: Path) -> str:
+    try:
+        import hashlib
+
+        h = hashlib.sha256()
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception:
+        return ""
+
+
+def _backtest_best_is_usable(payload: JsonDict, best: JsonDict) -> bool:
+    diagnostics = payload.get("strategy_backtest_diagnostics")
+    if not isinstance(diagnostics, dict) or diagnostics.get("eligible_for_formal_ranking") is not True:
+        return False
+    credibility = payload.get("backtest_credibility")
+    if not _backtest_credibility_is_usable(credibility):
+        return False
+    metric_keys = {"win_rate", "max_drawdown", "signal_density"}
+    if metric_keys.issubset(best.keys()):
+        win_rate = _float_metric(best.get("win_rate"), 0.0)
+        max_drawdown = _float_metric(best.get("max_drawdown"), 1.0)
+        signal_density = _float_metric(best.get("signal_density"), 0.0)
+        return bool(win_rate >= 0.45 and max_drawdown <= 0.25 and signal_density > 0.0)
+    return True
+
+
+def _float_metric(value: Any, default: float) -> float:
+    if value is None:
+        return float(default)
+    try:
+        return float(value)
+    except Exception:
+        return float(default)
+
+
+def _backtest_credibility_is_usable(credibility: Any) -> bool:
+    if not isinstance(credibility, dict):
+        return False
+    if credibility.get("passed") is False:
+        return False
+    required_flags = (
+        "point_in_time_data",
+        "suspension_and_limit_handling",
+        "volume_constraint",
+        "cost_model",
+        "slippage_model",
+        "in_sample_out_of_sample_split",
+        "parameter_sensitivity",
+        "failed_backtests_recorded",
+    )
+    for key in required_flags:
+        if credibility.get(key) is not True:
+            return False
+    metrics = credibility.get("metrics")
+    if not isinstance(metrics, dict):
+        return False
+    if float(metrics.get("signal_density", 0.0) or 0.0) <= 0.0:
+        return False
+    if int(metrics.get("test_windows", 0) or 0) <= 0:
+        return False
+    return True
 
 
 def apply_risk_overrides(strategy: str, thresholds: JsonDict, center_config: JsonDict) -> JsonDict:

@@ -1063,3 +1063,44 @@ def production_strategy_health_multipliers(
         except Exception:
             continue
     return out
+
+
+def production_strategy_health_evidence(
+    load_latest_production_backtest_audit: Callable[[], Tuple[pd.DataFrame, str]],
+) -> Dict[str, Any]:
+    df, source = load_latest_production_backtest_audit()
+    out: Dict[str, Any] = {"source": str(source or ""), "strategies": {}}
+    if df is None or df.empty:
+        return out
+    multipliers = production_strategy_health_multipliers(load_latest_production_backtest_audit)
+    for _, row in df.iterrows():
+        sk = str(row.get("策略", "")).strip().lower()
+        if sk not in {"v5", "v8", "v9", "combo"}:
+            continue
+        out["strategies"][sk] = {
+            "multiplier": float(multipliers.get(sk, 1.0)),
+            "risk": str(row.get("评估风险", "")).strip().upper(),
+            "promotion": str(row.get("建议晋升", "")).strip().upper(),
+            "sample_size": _safe_int(row.get("样本")),
+            "win_rate_pct": _safe_float(row.get("胜率(%)")),
+            "max_drawdown_pct": _safe_float(row.get("最大回撤(%)")),
+            "signal_density": _safe_float(row.get("信号密度")),
+            "rolling_failed_windows": str(row.get("滚动失败窗", "")).strip(),
+            "params": str(row.get("参数(阈值/持仓)", "")).strip(),
+            "next_action": str(row.get("建议动作", "")).strip(),
+        }
+    return out
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0

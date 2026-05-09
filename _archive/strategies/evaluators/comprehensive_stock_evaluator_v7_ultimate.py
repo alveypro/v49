@@ -30,6 +30,7 @@ import logging
 from datetime import datetime, timedelta
 import sqlite3
 import os
+import time
 
 logger = logging.getLogger(__name__)
 V7_LOG_DYNAMIC_WEIGHTS = os.getenv("V7_LOG_DYNAMIC_WEIGHTS", "0") == "1"
@@ -216,6 +217,9 @@ class IndustryRotationAnalyzer:
         3. 行业内涨停数量
         """
         try:
+            cached = self.sector_performance.get(industry)
+            if isinstance(cached, dict) and 'heat' in cached:
+                return float(cached.get('heat', 0) or 0)
             conn = sqlite3.connect(self.db_path)
             
             # 获取该行业股票的近期表现
@@ -467,22 +471,30 @@ class ComprehensiveStockEvaluatorV7Ultimate:
         6. 计算最终评分
         """
         try:
+            stage_timing = {}
             # Step 1: 环境识别（缓存避免重复计算）
+            started = time.perf_counter()
             if self.current_regime is None:
                 self.current_regime = self.market_analyzer.identify_market_regime()
                 self.current_sentiment = self.market_analyzer.calculate_market_sentiment()
                 self.hot_industries = self.industry_analyzer.get_hot_industries(top_n=8)
+            stage_timing['market_init'] = time.perf_counter() - started
             
             # Step 2: 行业热度
+            started = time.perf_counter()
             industry_heat = self.industry_analyzer.calculate_industry_heat(industry)
+            stage_timing['industry_heat'] = time.perf_counter() - started
             
             # Step 3: 获取动态权重
+            started = time.perf_counter()
             adaptive_weights = self.weight_calculator.get_adaptive_weights(
                 self.current_regime,
                 industry_heat
             )
+            stage_timing['adaptive_weights'] = time.perf_counter() - started
             
             # Step 4: 使用v4.0评分器的技术分析
+            started = time.perf_counter()
             if self.v4_evaluator:
                 v4_result = self.v4_evaluator.evaluate_stock_v4(stock_data)
                 
@@ -509,8 +521,10 @@ class ComprehensiveStockEvaluatorV7Ultimate:
                     'error': 'v4.0评分器未加载',
                     'final_score': 0
                 }
+            stage_timing['v4_score'] = time.perf_counter() - started
             
             # Step 5: 三层信号过滤（改为宽松模式：只记录警告，不直接淘汰）
+            started = time.perf_counter()
             filter_result = self._apply_signal_filters(
                 stock_data,
                 ts_code,
@@ -539,8 +553,10 @@ class ComprehensiveStockEvaluatorV7Ultimate:
             
             # 应用过滤扣分
             final_score = max(0, final_score - filter_penalty)
+            stage_timing['filters'] = time.perf_counter() - started
             
             # Step 6: 加入行业轮动加分
+            started = time.perf_counter()
             bonus_score = 0
             if industry in self.hot_industries:
                 rank = self.hot_industries.index(industry) + 1
@@ -556,6 +572,17 @@ class ComprehensiveStockEvaluatorV7Ultimate:
                 logger.info(f"🔥 行业轮动加分: {industry} 排名第{rank}, 加{bonus_score}分")
             
             final_score = min(100, final_score + bonus_score)
+            stage_timing['industry_bonus'] = time.perf_counter() - started
+
+            conversion_review = self._apply_near_threshold_conversion_v7(
+                final_score=final_score,
+                dimension_scores=dimension_scores,
+                adaptive_weights=adaptive_weights,
+                industry_heat=industry_heat,
+                filter_penalty=filter_penalty,
+                filter_warnings=filter_warnings,
+            )
+            final_score = conversion_review['final_score']
             
             # Step 7: 评级
             if final_score >= 85:
@@ -575,12 +602,14 @@ class ComprehensiveStockEvaluatorV7Ultimate:
                 description = "信号偏弱，不建议介入"
             
             # Step 8: 智能止损止盈建议
+            started = time.perf_counter()
             stop_loss, take_profit = self._calculate_smart_stop_loss_take_profit(
                 stock_data,
                 final_score,
                 self.current_regime,
                 industry_heat
             )
+            stage_timing['stops'] = time.perf_counter() - started
             
             # Step 9: 返回结果
             return {
@@ -596,9 +625,13 @@ class ComprehensiveStockEvaluatorV7Ultimate:
                 'bonus_score': bonus_score,
                 'filter_penalty': filter_penalty,
                 'filter_warnings': filter_warnings,
+                'near_threshold_conversion': conversion_review,
                 'adaptive_weights': adaptive_weights,
                 'stop_loss': stop_loss,
                 'take_profit': take_profit,
+                'runtime_diagnostics': {
+                    'stage_timing_ms': {key: max(0.0, float(value) * 1000.0) for key, value in stage_timing.items()}
+                },
                 'signal_reasons': self._generate_signal_reasons(
                     dimension_scores,
                     self.current_regime,
@@ -616,6 +649,79 @@ class ComprehensiveStockEvaluatorV7Ultimate:
                 'error': str(e),
                 'final_score': 0
             }
+
+    def _apply_near_threshold_conversion_v7(
+        self,
+        *,
+        final_score: float,
+        dimension_scores: Dict[str, float],
+        adaptive_weights: Dict[str, float],
+        industry_heat: float,
+        filter_penalty: float,
+        filter_warnings: list,
+    ) -> Dict:
+        """
+        Convert only high-quality near-threshold v7 candidates.
+
+        This is a factor-gate calibration, not threshold lowering: the score can only
+        bridge to 60 when the existing weighted facts show broad confirmation.
+        """
+        score = float(final_score or 0.0)
+        review = {
+            'version': 'v7_near_threshold_conversion.v1',
+            'eligible': False,
+            'applied': False,
+            'original_score': round(score, 2),
+            'final_score': round(score, 2),
+            'bonus': 0.0,
+            'blocking_reasons': [],
+            'quality_flags': {},
+        }
+        if score < 58.0 or score >= 60.0:
+            review['blocking_reasons'].append('outside_near_threshold_band_58_60')
+            return review
+        if float(filter_penalty or 0.0) > 0:
+            review['blocking_reasons'].append('filter_penalty_present')
+        if filter_warnings:
+            review['blocking_reasons'].append('filter_warnings_present')
+        if float(industry_heat or 0.0) < -0.1:
+            review['blocking_reasons'].append('industry_heat_negative')
+
+        def ratio(name: str) -> float:
+            weight = float(adaptive_weights.get(name, 0.0) or 0.0)
+            if weight <= 0:
+                return 0.0
+            return float(dimension_scores.get(name, 0.0) or 0.0) / weight
+
+        quality_flags = {
+            'potential_value_confirmed': ratio('潜伏价值') >= 0.55,
+            'bottom_structure_confirmed': ratio('底部特征') >= 0.50,
+            'volume_price_confirmed': ratio('量价配合') >= 0.50,
+            'macd_trend_confirmed': ratio('MACD趋势') >= 0.50,
+            'moving_average_confirmed': ratio('均线多头') >= 0.45,
+            'main_money_confirmed': ratio('主力行为') >= 0.45,
+            'startup_confirmed': ratio('启动确认') >= 0.40,
+        }
+        review['quality_flags'] = quality_flags
+        confirmation_count = sum(1 for value in quality_flags.values() if value)
+        review['confirmation_count'] = int(confirmation_count)
+        if confirmation_count < 4:
+            review['blocking_reasons'].append('insufficient_broad_factor_confirmation')
+        if not (
+            quality_flags['volume_price_confirmed']
+            or quality_flags['macd_trend_confirmed']
+            or quality_flags['startup_confirmed']
+        ):
+            review['blocking_reasons'].append('missing_trade_timing_confirmation')
+
+        if review['blocking_reasons']:
+            return review
+        bonus = min(2.0, max(0.0, 60.0 - score))
+        review['eligible'] = True
+        review['applied'] = bonus > 0
+        review['bonus'] = round(bonus, 2)
+        review['final_score'] = round(score + bonus, 2)
+        return review
     
     def _apply_signal_filters(self, stock_data, ts_code, industry, score, industry_heat):
         """

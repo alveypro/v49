@@ -11,6 +11,7 @@ from openclaw.runtime.root_dependency_bridge import (
     load_stable_uptrend_renderer,
     load_v3_evaluator_class,
     load_v4_evaluator_class,
+    load_v5_evaluator_class,
     load_v6_ultimate_evaluator_class,
     load_v7_evaluator_class,
     load_v8_evaluator_class,
@@ -52,10 +53,10 @@ def load_ui_dependencies(logger) -> Dict[str, Any]:
             pass
 
     try:
-        out["ComprehensiveStockEvaluatorV5"] = out["ComprehensiveStockEvaluatorV4"]
+        out["ComprehensiveStockEvaluatorV5"] = load_v5_evaluator_class()
         out["V5_EVALUATOR_AVAILABLE"] = out["ComprehensiveStockEvaluatorV5"] is not None
         if out["V5_EVALUATOR_AVAILABLE"]:
-            logger.info("v5.0启动确认型评分器加载成功（基于v4.0八维体系）！")
+            logger.info("v5.0启动确认型评分器加载成功！")
     except ImportError as e:
         logger.warning(f"v5.0评分器未找到: {e}")
 

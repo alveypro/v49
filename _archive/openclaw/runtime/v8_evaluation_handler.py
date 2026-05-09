@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional
+import time
 
 import pandas as pd
 
@@ -42,12 +43,16 @@ def evaluate_v8_signal(
     if len(stock_data) < 60:
         return build_v8_empty_result(version)
 
+    stage_timing: Dict[str, float] = {}
+    started = time.perf_counter()
     stock_data = _sort_by_trade_date(stock_data)
     index_data = _sort_by_trade_date(index_data)
+    stage_timing["sort_input"] = time.perf_counter() - started
 
     market_status = {"can_trade": True, "position_multiplier": 1.0, "reason": "未启用市场过滤"}
     market_penalty = 1.0
 
+    started = time.perf_counter()
     if index_data is not None and len(index_data) >= 60:
         market_status = calculate_v8_market_regime(index_data)
         market_penalty = calculate_v8_market_penalty(market_status)
@@ -55,26 +60,33 @@ def evaluate_v8_signal(
             logger.warning(f"⚠️ 市场环境极差（{market_status['reason']}），评分将降至30%")
     else:
         market_status["reason"] = "大盘数据不足，未降分"
+    stage_timing["market_regime"] = time.perf_counter() - started
 
+    started = time.perf_counter()
     if hasattr(base_evaluator, "evaluate_stock_v7"):
         industry_value = industry or (industry_resolver(ts_code) if ts_code and industry_resolver else "未知行业")
         v7_result = base_evaluator.evaluate_stock_v7(stock_data, ts_code, industry_value)
     else:
         v7_result = base_evaluator.evaluate_stock_v4(stock_data)
+    stage_timing["base_evaluator"] = time.perf_counter() - started
 
     if not v7_result["success"]:
         return v7_result
 
+    started = time.perf_counter()
     advanced_result = calculate_v8_advanced_factors(stock_data, index_data=index_data)
+    stage_timing["advanced_factors"] = time.perf_counter() - started
 
+    started = time.perf_counter()
     try:
         atr_stops = calculate_v8_atr_stops(stock_data)
     except Exception as exc:
         if logger is not None:
             logger.warning(f"ATR计算失败: {exc}")
         atr_stops = {}
+    stage_timing["atr_stops"] = time.perf_counter() - started
 
-    return build_v8_evaluation_result(
+    result = build_v8_evaluation_result(
         version=version,
         v7_result=v7_result,
         advanced_result=advanced_result,
@@ -83,3 +95,10 @@ def evaluate_v8_signal(
         atr_stops=atr_stops,
         timestamp=timestamp,
     )
+    result["runtime_diagnostics"] = {
+        "stage_timing_ms": {key: max(0.0, float(value) * 1000.0) for key, value in stage_timing.items()},
+    }
+    v7_runtime = v7_result.get("runtime_diagnostics") if isinstance(v7_result, dict) else None
+    if isinstance(v7_runtime, dict) and isinstance(v7_runtime.get("stage_timing_ms"), dict):
+        result["runtime_diagnostics"]["v7_stage_timing_ms"] = dict(v7_runtime.get("stage_timing_ms") or {})
+    return result

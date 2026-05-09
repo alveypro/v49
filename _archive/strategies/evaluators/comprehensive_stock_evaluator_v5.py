@@ -194,9 +194,9 @@ class ComprehensiveStockEvaluatorV5(ComprehensiveStockEvaluatorV4):
         
         # 1.2 横盘蓄势（5分）
         price_chg_5d = ind.get('price_chg_5d', 0)
-        if abs(price_chg_5d) <= 3:
+        if abs(price_chg_5d) <= 0.03:
             score += 5  # 5天内波动小于3%
-        elif abs(price_chg_5d) <= 5:
+        elif abs(price_chg_5d) <= 0.05:
             score += 3
         
         return min(score, 10)  # 最高10分
@@ -221,9 +221,9 @@ class ComprehensiveStockEvaluatorV5(ComprehensiveStockEvaluatorV4):
         
         # 2.2 超跌反弹（5分）
         price_chg_20d = ind.get('price_chg_20d', 0)
-        if -20 <= price_chg_20d <= -10:
+        if -0.20 <= price_chg_20d <= -0.10:
             score += 5  # 适度超跌
-        elif -30 <= price_chg_20d < -20:
+        elif -0.30 <= price_chg_20d < -0.20:
             score += 3  # 深度超跌
         
         return min(score, 10)  # 最高10分
@@ -248,7 +248,7 @@ class ComprehensiveStockEvaluatorV5(ComprehensiveStockEvaluatorV4):
         
         # 3.2 价涨量增（8分）
         price_chg_5d = ind.get('price_chg_5d', 0)
-        if price_chg_5d > 3 and vol_ratio > 1.2:
+        if price_chg_5d > 0.03 and vol_ratio > 1.2:
             score += 8  # 价涨量增
         elif price_chg_5d > 0 and vol_ratio > 1.0:
             score += 5
@@ -327,9 +327,9 @@ class ComprehensiveStockEvaluatorV5(ComprehensiveStockEvaluatorV4):
         # 7.3 放量上涨（6分）⬆️ 提高
         vol_ratio = ind.get('vol_ratio', 1.0)
         price_chg_5d = ind.get('price_chg_5d', 0)
-        if price_chg_5d > 5 and vol_ratio > 1.5:
+        if price_chg_5d > 0.05 and vol_ratio > 1.5:
             score += 6  # 强势放量上涨
-        elif price_chg_5d > 3 and vol_ratio > 1.2:
+        elif price_chg_5d > 0.03 and vol_ratio > 1.2:
             score += 4
         elif price_chg_5d > 0 and vol_ratio > 1.0:
             score += 2

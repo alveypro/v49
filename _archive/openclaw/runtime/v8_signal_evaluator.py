@@ -7,10 +7,12 @@ from typing import Any, Dict, Tuple
 def calculate_v8_final_score(*, v7_score: float, advanced_total_score: float, advanced_max_score: float, market_penalty: float) -> Dict[str, float]:
     max_score = float(advanced_max_score or 100.0)
     advanced_score = (float(advanced_total_score or 0.0) / max_score) * 100.0 if max_score > 0 else 0.0
-    final_score = (0.9 * advanced_score + 0.1 * float(v7_score or 0.0)) * float(market_penalty)
+    pre_market_score = 0.9 * advanced_score + 0.1 * float(v7_score or 0.0)
+    final_score = pre_market_score * float(market_penalty)
     final_score = max(0.0, min(100.0, final_score))
     return {
         "final_score": round(final_score, 2),
+        "pre_market_score": round(pre_market_score, 2),
         "advanced_score": round(advanced_score, 2),
         "v7_score": round(float(v7_score or 0.0), 2),
         "v7_weight": 0.1,
@@ -79,6 +81,8 @@ def build_v8_evaluation_result(
         "description": description,
         "v7_score": score["v7_score"],
         "advanced_score": score["advanced_score"],
+        "pre_market_score": score["pre_market_score"],
+        "market_penalty": score["market_penalty"],
         "v7_weight": score["v7_weight"],
         "advanced_weight": score["advanced_weight"],
         "v7_details": v7_result,
@@ -88,3 +92,45 @@ def build_v8_evaluation_result(
         "version": version,
         "timestamp": timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
+
+
+def build_v8_suppression_diagnostics(score_diagnostics: Dict[str, Any]) -> Dict[str, Any]:
+    breakdown = score_diagnostics.get("score_breakdown") if isinstance(score_diagnostics.get("score_breakdown"), dict) else {}
+    threshold = float(score_diagnostics.get("threshold", 0.0) or 0.0)
+    evaluated = int(score_diagnostics.get("evaluated", 0) or 0)
+    pass_rate = float(score_diagnostics.get("pass_rate", 0.0) or 0.0)
+    final_avg = float(score_diagnostics.get("avg_score", 0.0) or 0.0)
+    pre_market_avg = _breakdown_avg(breakdown, "pre_market_score")
+    market_penalty_avg = _breakdown_avg(breakdown, "market_penalty")
+    advanced_avg = _breakdown_avg(breakdown, "advanced_score")
+    factor_avgs = {
+        str(key).split("factor:", 1)[1]: float(value.get("avg", 0.0) or 0.0)
+        for key, value in breakdown.items()
+        if str(key).startswith("factor:") and isinstance(value, dict)
+    }
+    low_factors = sorted(
+        [{"factor": key, "avg": value} for key, value in factor_avgs.items() if value < 5.0],
+        key=lambda item: (item["avg"], item["factor"]),
+    )
+    suppressed_by_market = evaluated > 0 and pre_market_avg >= threshold and final_avg < threshold and market_penalty_avg < 0.9
+    suppressed_by_factors = evaluated > 0 and advanced_avg < threshold and len(low_factors) > 0
+    return {
+        "type": "v8_suppression_diagnostics",
+        "evaluated": evaluated,
+        "threshold": threshold,
+        "pass_rate": pass_rate,
+        "avg_final_score": final_avg,
+        "avg_pre_market_score": pre_market_avg,
+        "avg_market_penalty": market_penalty_avg,
+        "avg_advanced_score": advanced_avg,
+        "suppressed_by_market_penalty": bool(suppressed_by_market),
+        "suppressed_by_factor_distribution": bool(suppressed_by_factors),
+        "low_factor_averages": low_factors[:10],
+    }
+
+
+def _breakdown_avg(breakdown: Dict[str, Any], key: str) -> float:
+    item = breakdown.get(key)
+    if not isinstance(item, dict):
+        return 0.0
+    return float(item.get("avg", 0.0) or 0.0)
