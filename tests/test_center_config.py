@@ -7,6 +7,7 @@ from strategies.center_config import (
     apply_risk_overrides,
     default_center_config,
     find_latest_backtest_best,
+    resolve_governance_recommendation,
     resolve_run_policy,
     resolve_runtime_params,
 )
@@ -247,6 +248,37 @@ def test_resolve_runtime_params_prefers_cli_overrides(tmp_path: Path):
     assert out["source"]["score_threshold"] == "cli_override"
     assert out["source"]["sample_size"] == "latest_backtest_best"
     assert out["source"]["holding_days"] == "cli_override"
+
+
+def test_resolve_governance_recommendation_accepts_valid_governance_action():
+    cfg = default_center_config()
+    cfg["strategy_governance"] = {
+        "current_primary": "v9",
+        "recommended_primary": "stable",
+        "governance_action": "degrade_primary",
+        "reason": "drawdown_guard",
+        "as_of": "2026-05-09",
+    }
+
+    recommendation = resolve_governance_recommendation(cfg)
+
+    assert recommendation == {
+        "current_primary": "v9",
+        "recommended_primary": "stable",
+        "governance_action": "degrade_primary",
+        "reason": "drawdown_guard",
+        "as_of": "2026-05-09",
+    }
+
+
+def test_resolve_governance_recommendation_rejects_unknown_action():
+    cfg = default_center_config()
+    cfg["strategy_governance"] = {
+        "recommended_primary": "stable",
+        "governance_action": "force_production",
+    }
+
+    assert resolve_governance_recommendation(cfg) == {}
 
 
 def test_resolve_runtime_params_does_not_auto_lower_score_threshold(tmp_path: Path):
