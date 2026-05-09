@@ -1,0 +1,15 @@
+[Unit]
+Description=Airivo Auth Decision Alert Check
+After=network-online.target openclaw-streamlit.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/openclaw/current
+Environment=PYTHONUNBUFFERED=1
+Environment=AIRIVO_AUTH_DECISION_LOG_PATH=/tmp/airivo_auth_decision.jsonl
+ExecStart=/opt/openclaw/venv311/bin/python /opt/openclaw/current/tools/auth_decision_alert.py --window-seconds 300 --redirect-threshold 12 --consecutive-threshold 4 --allow-missing-log --json
+SuccessExitStatus=2
+StandardOutput=append:/var/log/openclaw/auth_decision_alert.log
+StandardError=append:/var/log/openclaw/auth_decision_alert.err.log

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Airivo Auth Decision Alert Check Every Minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+Unit=airivo-auth-decision-alert.service
+
+[Install]
+WantedBy=timers.target

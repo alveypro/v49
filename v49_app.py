@@ -158,11 +158,13 @@ from openclaw.runtime.airivo_session import (
 )
 from openclaw.services.airivo_auth_middleware import (
     check_auth_and_redirect as auth_check_and_redirect,
+    get_auth_debug_snapshot as auth_get_debug_snapshot,
     get_user_info as auth_get_user_info,
     get_user_role as auth_get_user_role,
     inject_auth_headers as auth_inject_headers,
     logout as auth_logout,
     require_auth as auth_require_auth,
+    should_show_auth_debug_for_user as auth_should_show_debug_for_user,
 )
 from openclaw.runtime.scan_result_utils import (
     add_reason_summary as runtime_add_reason_summary,
@@ -10529,6 +10531,10 @@ def main():
         f"A股量价决策与风险门禁后台 | build={_fp['build_id']} | pid={_fp['pid']} | app={_fp['app_file']} | "
         f"用户: {auth_user.get('display_name', auth_user.get('username', '匿名'))} ({role_labels.get(auth_user.get('role', ''), auth_user.get('role', ''))})"
     )
+    if auth_should_show_debug_for_user(auth_user):
+        with st.expander("Auth Debug (Admin)", expanded=False):
+            st.caption("仅管理员可见；用于定位登录循环，不展示 token 明文。")
+            st.json(auth_get_debug_snapshot(), expanded=False)
     if st.button("刷新", key="refresh_main_runtime_status"):
         try:
             _airivo_data_freshness_snapshot_cached.clear()
