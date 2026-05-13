@@ -252,6 +252,8 @@ def build_primary_result_bridge_context(
     primary_result_bridge_enabled: bool,
     primary_result_api_url: str,
     primary_result_initial_json_html: str,
+    top5_trader_brief_health_enabled: bool,
+    top5_trader_brief_health_url: str,
 ) -> dict[str, object]:
     enabled_for_view = current_view in {"overview", "candidates"}
     enabled = bool(primary_result_bridge_enabled and enabled_for_view)
@@ -260,6 +262,8 @@ def build_primary_result_bridge_context(
         "enabled": enabled,
         "api_url": primary_result_api_url,
         "initial_json_html": primary_result_initial_json_html if enabled_for_view else "",
+        "top5_health_enabled": bool(top5_trader_brief_health_enabled),
+        "top5_health_api_url": str(top5_trader_brief_health_url or ""),
     }
 
 

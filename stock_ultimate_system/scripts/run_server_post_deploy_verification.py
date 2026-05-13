@@ -38,6 +38,13 @@ DEFAULT_HTTP_TARGETS = (
         "content_expectation": "json_object",
     },
     {
+        "name": "stock_top5_trader_brief_health",
+        "url": "https://airivo.online/stock/api/top5-trader-brief-health",
+        "expected_statuses": (200,),
+        "content_expectation": "json_object",
+        "top5_contract_version": "top5_trader_brief_health.v1",
+    },
+    {
         "name": "t12_ai_runner_api",
         "url": "https://airivo.online/T12/api/stock-ai-runner",
         "expected_statuses": (404,),
@@ -303,6 +310,7 @@ def _normalize_http_target(target: tuple[str, str] | dict[str, object]) -> dict[
             "url": str(target.get("url") or "").strip(),
             "expected_statuses": tuple(target.get("expected_statuses") or (200, 301, 302, 303, 304)),
             "content_expectation": str(target.get("content_expectation") or "status_only").strip(),
+            "top5_contract_version": str(target.get("top5_contract_version") or "").strip(),
         }
     name, url = target
     return {
@@ -310,6 +318,7 @@ def _normalize_http_target(target: tuple[str, str] | dict[str, object]) -> dict[
         "url": url,
         "expected_statuses": (200, 301, 302, 303, 304),
         "content_expectation": "status_only",
+        "top5_contract_version": "",
     }
 
 
@@ -326,7 +335,9 @@ def _check_http_targets(
         status_code, body = url_fetcher(url, timeout)
         content_passed = True
         content_expectation = str(target["content_expectation"])
+        top5_contract = str(target.get("top5_contract_version") or "").strip()
         decoded_json = None
+        json_fields = None
         if content_expectation == "json_object":
             try:
                 decoded_body = json.loads(body)
@@ -334,19 +345,30 @@ def _check_http_targets(
                 decoded_json = decoded_body if isinstance(decoded_body, dict) else None
                 if content_passed and decoded_body.get("disabled_reason") == "stock entry guard blocked primary result publication.":
                     content_passed = False
+                if (
+                    content_passed
+                    and isinstance(decoded_json, dict)
+                    and name == "stock_top5_trader_brief_health"
+                    and top5_contract
+                ):
+                    content_passed = str(decoded_json.get("contract_version") or "").strip() == top5_contract
             except json.JSONDecodeError:
                 content_passed = False
         expected_statuses = tuple(int(item) for item in target["expected_statuses"])
-        json_fields = (
-            {
-                "result_id": decoded_json.get("result_id"),
-                "run_id": decoded_json.get("run_id"),
-                "lifecycle_id": decoded_json.get("lifecycle_id"),
-                "disabled_reason": decoded_json.get("disabled_reason"),
-            }
-            if isinstance(decoded_json, dict)
-            else None
-        )
+        if isinstance(decoded_json, dict):
+            if name == "stock_top5_trader_brief_health":
+                json_fields = {
+                    "contract_version": decoded_json.get("contract_version"),
+                    "manifest_found": decoded_json.get("manifest_found"),
+                    "threshold_hours": decoded_json.get("threshold_hours"),
+                }
+            else:
+                json_fields = {
+                    "result_id": decoded_json.get("result_id"),
+                    "run_id": decoded_json.get("run_id"),
+                    "lifecycle_id": decoded_json.get("lifecycle_id"),
+                    "disabled_reason": decoded_json.get("disabled_reason"),
+                }
         results.append(
             {
                 "name": name,

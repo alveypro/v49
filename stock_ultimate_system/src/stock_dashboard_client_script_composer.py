@@ -18,9 +18,13 @@ _PAGE_INTERACTION_TEMPLATE = Path(__file__).with_name(
 def compose_primary_result_bridge_bootstrap_script(primary_result_bridge_context: dict[str, object]) -> str:
     enabled = "true" if bool(primary_result_bridge_context.get("enabled")) else "false"
     api_url = repr(str(primary_result_bridge_context.get("api_url", "")))
+    th = "true" if bool(primary_result_bridge_context.get("top5_health_enabled")) else "false"
+    health_url = repr(str(primary_result_bridge_context.get("top5_health_api_url", "") or ""))
     return (
         f"const PRIMARY_RESULT_BRIDGE_ENABLED = {enabled};\n"
-        f"    const PRIMARY_RESULT_API_URL = {api_url};"
+        f"    const PRIMARY_RESULT_API_URL = {api_url};\n"
+        f"    const TOP5_MANIFEST_HEALTH_ENABLED = {th};\n"
+        f"    const TOP5_MANIFEST_HEALTH_URL = {health_url};"
     )
 
 

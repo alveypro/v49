@@ -26,10 +26,12 @@ def render_main_site_home(base_path: str = "") -> str:
     normalized_base_path = _normalize_base_path(base_path)
     is_apex_namespace = normalized_base_path.lower() == "/apex"
     stock_href = _href(base_path, "/stock/")
-    t12_href = _href(base_path, "/T12/")
+    # Apex landing must not herd users into /apex/T12 (internal-validation mirror).
+    # Governance entry stays the canonical prod path /T12/ (same nginx server).
+    t12_href = "/T12/" if is_apex_namespace else _href(base_path, "/T12/")
     public_root = "airivo.online" + (normalized_base_path or "")
     public_stock = public_root + "/stock"
-    public_t12 = public_root + "/T12"
+    public_t12 = "airivo.online/T12" if is_apex_namespace else public_root + "/T12"
     hero_kicker = "Internal Validation" if is_apex_namespace else "Product Matrix"
     hero_title = (
         "供内部验证与预发布使用的受控命名空间"

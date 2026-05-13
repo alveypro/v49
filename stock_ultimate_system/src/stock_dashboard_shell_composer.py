@@ -215,6 +215,8 @@ def compose_page_shell_html(
         '</aside>'
         '<div class="container">'
         '<div class="masthead-stack">'
+        '<div id="top5-manifest-freshness-banner" class="top5-manifest-freshness-banner" '
+        'role="status" aria-live="polite" hidden></div>'
         '<div class="topbar">'
         '<div class="topbar-title">'
         '<strong>Airivo Stock</strong>'

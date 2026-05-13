@@ -148,16 +148,22 @@ def test_build_primary_result_bridge_context_enables_only_supported_views():
         primary_result_bridge_enabled=True,
         primary_result_api_url="/stock/api/primary-result",
         primary_result_initial_json_html="<script>json</script>",
+        top5_trader_brief_health_enabled=True,
+        top5_trader_brief_health_url="/stock/api/top5-trader-brief-health",
     )
     assert payload["enabled"] is True
     assert payload["enabled_for_view"] is True
     assert payload["initial_json_html"] == "<script>json</script>"
+    assert payload["top5_health_enabled"] is True
+    assert payload["top5_health_api_url"] == "/stock/api/top5-trader-brief-health"
 
     t12_payload = build_primary_result_bridge_context(
         current_view="t12",
         primary_result_bridge_enabled=True,
         primary_result_api_url="/stock/api/primary-result",
         primary_result_initial_json_html="<script>json</script>",
+        top5_trader_brief_health_enabled=False,
+        top5_trader_brief_health_url="",
     )
     assert t12_payload["enabled"] is False
     assert t12_payload["enabled_for_view"] is False

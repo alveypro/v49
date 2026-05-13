@@ -22,6 +22,16 @@ from tests.primary_result_test_support import seed_current_primary_pointer
 pytestmark = pytest.mark.integration
 
 
+_TOP5_HEALTH_OK_BODY = json.dumps(
+    {
+        "contract_version": "top5_trader_brief_health.v1",
+        "manifest_found": True,
+        "threshold_hours": 168,
+    },
+    ensure_ascii=False,
+)
+
+
 def _write_minimal_experiment_inputs(tmp_path: Path, *, risk_level: str = "low") -> Path:
     exp_dir = tmp_path / "data" / "experiments"
     rep_dir = tmp_path / "data" / "reports"
@@ -218,6 +228,8 @@ def _dashboard_html(primary_progress="1/20", basket_progress="8/20", promotion_g
 
 
 def _ok_url_fetcher(url, timeout):
+    if url.endswith("/stock/api/top5-trader-brief-health"):
+        return 200, _TOP5_HEALTH_OK_BODY
     if url.endswith("/stock/api/primary-result"):
         return 200, '{"schema_version":"primary_result_v1","result_id":"primary:000001.SZ"}'
     if url.endswith("/T12/api/stock-ai-runner") or url.endswith("/T12/ops/stock-ai-runner"):

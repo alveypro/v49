@@ -495,3 +495,33 @@ __PRIMARY_RESULT_BRIDGE_BOOTSTRAP_SCRIPT__
         window.clearTimeout(timeoutId);
       }
     }
+    async function loadTop5ManifestFreshnessBanner() {
+      const mount = document.getElementById('top5-manifest-freshness-banner');
+      if (!mount || !TOP5_MANIFEST_HEALTH_ENABLED || !TOP5_MANIFEST_HEALTH_URL) {
+        return;
+      }
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 2000);
+      try {
+        const resp = await fetch(TOP5_MANIFEST_HEALTH_URL, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          signal: controller.signal,
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data || typeof data !== 'object') return;
+        if (!data.eval_enabled || !data.stale_banner_recommended || !String(data.message_zh || '').trim()) {
+          mount.setAttribute('hidden', 'hidden');
+          return;
+        }
+        const cleaned = String(data.message_zh || '').replace(/\*\*([^*]+)\*\*/g, '$1');
+        mount.textContent = cleaned;
+        mount.removeAttribute('hidden');
+      } catch (error) {
+        return;
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    }
+    loadTop5ManifestFreshnessBanner();

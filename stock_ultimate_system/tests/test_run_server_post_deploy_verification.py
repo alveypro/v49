@@ -8,6 +8,16 @@ from scripts.run_server_post_deploy_verification import run_server_post_deploy_v
 from src.artifact_registry import sha256_file
 
 
+_TOP5_HEALTH_OK_BODY = json.dumps(
+    {
+        "contract_version": "top5_trader_brief_health.v1",
+        "manifest_found": True,
+        "threshold_hours": 168,
+    },
+    ensure_ascii=False,
+)
+
+
 def _create_app_dir(tmp_path):
     app_dir = tmp_path / "stock-ultimate" / "app"
     for relative_path in (
@@ -307,6 +317,8 @@ def _dashboard_html(primary_progress="1/20", basket_progress="8/20", promotion_g
 def _ok_url_fetcher(url, timeout):
     if "/apex/stock" in url:
         return 410, "gone"
+    if url.endswith("/stock/api/top5-trader-brief-health"):
+        return 200, _TOP5_HEALTH_OK_BODY
     if url.endswith("/stock/api/primary-result"):
         return 200, '{"schema_version":"primary_result_v1","result_id":"primary:300750.SZ","run_id":"run-1","lifecycle_id":"life-1"}'
     if url.endswith("/T12/api/stock-ai-runner") or url.endswith("/T12/ops/stock-ai-runner"):
@@ -432,6 +444,8 @@ def test_server_post_deploy_verification_flags_live_apex_stock_content_for_stock
     activation_plan_path = _write_activation_plan(tmp_path, "stock-scoped")
 
     def stale_apex_fetcher(url, timeout):
+        if url.endswith("/stock/api/top5-trader-brief-health"):
+            return 200, _TOP5_HEALTH_OK_BODY
         if url.endswith("/stock/api/primary-result"):
             return 200, '{"schema_version":"primary_result_v1","result_id":"primary:300750.SZ","run_id":"run-1","lifecycle_id":"life-1"}'
         if url.endswith("/T12/api/stock-ai-runner") or url.endswith("/T12/ops/stock-ai-runner"):
@@ -464,6 +478,8 @@ def test_server_post_deploy_verification_rejects_primary_result_api_pointer_drif
     app_dir = _create_app_dir(tmp_path)
 
     def drift_fetcher(url, timeout):
+        if url.endswith("/stock/api/top5-trader-brief-health"):
+            return 200, _TOP5_HEALTH_OK_BODY
         if url.endswith("/stock/api/primary-result"):
             return 200, '{"schema_version":"primary_result_v1","result_id":"primary:300001.SZ","run_id":"run-x","lifecycle_id":"life-x"}'
         if url.endswith("/T12/api/stock-ai-runner") or url.endswith("/T12/ops/stock-ai-runner"):
@@ -499,6 +515,8 @@ def test_server_post_deploy_verification_flags_live_apex_stock_api_content(tmp_p
     activation_plan_path = _write_activation_plan(tmp_path, "stock-scoped")
 
     def drift_fetcher(url, timeout):
+        if url.endswith("/stock/api/top5-trader-brief-health"):
+            return 200, _TOP5_HEALTH_OK_BODY
         if url.endswith("/apex/stock/api/primary-result"):
             return 200, '{"schema_version":"primary_result_v1","result_id":"primary:300001.SZ","run_id":"run-x","lifecycle_id":"life-x"}'
         if url.endswith("/stock/api/primary-result"):
@@ -532,6 +550,8 @@ def test_server_post_deploy_verification_rejects_live_apex_stock_content_for_ful
     activation_plan_path = _write_activation_plan(tmp_path, "full-domain")
 
     def drift_fetcher(url, timeout):
+        if url.endswith("/stock/api/top5-trader-brief-health"):
+            return 200, _TOP5_HEALTH_OK_BODY
         if url.endswith("/apex/stock/api/primary-result"):
             return 200, '{"schema_version":"primary_result_v1","result_id":"primary:300001.SZ","run_id":"run-x","lifecycle_id":"life-x"}'
         if url.endswith("/stock/api/primary-result"):

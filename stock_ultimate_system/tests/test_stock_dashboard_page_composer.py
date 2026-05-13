@@ -185,15 +185,24 @@ def test_compose_primary_result_bridge_bootstrap_script_renders_constants():
         {
             "enabled": True,
             "api_url": "/stock/api/primary-result",
+            "top5_health_enabled": True,
+            "top5_health_api_url": "/stock/api/top5-trader-brief-health",
         }
     )
     assert "const PRIMARY_RESULT_BRIDGE_ENABLED = true;" in html
     assert "const PRIMARY_RESULT_API_URL = '/stock/api/primary-result';" in html
+    assert "const TOP5_MANIFEST_HEALTH_ENABLED = true;" in html
+    assert "const TOP5_MANIFEST_HEALTH_URL = '/stock/api/top5-trader-brief-health';" in html
 
 
 def test_compose_primary_result_bridge_client_script_contains_bridge_contract():
     html = compose_primary_result_bridge_client_script(
-        primary_result_bridge_bootstrap_script="const PRIMARY_RESULT_BRIDGE_ENABLED = true;\n    const PRIMARY_RESULT_API_URL = '/stock/api/primary-result';",
+        primary_result_bridge_bootstrap_script=(
+            "const PRIMARY_RESULT_BRIDGE_ENABLED = true;\n"
+            "    const PRIMARY_RESULT_API_URL = '/stock/api/primary-result';\n"
+            "    const TOP5_MANIFEST_HEALTH_ENABLED = true;\n"
+            "    const TOP5_MANIFEST_HEALTH_URL = '/stock/api/top5-trader-brief-health';"
+        ),
         primary_result_core_compare_fields=("result_lifecycle_stage", "audit_status"),
     )
     assert "function isValidPrimaryResultPayload(payload)" in html
@@ -249,6 +258,7 @@ def test_compose_page_shell_html_wraps_app_sidebar_topbar_and_content():
         main_content_html="<div>main</div>",
     )
     assert '<div class="app-shell">' in html
+    assert 'id="top5-manifest-freshness-banner"' in html
     assert "<a>nav</a>" in html
     assert "<div>pill</div>" in html
     assert "<div>kpi</div>" in html

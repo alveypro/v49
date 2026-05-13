@@ -22,13 +22,14 @@ def test_main_site_home_executes_as_apex_sidecar_entry():
 
     assert 'id="main-site-home"' in html_text
     assert 'href="/apex/stock/"' in html_text
-    assert 'href="/apex/T12/"' in html_text
+    assert 'href="/T12/"' in html_text
+    assert 'href="/apex/T12/"' not in html_text
     assert "Internal Validation" in html_text
     assert "内部验证环境，不新增产品职责" in html_text
     assert "不参与对外正式产品叙事" in html_text
     assert "airivo.online/apex" in html_text
     assert "airivo.online/apex/stock" in html_text
-    assert "airivo.online/apex/T12" in html_text
+    assert "airivo.online/T12" in html_text
     assert "进入 /stock 内部验证入口" in html_text
     assert "查看 /T12 内部只读入口" in html_text
     assert "进入主系统" not in html_text
