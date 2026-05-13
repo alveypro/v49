@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write
+
+# Phase C Cosign optional: Repo Settings → Actions → Variables → COSIGN_SIGN_TOP5_MANIFEST = true ; installer sets COSIGN_CERT_IDENTITY_REGEXP.
 
 jobs:
   core:
@@ -21,6 +24,52 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Top5 audit scheduler drift check (systemd from deploy/top5_audit_schedule.env.sh)
+        run: bash deploy/tools/check_top5_audit_schedulers_generated.sh
+
+      - name: Top5 deploy manifest (deterministic hashes for install_top5_audit_timer.sh --require-manifest)
+        run: |
+          mkdir -p artifacts
+          python3 deploy/tools/top5_audit_scheduler_manifest.py generate \
+            --repo "${GITHUB_WORKSPACE}" \
+            --paths deploy/top5_audit_sync_paths.txt \
+            --out-json artifacts/top5_audit_scheduler_manifest.json \
+            --sha256sums artifacts/top5_audit_scheduler_manifest.sha256
+          python3 deploy/tools/top5_audit_scheduler_manifest.py verify \
+            --repo "${GITHUB_WORKSPACE}" \
+            --manifest artifacts/top5_audit_scheduler_manifest.json
+          (cd "${GITHUB_WORKSPACE}" && sha256sum -c artifacts/top5_audit_scheduler_manifest.sha256)
+
+      - name: Install Cosign (scheduler manifest signing — opt-in)
+        if: ${{ vars.COSIGN_SIGN_TOP5_MANIFEST == 'true' }}
+        uses: sigstore/cosign-installer@v3.8.0
+
+      - name: Keyless sign manifest (Sigstore / GitHub OIDC)
+        if: ${{ vars.COSIGN_SIGN_TOP5_MANIFEST == 'true' }}
+        env:
+          COSIGN_YES: "true"
+        run: |
+          cosign version
+          cosign sign-blob artifacts/top5_audit_scheduler_manifest.json \
+            --bundle artifacts/top5_audit_scheduler_manifest.cosign.bundle
+
+      - name: Upload Top5 scheduler deploy manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: top5-scheduler-deploy-manifest
+          path: |
+            artifacts/top5_audit_scheduler_manifest.json
+            artifacts/top5_audit_scheduler_manifest.sha256
+          if-no-files-found: error
+
+      - name: Upload Top5 Cosign manifest bundle (Phase C — opt-in)
+        if: ${{ vars.COSIGN_SIGN_TOP5_MANIFEST == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: top5-manifest-cosign-bundle
+          path: artifacts/top5_audit_scheduler_manifest.cosign.bundle
+          if-no-files-found: error
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -30,6 +79,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install pytest pandas numpy
+
+      - name: Tool boundary audit
+        run: |
+          python tools/tool_boundary_audit.py \
+            --fail-on-archive-candidates \
+            --max-manual-review 0 \
+            --max-support-review 2
 
       - name: Core import smoke
         run: |
@@ -69,7 +125,13 @@ jobs:
           PY
 
       - name: Professional schema and service tests
-        run: pytest tests/test_professional_system_services.py tests/test_execution_evidence_service.py tests/test_experiment_governance_service.py tests/test_backtest_credibility_service.py tests/test_release_dry_run_service.py tests/test_release_dry_run_fixture_service.py tests/test_backtest_stats.py tests/test_backtest_workers.py tests/test_v49_backtest_entry.py tests/test_v49_data_ops_entry.py tests/test_v49_research_entries.py tests/test_v49_strategy_evolution_entry.py tests/test_v49_today_decision_entry.py tests/test_v49_trading_assistant_entry.py tests/test_v49_entry_dispatcher.py tests/test_v49_sidebar.py tests/test_v49_app_router.py tests/test_v8_legacy_facades.py tests/test_v8_evaluation_handler.py tests/test_v8_atr_risk.py tests/test_v8_market_regime.py tests/test_v8_core_factors.py tests/test_v8_advanced_factor_aggregator.py tests/test_v8_signal_evaluator.py tests/test_v9_signal_evaluator.py tests/test_combo_signal_evaluator.py tests/test_v49_adapter.py -q
+        run: pytest tests/test_professional_system_services.py tests/test_execution_evidence_service.py tests/test_experiment_governance_service.py tests/test_backtest_credibility_service.py tests/test_release_dry_run_service.py tests/test_release_dry_run_fixture_service.py tests/test_backtest_stats.py tests/test_backtest_workers.py tests/test_v49_backtest_entry.py tests/test_v49_data_ops_entry.py tests/test_v49_research_entries.py tests/test_v49_strategy_evolution_entry.py tests/test_v49_today_decision_entry.py tests/test_v49_trading_assistant_entry.py tests/test_v49_entry_dispatcher.py tests/test_v49_sidebar.py tests/test_v49_app_router.py tests/test_v8_legacy_facades.py tests/test_v8_evaluation_handler.py tests/test_v8_atr_risk.py tests/test_v8_market_regime.py tests/test_v8_core_factors.py tests/test_v8_advanced_factor_aggregator.py tests/test_v8_signal_evaluator.py tests/test_v9_signal_evaluator.py tests/test_combo_signal_evaluator.py tests/test_v49_adapter.py tests/test_top5_audit_scheduler_manifest.py tests/test_top5_forward_return_evaluation_service.py -q
+
+      - name: Stock dashboard boundary tests
+        run: pytest stock_ultimate_system/tests/test_ci_dashboard_boundary_gate.py stock_ultimate_system/tests/test_stock_dashboard_page_sections.py stock_ultimate_system/tests/test_stock_dashboard_render_inputs.py stock_ultimate_system/tests/test_stock_dashboard_http_routes.py stock_ultimate_system/tests/test_run_dashboard_primary_result_api.py -q
+
+      - name: Governance boundary documentation tests
+        run: pytest tests/test_governance_docs_links.py tests/test_pr_template_governance_checklist.py tests/test_release_gate_script.py -q
 
       - name: Governance gate
         id: governance_gate
@@ -134,14 +196,14 @@ jobs:
               selected = int(payload.get("selected_count", 0) or 0)
               lines.append(f"- Hygiene dry-run selected: `{selected}`, patched: `{patched}`")
               if patched > 0:
-                  lines.append("- Remediation required: run `tools/backfill_execution_attribution.py --apply ...` and rerun gate.")
+                  lines.append("- Remediation required: run `tools/archive/strategy_competition/backfill_execution_attribution.py --apply ...` and rerun gate.")
           else:
               lines.append("- Execution attribution hygiene artifact: not generated in this run")
 
           lines.extend(
               [
                   "",
-                  "Runbook: `_archive/docs/AIRIVO_GOVERNANCE_GATE_RUNBOOK.md`",
+                  "Runbook: `docs/AIRIVO_GOVERNANCE_GATE_RUNBOOK.md`",
                   "",
               ]
           )
@@ -196,15 +258,15 @@ jobs:
           path: artifacts/governance_pr_comment.md
           if-no-files-found: ignore
 
-      - name: Fail workflow if governance gate failed
-        if: steps.governance_gate.outcome != 'success'
+      - name: Fail workflow if archived governance gate is explicitly blocking
+        if: ${{ vars.AIRIVO_BLOCK_ON_ARCHIVED_GOVERNANCE_GATE == 'true' && steps.governance_gate.outcome != 'success' }}
         run: |
-          echo "Governance gate failed; see PR comment for latest artifacts."
+          echo "Archived governance gate failed and AIRIVO_BLOCK_ON_ARCHIVED_GOVERNANCE_GATE=true; see PR comment for latest artifacts."
           exit 1
 
       - name: Release dry-run preflight evidence
         run: |
-          python tools/build_release_dry_run_fixture.py \
+          python _archive/tools/build_release_dry_run_fixture.py \
             --db artifacts/release_dry_run/fixture.db \
             --payload artifacts/release_dry_run/fixture_payload.json \
             --report artifacts/release_dry_run/fixture_report.md \

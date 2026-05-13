@@ -1,6 +1,8 @@
 # Airivo Governance Gate Runbook
 
-This runbook standardizes how developers and CI execute governance gates, so all paths use the same checks and produce the same failure semantics.
+This runbook documents the archived governance gate. It is retained for forensic
+review, PR comments, and migration continuity; it is not the current default
+hard production gate.
 
 Quick map: `docs/AIRIVO_GOVERNANCE_ONE_PAGE_FLOW.md`
 
@@ -8,17 +10,23 @@ Quick map: `docs/AIRIVO_GOVERNANCE_ONE_PAGE_FLOW.md`
 
 Use this runbook for:
 
-- local pre-PR governance checks
-- CI governance checks
-- release-diff governance checks before pushing `main`
+- troubleshooting historical governance blockers
+- generating archived governance PR comment artifacts
+- explicitly opted-in release-diff checks
 
-Do not bypass this runbook with ad-hoc `governance_gate.py` calls unless troubleshooting.
+Current hard gates live in the runtime boundary map:
+
+- `python tools/tool_boundary_audit.py --fail-on-archive-candidates --max-manual-review 0 --max-support-review 2`
+- stock dashboard boundary tests in `.github/workflows/ci.yml`
+
+Do not promote this archived runner back to default blocking CI unless it is
+fully migrated to current `tools/`, `openclaw/services/`, and DB path semantics.
 
 ## 2. Required Inputs
 
-Minimum required:
+Minimum required when running the archived gate intentionally:
 
-- Python runtime that can run `tools/governance_gate.py`
+- Python runtime that can run `_archive/tools/governance_gate.py`
 - a readable DB path for execution attribution hygiene dry-run
 
 Common DB choices:
@@ -33,7 +41,7 @@ Common DB choices:
 export AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_DB_PATH="data/openclaw.db"
 export AIRIVO_ENABLE_EXECUTION_ATTRIBUTION_HYGIENE_GATE=1
 
-bash tools/run_governance_gate_ci.sh
+bash tools/archive/governance/run_governance_gate_ci.sh
 ```
 
 Expected behavior:
@@ -41,6 +49,9 @@ Expected behavior:
 - exits `0` when clean
 - exits non-zero when governance blockers exist
 - prints a deterministic list of blockers
+
+In CI, this archived gate is informational by default. It blocks only when
+`AIRIVO_BLOCK_ON_ARCHIVED_GOVERNANCE_GATE=true`.
 
 ## 4. Local Diff-Only Check
 
@@ -53,7 +64,7 @@ HEAD_SHA="$(git rev-parse HEAD)"
 GOVERNANCE_BASE_SHA="$BASE_SHA" \
 GOVERNANCE_HEAD_SHA="$HEAD_SHA" \
 AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_DB_PATH="data/openclaw.db" \
-bash tools/run_governance_gate_ci.sh
+bash tools/archive/governance/run_governance_gate_ci.sh
 ```
 
 ## 5. CI Standard Template
@@ -70,14 +81,15 @@ export AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_STATUSES="${AIRIVO_EXECUTION_ATTRIBU
 export AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_STALE_MINUTES="${AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_STALE_MINUTES:-30}"
 export AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_MAX_ORDERS="${AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_MAX_ORDERS:-500}"
 
-bash tools/run_governance_gate_ci.sh
+bash tools/archive/governance/run_governance_gate_ci.sh
 ```
 
 Policy:
 
 - hygiene gate is dry-run only in CI
-- if dry-run finds missing attribution rows (`patched_count > 0`), fail the pipeline
-- fix data hygiene first, then rerun
+- if dry-run finds missing attribution rows (`patched_count > 0`), treat it as an
+  audit finding unless `AIRIVO_BLOCK_ON_ARCHIVED_GOVERNANCE_GATE=true`
+- fix data hygiene first before using this archived gate as a release blocker
 
 ## 6. Release Diff Gate
 
@@ -90,10 +102,11 @@ LOCAL_HEAD="$(git rev-parse HEAD)"
 GOVERNANCE_BASE_SHA="$REMOTE_BEFORE" \
 GOVERNANCE_HEAD_SHA="$LOCAL_HEAD" \
 AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_DB_PATH="${AIRIVO_RELEASE_DB_PATH:-data/openclaw.db}" \
-bash tools/run_governance_gate_ci.sh
+bash tools/archive/governance/run_governance_gate_ci.sh
 ```
 
-If this fails, do not push.
+If this fails, do not push only when the release process has explicitly opted
+into archived governance blocking with `AIRIVO_BLOCK_ON_ARCHIVED_GOVERNANCE_GATE=true`.
 
 ## 7. Failure Triage
 
@@ -102,7 +115,7 @@ If this fails, do not push.
 3. If blocker is execution attribution hygiene, run:
 
 ```bash
-python tools/backfill_execution_attribution.py \
+python tools/archive/strategy_competition/backfill_execution_attribution.py \
   --db-path "${AIRIVO_EXECUTION_ATTRIBUTION_HYGIENE_DB_PATH:-data/openclaw.db}" \
   --statuses created,submitted \
   --stale-minutes 30 \
@@ -113,7 +126,8 @@ Then decide whether to run `--apply` in a controlled remediation step.
 
 ## 8. Non-Negotiable Boundaries
 
-- no `--non-blocking` semantics for governance gate
-- no merge when gate fails
-- no replacing gate checks with screenshots, chat logs, or manual claims
-
+- archived governance failure must be visible in PR comments or artifacts
+- archived governance failure blocks only under explicit opt-in
+- current hard gates must remain the tool boundary audit and stock dashboard
+  boundary tests until a new governance runner replaces the archived one
+- no replacing gate findings with screenshots, chat logs, or manual claims

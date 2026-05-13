@@ -1,5 +1,12 @@
 # Airivo ensemble_core 顶层组合研究线开发计划
 
+> Superseded governance note: this is a historical research plan. Runtime
+> boundaries and active hard gates are now defined by
+> `docs/AIRIVO_RUNTIME_BOUNDARY_MAP.md`, `.github/workflows/ci.yml`, and the
+> current PR template. Mentions of `tools/governance_gate.py` below are retained
+> as historical context and must not be used to re-expand top-level `tools/` or
+> redefine the current production gate.
+
 版本：`v1.0`
 日期：`2026-05-07`
 状态：`严格执行计划`
@@ -134,7 +141,7 @@ v5 OOS 若结论为 `oos_monitoring_failed_blocked`，下一步只能启动 `v6 
 验收命令：
 
 ```bash
-python tools/strategy_optimization_stage_audit.py --rejected-artifacts logs/openclaw/rejected_backtest_artifacts.jsonl --json
+python tools/archive/research/strategy_optimization_stage_audit.py --rejected-artifacts logs/openclaw/rejected_backtest_artifacts.jsonl --json
 ```
 
 验收标准：
@@ -423,7 +430,7 @@ benchmark：
 - `openclaw/services/ensemble_core_contract_service.py`
 - `openclaw/research/all_strategy_evidence_run.py`
 - `openclaw/services/unified_strategy_recommendation_service.py`
-- `tools/all_strategy_evidence_run.py`
+- `tools/archive/research/all_strategy_evidence_run.py`
 
 后续可新增：
 
@@ -443,7 +450,7 @@ benchmark：
 ### 6.1 生成 historical source scans
 
 ```bash
-python tools/all_strategy_evidence_run.py \
+python tools/archive/research/all_strategy_evidence_run.py \
   --strategies v4,v5,v8,v9,combo,v6,v7 \
   --date-from 2025-10-01 \
   --date-to YYYY-MM-DD \
@@ -459,7 +466,7 @@ python tools/all_strategy_evidence_run.py \
 ### 6.2 生成 ensemble_core fact chain
 
 ```bash
-python tools/all_strategy_evidence_run.py \
+python tools/archive/research/all_strategy_evidence_run.py \
   --strategies ensemble_core \
   --date-from 2025-10-01 \
   --date-to YYYY-MM-DD \
@@ -479,14 +486,14 @@ pytest \
   tests/test_tushare_pro_alpha_feature_service.py \
   tests/test_ensemble_core_contract_service.py \
   tests/test_all_strategy_evidence_run.py \
-  tests/test_unified_strategy_recommendation_service.py \
+  openclaw_tests/unified/test_unified_strategy_recommendation_service.py \
   tests/test_strategy_optimization_stage_audit_tool.py
 ```
 
 ### 6.4 运行阶段审计
 
 ```bash
-python tools/strategy_optimization_stage_audit.py \
+python tools/archive/research/strategy_optimization_stage_audit.py \
   --rejected-artifacts logs/openclaw/rejected_backtest_artifacts.jsonl \
   --json
 ```

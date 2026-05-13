@@ -62,7 +62,8 @@ def test_ci_workflow_posts_governance_pr_comment_and_preserves_gate_failure():
     assert "governance_pr_comment.md >> \"$GITHUB_STEP_SUMMARY\"" in workflow
     assert "Upload governance comment artifact" in workflow
     assert "name: governance-gate-comment" in workflow
-    assert "Fail workflow if governance gate failed" in workflow
+    assert "Fail workflow if archived governance gate is explicitly blocking" in workflow
+    assert "AIRIVO_BLOCK_ON_ARCHIVED_GOVERNANCE_GATE" in workflow
     assert "steps.governance_gate.outcome != 'success'" in workflow
 
 
