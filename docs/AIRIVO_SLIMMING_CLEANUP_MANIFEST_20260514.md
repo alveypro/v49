@@ -88,6 +88,12 @@ Recommendation:
 
 If references are limited to archived maintenance or historical docs, delete from active service namespace and document the assembler as historical.
 
+Execution note 2026-05-14:
+
+- Final reference check found no production reference outside this manifest and `tools/archive/maintenance/assemble_top5_rebuild_service.py`.
+- The archived assembler was documented as historical migration context only.
+- `_top5_rebuild_body*` files were approved for removal from the active service namespace.
+
 ## Batch 3: Research/Governance Downgrade Candidates
 
 These files are not first-class delete targets yet. The right move is downgrade from default production gates into archive/nightly because they represent research/governance branches rather than daily Top5 production operations.
