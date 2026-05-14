@@ -20,15 +20,10 @@ deploy/tools/check_top5_audit_schedulers_generated.sh
 openclaw/__init__.py
 openclaw/paths.py
 openclaw/services/__init__.py
-openclaw/services/data_version_service.py
-openclaw/services/lineage_service.py
-openclaw/services/backtest_credibility_service.py
 openclaw/services/unified_strategy_recommendation_service.py
 openclaw/services/strategy_competition_audit_service.py
 openclaw/services/strategy_competition_shadow_execution_service.py
 openclaw/services/strategy_competition_shadow_feedback_service.py
-openclaw/services/execution_fill_service.py
-openclaw/services/top5_brief_manifest_freshness_service.py
 openclaw/services/top5_forward_return_evaluation_service.py
 openclaw/services/top5_trader_brief_rebuild_service.py
 strategies/registry.py
