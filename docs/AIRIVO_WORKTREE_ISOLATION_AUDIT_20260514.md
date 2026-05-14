@@ -11,6 +11,13 @@ The previously staged research draft was removed from the index:
 
 No file content was reverted or deleted. The staging area is now empty.
 
+Execution note:
+
+- `auth/deploy` changes were isolated into stash entry `isolate auth deploy worktree 2026-05-14`.
+- `openclaw/services` changes were isolated into stash entry `isolate openclaw services worktree 2026-05-14`.
+- Dirty worktree entries dropped from 89 to 33 after those two isolations.
+- The staging area remained empty after isolation.
+
 ## Current Dirty Scope
 
 Observed uncommitted entries: 89
@@ -112,3 +119,5 @@ Do not start documentation archive work until all of the following are true:
 ## Recommended Next Action
 
 Create a temporary holding branch or stash for non-Batch-4 changes, then start a clean Batch 4 branch from `origin/main`. The current working tree is too broad to safely perform documentation slimming in place.
+
+After the first isolation pass, the remaining dirty categories are mainly research, strategies, docs/tests, and data/export artifacts. These should still be isolated before Batch 4 unless the next action is explicitly to review one of those categories.
