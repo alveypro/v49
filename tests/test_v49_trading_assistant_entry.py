@@ -116,3 +116,19 @@ def test_render_v49_trading_assistant_entry_skips_non_matching_route():
     )
 
     assert calls == []
+
+
+def test_v49_app_no_longer_owns_trading_assistant_subpage_imports():
+    from pathlib import Path
+
+    app_text = Path("v49_app.py").read_text(encoding="utf-8")
+    forbidden = [
+        "from ui.assistant_tab import render_single_stock_eval_tab",
+        "from openclaw.runtime.assistant_ops_tabs import render_assistant_ops_tabs",
+        "from openclaw.runtime.qa_chat_shell import render_qa_chat_shell",
+        "from openclaw.runtime.qa_self_learning_panel import render_qa_self_learning_panel",
+        "from openclaw.runtime.qa_submission_controller import render_qa_submission_controller",
+        "NotificationService = _ui_deps",
+    ]
+    for token in forbidden:
+        assert token not in app_text

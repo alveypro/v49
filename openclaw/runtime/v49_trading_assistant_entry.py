@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict
 
+from openclaw.runtime.root_dependency_bridge import load_notification_service_class
+
 
 ASSISTANT_TAB_LABELS = [
     "OpenClaw问答",
@@ -95,22 +97,38 @@ def render_v49_trading_assistant_entry(
     render_page_header: Callable[..., Any],
     focus_tab_by_text: Callable[..., Any],
     set_focus_once: Callable[..., Any],
-    render_qa_chat_shell: Callable[..., Any],
-    render_qa_self_learning_panel: Callable[..., Any],
-    render_qa_submission_controller: Callable[..., Any],
-    render_assistant_ops_tabs: Callable[..., Any],
     render_result_overview: Callable[..., Any],
-    render_single_stock_eval_tab: Callable[..., Any],
-    notification_service_cls: Any,
     airivo_has_role: Callable[..., Any],
     airivo_guard_action: Callable[..., Any],
     airivo_append_action_audit: Callable[..., Any],
+    render_qa_chat_shell: Callable[..., Any] | None = None,
+    render_qa_self_learning_panel: Callable[..., Any] | None = None,
+    render_qa_submission_controller: Callable[..., Any] | None = None,
+    render_assistant_ops_tabs: Callable[..., Any] | None = None,
+    render_single_stock_eval_tab: Callable[..., Any] | None = None,
+    notification_service_cls: Any | None = None,
 ) -> None:
     if not is_v49_trading_assistant_route(routes):
         return
     try:
         from openclaw.assistant import OpenClawStockAssistant
+        from openclaw.runtime.assistant_ops_tabs import render_assistant_ops_tabs as default_render_assistant_ops_tabs
+        from openclaw.runtime.qa_chat_shell import render_qa_chat_shell as default_render_qa_chat_shell
+        from openclaw.runtime.qa_self_learning_panel import (
+            render_qa_self_learning_panel as default_render_qa_self_learning_panel,
+        )
+        from openclaw.runtime.qa_submission_controller import (
+            render_qa_submission_controller as default_render_qa_submission_controller,
+        )
         from trading_assistant import TradingAssistant
+        from ui.assistant_tab import render_single_stock_eval_tab as default_render_single_stock_eval_tab
+
+        render_qa_chat_shell = render_qa_chat_shell or default_render_qa_chat_shell
+        render_qa_self_learning_panel = render_qa_self_learning_panel or default_render_qa_self_learning_panel
+        render_qa_submission_controller = render_qa_submission_controller or default_render_qa_submission_controller
+        render_assistant_ops_tabs = render_assistant_ops_tabs or default_render_assistant_ops_tabs
+        render_single_stock_eval_tab = render_single_stock_eval_tab or default_render_single_stock_eval_tab
+        notification_service_cls = notification_service_cls or load_notification_service_class()
 
         render_v49_trading_assistant_shell(
             st=st,

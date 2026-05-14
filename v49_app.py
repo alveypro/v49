@@ -54,7 +54,6 @@ import uuid
 from itertools import product
 from strategies.scan_pipeline import run_stock_scan_pipeline
 from strategies.registry import production_strategies, experimental_strategies
-from ui.assistant_tab import render_single_stock_eval_tab
 from openclaw.runtime.async_task_ui import (
     mark_scan_submitted as runtime_mark_scan_submitted,
     render_async_scan_status as runtime_render_async_scan_status,
@@ -1815,15 +1814,6 @@ from openclaw.runtime.stock_pool_workspace_page import render_stock_pool_workspa
 from openclaw.runtime.data_ops_core_page import render_data_ops_core_page
 from openclaw.runtime.data_ops_status_page import render_data_ops_status_page
 from openclaw.runtime.data_ops_update_page import render_data_ops_update_page
-from openclaw.runtime.assistant_config_page import render_assistant_config_page
-from openclaw.runtime.assistant_workbench_page import render_assistant_workbench_page
-from openclaw.runtime.assistant_holdings_page import render_assistant_holdings_page
-from openclaw.runtime.assistant_trade_history_page import render_assistant_trade_history_page
-from openclaw.runtime.assistant_daily_report_page import render_assistant_daily_report_page
-from openclaw.runtime.assistant_ops_tabs import render_assistant_ops_tabs
-from openclaw.runtime.qa_self_learning_panel import render_qa_self_learning_panel
-from openclaw.runtime.qa_chat_shell import render_qa_chat_shell
-from openclaw.runtime.qa_submission_controller import render_qa_submission_controller
 from openclaw.runtime.ui_dependency_loader import load_ui_dependencies
 
 _ui_deps = load_ui_dependencies(logger)
@@ -1835,7 +1825,6 @@ ComprehensiveStockEvaluatorV7Ultimate = _ui_deps["ComprehensiveStockEvaluatorV7U
 ComprehensiveStockEvaluatorV8Ultimate = _ui_deps["ComprehensiveStockEvaluatorV8Ultimate"]
 KellyPositionManager = _ui_deps["KellyPositionManager"]
 DynamicRebalanceManager = _ui_deps["DynamicRebalanceManager"]
-NotificationService = _ui_deps["NotificationService"]
 render_stable_uptrend_strategy = _ui_deps["render_stable_uptrend_strategy"]
 V3_EVALUATOR_AVAILABLE = _ui_deps["V3_EVALUATOR_AVAILABLE"]
 V4_EVALUATOR_AVAILABLE = _ui_deps["V4_EVALUATOR_AVAILABLE"]
@@ -10803,13 +10792,7 @@ def main():
         render_page_header=_render_page_header,
         focus_tab_by_text=_focus_tab_by_text,
         set_focus_once=_set_focus_once,
-        render_qa_chat_shell=render_qa_chat_shell,
-        render_qa_self_learning_panel=render_qa_self_learning_panel,
-        render_qa_submission_controller=render_qa_submission_controller,
-        render_assistant_ops_tabs=render_assistant_ops_tabs,
         render_result_overview=_render_result_overview,
-        render_single_stock_eval_tab=render_single_stock_eval_tab,
-        notification_service_cls=NotificationService,
         airivo_has_role=_airivo_has_role,
         airivo_guard_action=_airivo_guard_action,
         airivo_append_action_audit=_airivo_append_action_audit,
