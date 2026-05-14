@@ -129,7 +129,7 @@ jobs:
         run: pytest stock_ultimate_system/tests/test_ci_dashboard_boundary_gate.py stock_ultimate_system/tests/test_stock_dashboard_page_sections.py stock_ultimate_system/tests/test_stock_dashboard_render_inputs.py stock_ultimate_system/tests/test_stock_dashboard_http_routes.py stock_ultimate_system/tests/test_run_dashboard_primary_result_api.py -q
 
       - name: Governance boundary documentation tests
-        run: pytest tests/test_governance_docs_links.py tests/test_pr_template_governance_checklist.py tests/test_release_gate_script.py tests/test_ci_research_archive_boundary.py -q
+        run: pytest tests/test_governance_docs_links.py tests/test_pr_template_governance_checklist.py tests/test_release_gate_script.py tests/test_ci_research_archive_boundary.py tests/test_stock_docs_archive_boundary.py -q
 
       - name: Governance gate
         id: governance_gate
