@@ -23,12 +23,13 @@ def test_governance_docs_cross_linked():
     assert "pytest -q\n" not in readme
     assert "python tools/tool_boundary_audit.py --fail-on-archive-candidates --max-manual-review 0 --max-support-review 2" in readme
     assert (
-        "pytest stock_ultimate_system/tests/test_ci_dashboard_boundary_gate.py "
-        "stock_ultimate_system/tests/test_stock_dashboard_page_sections.py "
-        "stock_ultimate_system/tests/test_stock_dashboard_render_inputs.py "
-        "stock_ultimate_system/tests/test_stock_dashboard_http_routes.py "
-        "stock_ultimate_system/tests/test_run_dashboard_primary_result_api.py -q"
+        "cd stock_ultimate_system && pytest tests/test_ci_dashboard_boundary_gate.py "
+        "tests/test_stock_dashboard_page_sections.py "
+        "tests/test_stock_dashboard_render_inputs.py "
+        "tests/test_stock_dashboard_http_routes.py "
+        "tests/test_run_dashboard_primary_result_api.py -q"
     ) in readme
+    assert "Do not mix both test trees in one pytest process" in readme
     assert "tests/test_governance_docs_links.py tests/test_pr_template_governance_checklist.py tests/test_release_gate_script.py" in readme
     assert "AIRIVO_BLOCK_ON_ARCHIVED_GOVERNANCE_GATE" in runbook
     assert "AIRIVO_BLOCK_ON_ARCHIVED_GOVERNANCE_GATE" in one_page

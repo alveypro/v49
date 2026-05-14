@@ -30,13 +30,14 @@ def test_ci_keeps_stock_dashboard_boundary_gate() -> None:
     body = _workflow_step_body("Stock dashboard boundary tests")
 
     required_tests = [
-        "stock_ultimate_system/tests/test_ci_dashboard_boundary_gate.py",
-        "stock_ultimate_system/tests/test_stock_dashboard_page_sections.py",
-        "stock_ultimate_system/tests/test_stock_dashboard_render_inputs.py",
-        "stock_ultimate_system/tests/test_stock_dashboard_http_routes.py",
-        "stock_ultimate_system/tests/test_run_dashboard_primary_result_api.py",
+        "tests/test_ci_dashboard_boundary_gate.py",
+        "tests/test_stock_dashboard_page_sections.py",
+        "tests/test_stock_dashboard_render_inputs.py",
+        "tests/test_stock_dashboard_http_routes.py",
+        "tests/test_run_dashboard_primary_result_api.py",
     ]
 
+    assert "working-directory: stock_ultimate_system" in body
     assert "pytest " in body
     for test_path in required_tests:
         assert test_path in body

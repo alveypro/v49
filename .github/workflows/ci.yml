@@ -126,7 +126,8 @@ jobs:
         run: pytest tests/test_professional_system_services.py tests/test_execution_evidence_service.py tests/test_experiment_governance_service.py tests/test_backtest_credibility_service.py tests/test_backtest_stats.py tests/test_backtest_workers.py tests/test_v49_backtest_entry.py tests/test_v49_data_ops_entry.py tests/test_v49_research_entries.py tests/test_v49_strategy_evolution_entry.py tests/test_v49_today_decision_entry.py tests/test_v49_trading_assistant_entry.py tests/test_v49_entry_dispatcher.py tests/test_v49_sidebar.py tests/test_v49_app_router.py tests/test_v8_legacy_facades.py tests/test_v8_evaluation_handler.py tests/test_v8_atr_risk.py tests/test_v8_market_regime.py tests/test_v8_core_factors.py tests/test_v8_advanced_factor_aggregator.py tests/test_v8_signal_evaluator.py tests/test_v9_signal_evaluator.py tests/test_combo_signal_evaluator.py tests/test_v49_adapter.py tests/test_top5_audit_scheduler_manifest.py tests/test_top5_forward_return_evaluation_service.py -q
 
       - name: Stock dashboard boundary tests
-        run: pytest stock_ultimate_system/tests/test_ci_dashboard_boundary_gate.py stock_ultimate_system/tests/test_stock_dashboard_page_sections.py stock_ultimate_system/tests/test_stock_dashboard_render_inputs.py stock_ultimate_system/tests/test_stock_dashboard_http_routes.py stock_ultimate_system/tests/test_run_dashboard_primary_result_api.py -q
+        working-directory: stock_ultimate_system
+        run: pytest tests/test_ci_dashboard_boundary_gate.py tests/test_stock_dashboard_page_sections.py tests/test_stock_dashboard_render_inputs.py tests/test_stock_dashboard_http_routes.py tests/test_run_dashboard_primary_result_api.py -q
 
       - name: Governance boundary documentation tests
         run: pytest tests/test_governance_docs_links.py tests/test_pr_template_governance_checklist.py tests/test_release_gate_script.py tests/test_ci_research_archive_boundary.py tests/test_stock_docs_archive_boundary.py -q

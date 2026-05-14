@@ -26,9 +26,17 @@ Boundary validation commands:
 
 ```bash
 python tools/tool_boundary_audit.py --fail-on-archive-candidates --max-manual-review 0 --max-support-review 2
-pytest stock_ultimate_system/tests/test_ci_dashboard_boundary_gate.py stock_ultimate_system/tests/test_stock_dashboard_page_sections.py stock_ultimate_system/tests/test_stock_dashboard_render_inputs.py stock_ultimate_system/tests/test_stock_dashboard_http_routes.py stock_ultimate_system/tests/test_run_dashboard_primary_result_api.py -q
 pytest tests/test_governance_docs_links.py tests/test_pr_template_governance_checklist.py tests/test_release_gate_script.py -q
+cd stock_ultimate_system && pytest tests/test_ci_dashboard_boundary_gate.py tests/test_stock_dashboard_page_sections.py tests/test_stock_dashboard_render_inputs.py tests/test_stock_dashboard_http_routes.py tests/test_run_dashboard_primary_result_api.py -q
 ```
+
+Pytest invocation boundary:
+
+- Run root `tests/...` from the repository root.
+- Run `stock_ultimate_system/tests/...` from `stock_ultimate_system/`.
+- Do not mix both test trees in one pytest process. Both trees have a
+  `tests/conftest.py`; mixing them can raise `ImportPathMismatchError` and does
+  not indicate a product failure.
 
 Run product entrypoints separately:
 
