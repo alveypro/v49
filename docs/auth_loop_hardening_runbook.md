@@ -17,9 +17,9 @@
 
 - 代码静态检查：
   - `python3 -m py_compile openclaw/services/airivo_auth_middleware.py pages/login.py v49_app.py`
-- 线上部署验证：
-  - `DEPLOY_PASS=*** bash tools/deploy_auth_to_release.sh`
-  - `DEPLOY_PASS=*** bash tools/verify_airivo_system.sh`
+- 部署边界：
+  - 当前仓库没有受控的 auth 专用部署脚本；不要在本 runbook 中伪造 `deploy/tools/*` 路径。
+  - 认证变更必须走主发布链路，并在发布记录中写明受影响文件与回滚点。
 - 路由校验：
   - `https://airivo.online/login?auth_debug=1`
   - `https://airivo.online/app?auth_debug=1`
@@ -59,7 +59,7 @@
   - 核心登录失败率显著上升（例如 >5% 持续 10 分钟）。
   - 熔断提示大面积出现（例如管理员反馈 >3 个独立账号复现）。
 - 回滚动作：
-  - 执行 `tools/deploy_auth_to_release.sh` 生成的远程备份恢复流程，回到上一稳定版本。
+  - 使用主发布链路的上一稳定版本回滚；回滚前记录当前 release SHA、受影响文件和认证决策日志路径。
   - 回滚后仍保留日志用于根因分析。
 
 ## 8) 后续增强（下一迭代）
