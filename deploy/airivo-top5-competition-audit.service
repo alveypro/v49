@@ -1,0 +1,31 @@
+[Unit]
+Description=Airivo Daily V9 Evidence Pipeline
+After=network-online.target openclaw-streamlit.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/openclaw/current
+# Generated from deploy/top5_audit_schedule.env.sh — edit that file and re-run deploy/tools/gen_top5_audit_schedulers.sh
+# Audit + forward gate can exceed systemd default start timeout.
+TimeoutStartSec=7200
+Environment=PYTHONUNBUFFERED=1
+Environment=STRATEGY_COMPETITION_AUDIT_OUTPUT_DIR=/opt/openclaw/current/logs/openclaw/strategy_competition_audit
+Environment=TOP5_GATE_PROJECT_ROOT=/opt/openclaw/current
+Environment=TOP5_GATE_ENFORCE_RELAXED=0
+Environment=TOP5_AUDIT_MODE=strict
+Environment=TOP5_AUDIT_AUTO_SHADOW_INPUT=0
+Environment=AIRIVO_SITE_HEALTH_URL=https://airivo.online/
+Environment=AIRIVO_RECORD_PLANNED_OBSERVATIONS=1
+Environment=AIRIVO_REQUIRE_EXECUTION_CLOSURE=0
+Environment=AIRIVO_REQUIRE_NO_STALE_OPEN=0
+Environment=PERMANENT_DB_PATH=/opt/openclaw/permanent_stock_database.db
+Environment=OPENCLAW_DB_PATH=/opt/openclaw/permanent_stock_database.db
+Environment=AIRIVO_DB_PATH=/opt/openclaw/permanent_stock_database.db
+Environment=SIM_TRADING_DB_PATH=/opt/openclaw/sim_trading.db
+Environment=TRADING_ASSISTANT_DB_PATH=/opt/openclaw/trading_assistant.db
+# Full evidence loop: data health -> v9/stable evidence -> Top5 audit/gate -> manifest -> page health.
+ExecStart=/opt/openclaw/venv311/bin/python /opt/openclaw/current/tools/run_daily_v9_evidence_pipeline.py --output-dir logs/openclaw/daily_evidence_pipeline --record-planned-observations
+StandardOutput=append:/var/log/openclaw/top5_competition_audit.log
+StandardError=append:/var/log/openclaw/top5_competition_audit.err.log

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Airivo Top5 Competition Audit
+
+[Timer]
+OnCalendar=*-*-* 08:45:00
+OnCalendar=*-*-* 18:10:00
+Persistent=true
+Unit=airivo-top5-competition-audit.service
+
+[Install]
+WantedBy=timers.target

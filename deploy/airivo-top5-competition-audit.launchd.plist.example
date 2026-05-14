@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.airivo.top5-competition-audit</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO_ROOT__/tools/run_top5_competition_audit_then_gate.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+    <key>STRATEGY_COMPETITION_AUDIT_OUTPUT_DIR</key>
+    <string>__REPO_ROOT__/logs/openclaw/strategy_competition_audit</string>
+    <key>TOP5_GATE_PROJECT_ROOT</key>
+    <string>__REPO_ROOT__</string>
+    <key>TOP5_GATE_ENFORCE_RELAXED</key>
+    <string>0</string>
+    <key>TOP5_AUDIT_MODE</key>
+    <string>strict</string>
+    <key>TOP5_AUDIT_AUTO_SHADOW_INPUT</key>
+    <string>0</string>
+    <key>PERMANENT_DB_PATH</key>
+    <string>/opt/openclaw/permanent_stock_database.db</string>
+    <key>OPENCLAW_DB_PATH</key>
+    <string>/opt/openclaw/permanent_stock_database.db</string>
+    <key>AIRIVO_DB_PATH</key>
+    <string>/opt/openclaw/permanent_stock_database.db</string>
+    <key>SIM_TRADING_DB_PATH</key>
+    <string>/opt/openclaw/sim_trading.db</string>
+    <key>TRADING_ASSISTANT_DB_PATH</key>
+    <string>/opt/openclaw/trading_assistant.db</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <array>
+  <dict>
+    <key>Hour</key>
+    <integer>08</integer>
+    <key>Minute</key>
+    <integer>45</integer>
+  </dict>
+  <dict>
+    <key>Hour</key>
+    <integer>18</integer>
+    <key>Minute</key>
+    <integer>10</integer>
+  </dict>
+  </array>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/logs/openclaw/top5_competition_audit.launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/logs/openclaw/top5_competition_audit.launchd.err.log</string>
+</dict>
+</plist>
