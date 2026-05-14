@@ -166,6 +166,7 @@ from openclaw.services.airivo_auth_middleware import (
     require_auth as auth_require_auth,
     should_show_auth_debug_for_user as auth_should_show_debug_for_user,
 )
+from openclaw.services.strategy_governance_service import rescue_allowed_for_runtime
 from openclaw.runtime.scan_result_utils import (
     add_reason_summary as runtime_add_reason_summary,
     append_reason_col as runtime_append_reason_col,
@@ -235,6 +236,9 @@ from openclaw.runtime.production_baseline import (
     rollback_latest_promoted_params as runtime_rollback_latest_promoted_params,
     save_production_unified_profile as runtime_save_production_unified_profile,
     trigger_auto_evolve_optimize as runtime_trigger_auto_evolve_optimize,
+)
+from openclaw.runtime.top5_trader_brief_panel import (
+    render_top5_trader_brief_panel as runtime_render_top5_trader_brief_panel,
 )
 from openclaw.services.airivo_feedback_service import (
     apply_batch_feedback_action as service_apply_batch_feedback_action,
@@ -388,8 +392,6 @@ AIRIVO_ACTION_AUDIT_LOG = os.getenv(
     "AIRIVO_ACTION_AUDIT_LOG",
     str(Path(os.getenv("AIRIVO_AUTH_AUDIT_LOG", "/var/log/airivo_auth_audit.jsonl")).with_name("airivo_action_audit.jsonl")),
 )
-
-
 def _airivo_request_headers() -> Dict[str, str]:
     return runtime_request_headers()
 
@@ -2298,15 +2300,17 @@ def _run_async_backtest_worker_main() -> int:
         ),
     )
 
-st.set_page_config(
-    page_title="Airivo Quant Decision System",
-    page_icon="A",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+_V49_HEADLESS = os.getenv("V49_HEADLESS", "").strip().lower() in {"1", "true", "yes"}
+if not _V49_HEADLESS:
+    st.set_page_config(
+        page_title="Airivo Quant Decision System",
+        page_icon="A",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
 
-# ===================== 全局专业主题样式 =====================
-st.markdown("""
+    # ===================== 全局专业主题样式 =====================
+    st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -2598,6 +2602,7 @@ def _apply_filter_mode_with_rescue(
         top_percent,
         threshold_floor=threshold_floor,
         rescue_top_percent=rescue_top_percent,
+        allow_rescue=rescue_allowed_for_runtime(),
     )
 
 
@@ -10514,6 +10519,7 @@ def _run_funding_repair(db_path: str) -> Dict[str, Dict]:
     return results
 
 
+
 # ===================== 主界面（完整集成版）=====================
 def main():
     """主界面"""
@@ -10548,6 +10554,13 @@ def main():
             except Exception:
                 pass
         st.rerun()
+    runtime_render_top5_trader_brief_panel(
+        st=st,
+        repo_root=Path(__file__).resolve().parent,
+        permanent_db_path=PERMANENT_DB_PATH,
+        config=_CONFIG,
+        guard_action=_airivo_guard_action,
+    )
     
     # 初始化
     if 'vp_analyzer' not in st.session_state:
@@ -10817,6 +10830,9 @@ if __name__ == "__main__":
         raise SystemExit(_run_async_scan_worker_main())
     elif os.getenv("OPENCLAW_ASYNC_BACKTEST_WORKER") == "1":
         raise SystemExit(_run_async_backtest_worker_main())
+    elif os.getenv("TOP5_REBUILD_EXPORTS_ONLY") == "1":
+        tool = Path(__file__).resolve().parent / "tools" / "rebuild_top5_trader_brief_exports.py"
+        raise SystemExit(subprocess.call([sys.executable, str(tool)], cwd=str(Path(__file__).resolve().parent)))
     elif os.getenv("RUN_OFFLINE_ALL") == "1":
         run_offline_all()
     elif os.getenv("RUN_OFFLINE_V7") == "1":
