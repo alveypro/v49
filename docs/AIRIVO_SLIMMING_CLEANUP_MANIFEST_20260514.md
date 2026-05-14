@@ -137,6 +137,12 @@ Recommendation:
 
 Do not delete this group immediately. First remove it from default CI or move it behind a nightly/archive marker. After 20-60 trading days with no production dependency, reassess for archive-only retention or deletion.
 
+Execution note 2026-05-14:
+
+- Push/PR CI was narrowed so archived ensemble/rerun/release dry-run tests are not explicitly called by the default workflow.
+- Archived ensemble, formal rerun, post-rerun, promotion, and release dry-run tests were assigned to `.github/workflows/archived-research-nightly.yml`.
+- `tests/test_ci_research_archive_boundary.py` was added as a regression gate to prevent these archived research tests from returning to default CI.
+
 ## Batch 4: Documentation Reduction Candidates
 
 Current documentation surface is too large for a production system:
