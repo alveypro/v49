@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from openclaw.runtime.v49_today_decision_entry import (
     TodayDecisionDependencies,
     is_v49_today_decision_route,
@@ -125,3 +127,22 @@ def test_render_v49_today_decision_entry_skips_non_matching_route():
 
     assert result == {"airivo_snapshot": {"old": True}, "show_ai_signal_panel": True}
     assert calls == []
+
+
+def test_v49_app_does_not_own_today_snapshot_cache_wrappers():
+    app_text = Path("v49_app.py").read_text(encoding="utf-8")
+    forbidden = [
+        "service_data_freshness_snapshot",
+        "service_latest_candidate_snapshot",
+        "service_feedback_snapshot",
+        "def _airivo_data_freshness_snapshot",
+        "def _airivo_latest_candidate_snapshot",
+        "def _airivo_feedback_snapshot",
+    ]
+
+    for token in forbidden:
+        assert token not in app_text
+
+    assert "runtime_data_freshness_snapshot_cached" in app_text
+    assert "runtime_latest_candidate_snapshot_cached" in app_text
+    assert "runtime_feedback_snapshot_cached" in app_text

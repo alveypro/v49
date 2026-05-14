@@ -236,6 +236,11 @@ from openclaw.runtime.production_baseline import (
     save_production_unified_profile as runtime_save_production_unified_profile,
     trigger_auto_evolve_optimize as runtime_trigger_auto_evolve_optimize,
 )
+from openclaw.runtime.airivo_snapshot_cache import (
+    data_freshness_snapshot_cached as runtime_data_freshness_snapshot_cached,
+    feedback_snapshot_cached as runtime_feedback_snapshot_cached,
+    latest_candidate_snapshot_cached as runtime_latest_candidate_snapshot_cached,
+)
 from openclaw.runtime.top5_trader_brief_panel import (
     render_top5_trader_brief_panel as runtime_render_top5_trader_brief_panel,
 )
@@ -258,15 +263,12 @@ from openclaw.services.airivo_execution_read_service import (
     bucket_feedback_rows as service_bucket_feedback_rows,
     compare_queue_batches as service_compare_queue_batches,
     feedback_bucket_summary as service_feedback_bucket_summary,
-    feedback_snapshot as service_feedback_snapshot,
     latest_execution_queue as service_latest_execution_queue,
     load_feedback_rows as service_load_feedback_rows,
     load_queue_batch_rows as service_load_queue_batch_rows,
     recent_execution_batches as service_recent_execution_batches,
 )
 from openclaw.services.airivo_dashboard_snapshot_service import (
-    data_freshness_snapshot as service_data_freshness_snapshot,
-    latest_candidate_snapshot as service_latest_candidate_snapshot,
     parse_yyyymmdd as service_parse_yyyymmdd,
     table_latest as service_table_latest,
 )
@@ -886,7 +888,7 @@ def _publish_manual_scan_to_execution_queue(candidate: Dict[str, Any], db_path: 
         connect_db=_connect_permanent_db,
         logs_dir=logs_dir,
         clear_execution_queue_cache=_airivo_latest_execution_queue_cached.clear,
-        clear_feedback_snapshot_cache=_airivo_feedback_snapshot_cached.clear,
+        clear_feedback_snapshot_cache=runtime_feedback_snapshot_cached.clear,
     )
     if ok and batch_id:
         st.session_state["airivo_manual_queue_batch"] = batch_id
@@ -2622,33 +2624,6 @@ def _airivo_table_latest(conn: sqlite3.Connection, table: str, date_col: str = "
     return service_table_latest(conn, table, date_col)
 
 
-def _airivo_data_freshness_snapshot(db_path: str) -> Dict[str, Any]:
-    return service_data_freshness_snapshot(db_path)
-
-
-def _airivo_latest_candidate_snapshot(db_path: str, limit: int = 5) -> Tuple[pd.DataFrame, str]:
-    return service_latest_candidate_snapshot(db_path, limit=limit)
-
-
-def _airivo_feedback_snapshot(db_path: str) -> Dict[str, Any]:
-    return service_feedback_snapshot(db_path)
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _airivo_data_freshness_snapshot_cached(db_path: str, db_mtime: float) -> Dict[str, Any]:
-    return _airivo_data_freshness_snapshot(db_path)
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _airivo_latest_candidate_snapshot_cached(db_path: str, db_mtime: float, limit: int = 5) -> Tuple[pd.DataFrame, str]:
-    return _airivo_latest_candidate_snapshot(db_path, limit=limit)
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _airivo_feedback_snapshot_cached(db_path: str, db_mtime: float) -> Dict[str, Any]:
-    return _airivo_feedback_snapshot(db_path)
-
-
 def _airivo_latest_execution_queue(db_path: str, limit: int = 80) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     return service_latest_execution_queue(db_path, limit=limit)
 
@@ -2840,7 +2815,7 @@ def _airivo_update_feedback_row(
         operator_name=operator_name,
         system_suggested_action=system_suggested_action,
         human_override_reason=human_override_reason,
-        clear_feedback_snapshot_cache=_airivo_feedback_snapshot_cached.clear,
+        clear_feedback_snapshot_cache=runtime_feedback_snapshot_cached.clear,
     )
 
 
@@ -2856,7 +2831,7 @@ def _airivo_apply_batch_feedback_action(
         bucket=bucket,
         operator_name=operator_name,
         execution_note=execution_note,
-        clear_feedback_snapshot_cache=_airivo_feedback_snapshot_cached.clear,
+        clear_feedback_snapshot_cache=runtime_feedback_snapshot_cached.clear,
     )
 
 
@@ -2864,7 +2839,7 @@ def _airivo_refresh_realized_outcomes(db_path: str, lookback_days: int = 120) ->
     return service_refresh_realized_outcomes(
         db_path=db_path,
         lookback_days=lookback_days,
-        clear_feedback_snapshot_cache=_airivo_feedback_snapshot_cached.clear,
+        clear_feedback_snapshot_cache=runtime_feedback_snapshot_cached.clear,
     )
 
 
@@ -2878,7 +2853,7 @@ def _render_airivo_feedback_workbench(
         db_path=db_path,
         default_bucket=default_bucket,
         safe_file_mtime=_safe_file_mtime,
-        feedback_snapshot_cached=_airivo_feedback_snapshot_cached,
+        feedback_snapshot_cached=runtime_feedback_snapshot_cached,
         bucket_feedback_rows=_airivo_bucket_feedback_rows,
         load_feedback_rows=_airivo_load_feedback_rows,
         feedback_bucket_summary=_airivo_feedback_bucket_summary,
@@ -2897,7 +2872,7 @@ def _render_airivo_execution_center(db_path: str) -> None:
     runtime_render_airivo_execution_center(
         db_path=db_path,
         safe_file_mtime=_safe_file_mtime,
-        feedback_snapshot_cached=_airivo_feedback_snapshot_cached,
+        feedback_snapshot_cached=runtime_feedback_snapshot_cached,
         bucket_feedback_rows=_airivo_bucket_feedback_rows,
         load_feedback_rows=_airivo_load_feedback_rows,
         feedback_bucket_summary=_airivo_feedback_bucket_summary,
@@ -2914,11 +2889,11 @@ def _render_airivo_strategy_evolution(db_path: str, runtime_snapshot: Dict[str, 
         db_path=db_path,
         runtime_snapshot=runtime_snapshot,
         safe_file_mtime=_safe_file_mtime,
-        feedback_snapshot_cached=_airivo_feedback_snapshot_cached,
+        feedback_snapshot_cached=runtime_feedback_snapshot_cached,
         bucket_feedback_rows=_airivo_bucket_feedback_rows,
         load_feedback_rows=_airivo_load_feedback_rows,
         feedback_bucket_summary=_airivo_feedback_bucket_summary,
-        latest_candidate_snapshot_cached=_airivo_latest_candidate_snapshot_cached,
+        latest_candidate_snapshot_cached=runtime_latest_candidate_snapshot_cached,
     )
 
 
@@ -2926,9 +2901,9 @@ def _render_airivo_production_dashboard(db_path: str) -> Dict[str, Any]:
     return render_airivo_production_dashboard_page(
         db_path=db_path,
         safe_file_mtime=_safe_file_mtime,
-        data_freshness_snapshot_cached=_airivo_data_freshness_snapshot_cached,
-        latest_candidate_snapshot_cached=_airivo_latest_candidate_snapshot_cached,
-        feedback_snapshot_cached=_airivo_feedback_snapshot_cached,
+        data_freshness_snapshot_cached=runtime_data_freshness_snapshot_cached,
+        latest_candidate_snapshot_cached=runtime_latest_candidate_snapshot_cached,
+        feedback_snapshot_cached=runtime_feedback_snapshot_cached,
     )
 
 
@@ -10532,9 +10507,9 @@ def main():
             st.json(auth_get_debug_snapshot(), expanded=False)
     if st.button("刷新", key="refresh_main_runtime_status"):
         try:
-            _airivo_data_freshness_snapshot_cached.clear()
-            _airivo_latest_candidate_snapshot_cached.clear()
-            _airivo_feedback_snapshot_cached.clear()
+            runtime_data_freshness_snapshot_cached.clear()
+            runtime_latest_candidate_snapshot_cached.clear()
+            runtime_feedback_snapshot_cached.clear()
         except Exception:
             pass
         if "db_manager" in st.session_state:
