@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "docs" / "AIRIVO_STOCK_DOCS_ARCHIVE_MANIFEST_20260514.md"
 STOCK_DOCS = ROOT / "stock_ultimate_system" / "docs"
+ARCHIVE_DIR = STOCK_DOCS / "archive" / "2026-05-14"
 
 ACTIVE_KEEP_DOCS = {
     "stock_ultimate_system/docs/API_REFERENCE.md",
@@ -40,12 +41,17 @@ def _manifest_doc_refs(text: str) -> set[str]:
     return refs
 
 
-def test_stock_docs_manifest_covers_all_current_docs():
+def test_stock_docs_manifest_covers_active_and_archived_docs():
     text = MANIFEST.read_text(encoding="utf-8")
-    current_docs = {path.relative_to(ROOT).as_posix() for path in STOCK_DOCS.glob("*.md")}
+    active_docs = {path.relative_to(ROOT).as_posix() for path in STOCK_DOCS.glob("*.md")}
+    archived_docs = {
+        f"stock_ultimate_system/docs/{path.name}"
+        for path in ARCHIVE_DIR.glob("*.md")
+    }
 
-    assert current_docs
-    assert _manifest_doc_refs(text) == current_docs
+    assert active_docs == ACTIVE_KEEP_DOCS
+    assert len(archived_docs) == 43
+    assert _manifest_doc_refs(text) == active_docs | archived_docs
 
 
 def test_stock_docs_active_keep_allowlist_is_small_and_explicit():
@@ -60,6 +66,6 @@ def test_stock_docs_active_keep_allowlist_is_small_and_explicit():
 def test_stock_docs_archive_manifest_has_execution_guardrails():
     text = MANIFEST.read_text(encoding="utf-8")
 
-    assert "This pass does not move, delete, rename, or rewrite documentation." in text
-    assert "Add a docs boundary test that asserts the active docs allowlist." in text
+    assert "stock_ultimate_system/docs/archive/2026-05-14/" in text
+    assert "43 documents were moved" in text
     assert "Do not rewrite historical docs just to modernize language." in text

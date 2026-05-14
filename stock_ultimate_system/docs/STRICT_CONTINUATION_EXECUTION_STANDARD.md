@@ -24,11 +24,11 @@
 如本文档与其他说明性文档冲突，执行优先级如下：
 
 1. `docs/STRICT_CONTINUATION_EXECUTION_STANDARD.md`
-2. `docs/INDUSTRY_FIRST_CANDIDATE_SYSTEM_EXECUTION_STANDARD.md`
-3. `docs/STOCK_SINGLE_FORMAL_CHAIN_EXECUTION_STANDARD.md`
+2. `docs/archive/2026-05-14/INDUSTRY_FIRST_CANDIDATE_SYSTEM_EXECUTION_STANDARD.md`
+3. `docs/archive/2026-05-14/STOCK_SINGLE_FORMAL_CHAIN_EXECUTION_STANDARD.md`
 4. `docs/FORMAL_HOSTING_BOUNDARY_AND_ACTIVATION_BLOCKERS.md`
-5. `docs/TOP_TIER_EXECUTION_STANDARD.md`
-6. `docs/DEVELOPMENT_GUIDE.md`
+5. `docs/archive/2026-05-14/TOP_TIER_EXECUTION_STANDARD.md`
+6. `docs/archive/2026-05-14/DEVELOPMENT_GUIDE.md`
 
 ---
 
@@ -36,9 +36,9 @@
 
 上一阶段 `/stock` 单一正式主链收口已于 `2026-05-01` 关闭。相关阶段归档见：
 
-- `docs/STOCK_SINGLE_FORMAL_CHAIN_EXECUTION_STANDARD.md`
+- `docs/archive/2026-05-14/STOCK_SINGLE_FORMAL_CHAIN_EXECUTION_STANDARD.md`
 - `docs/FORMAL_HOSTING_BOUNDARY_AND_ACTIVATION_BLOCKERS.md`
-- `docs/first_real_stock_scoped_activation_admission_gate.md`
+- `docs/archive/2026-05-14/first_real_stock_scoped_activation_admission_gate.md`
 
 后续开发默认回到本文档主线执行；凡涉及 `/stock` 与 `apex` 正式身份、deploy baseline、verification 收口、formal activation 历史边界时，仍必须参考这些归档文档，但不再把它们当作当前阶段继续阻断下一阶段的主线文档。
 
@@ -85,7 +85,7 @@
 
 对应的下一阶段执行文档为：
 
-- `docs/INDUSTRY_FIRST_CANDIDATE_SYSTEM_EXECUTION_STANDARD.md`
+- `docs/archive/2026-05-14/INDUSTRY_FIRST_CANDIDATE_SYSTEM_EXECUTION_STANDARD.md`
 
 后续凡涉及：
 
@@ -99,11 +99,11 @@
 
 其中，候选股质量评估口径与 benchmark suite 的正式冻结文档为：
 
-- `docs/CANDIDATE_QUALITY_EVALUATION_AND_BENCHMARK_SUITE.md`
+- `docs/archive/2026-05-14/CANDIDATE_QUALITY_EVALUATION_AND_BENCHMARK_SUITE.md`
 
 本阶段接下来两周的正式执行清单为：
 
-- `docs/STOCK_TWO_WEEK_EXECUTION_CHECKLIST.md`
+- `docs/archive/2026-05-14/STOCK_TWO_WEEK_EXECUTION_CHECKLIST.md`
 
 ---
 
@@ -466,4 +466,4 @@
 
 后续所有开发、评审、取舍、优先级判断，必须严格服从这条主线。
 `/stock` 正式研究终端的产品面重构，必须遵守：
-- [STOCK_UI_SECOND_STAGE_RECONSTRUCTION_CHECKLIST.md](./STOCK_UI_SECOND_STAGE_RECONSTRUCTION_CHECKLIST.md)
+- [STOCK_UI_SECOND_STAGE_RECONSTRUCTION_CHECKLIST.md](./archive/2026-05-14/STOCK_UI_SECOND_STAGE_RECONSTRUCTION_CHECKLIST.md)

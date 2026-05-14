@@ -12,13 +12,13 @@
 
 配套执行产物：
 
-- `docs/airivo.online_route_ownership_matrix.md`
-- `docs/formal_nginx_active_vs_repo_current_gap_checklist.md`
-- `docs/airivo.online_route_ownership_freeze_decision.md`
-- `docs/t12_formal_topology_decision.md`
-- `docs/scoped_activation_rollout_spec.md`
-- `docs/first_real_stock_scoped_activation_admission_gate.md`
-- `docs/first_real_stock_scoped_activation_remaining_gap_checklist.md`
+- `docs/archive/2026-05-14/airivo.online_route_ownership_matrix.md`
+- `docs/archive/2026-05-14/formal_nginx_active_vs_repo_current_gap_checklist.md`
+- `docs/archive/2026-05-14/airivo.online_route_ownership_freeze_decision.md`
+- `docs/archive/2026-05-14/t12_formal_topology_decision.md`
+- `docs/archive/2026-05-14/scoped_activation_rollout_spec.md`
+- `docs/archive/2026-05-14/first_real_stock_scoped_activation_admission_gate.md`
+- `docs/archive/2026-05-14/first_real_stock_scoped_activation_remaining_gap_checklist.md`
 
 本文档是当前阶段的阻断级文档。凡涉及：
 

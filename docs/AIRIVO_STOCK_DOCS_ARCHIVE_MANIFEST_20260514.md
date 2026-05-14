@@ -1,13 +1,23 @@
 # AIRIVO Stock Docs Archive Manifest 2026-05-14
 
-Status: Batch 4 dry-run manifest only
+Status: Batch 4 archive move executed
 Scope: `stock_ultimate_system/docs/*.md`
 
-## Non-Actions In This Pass
+## Original Dry-Run Boundary
 
-This pass does not move, delete, rename, or rewrite documentation.
+The first pass did not move, delete, rename, or rewrite documentation.
 
-It only defines the review boundary for a later archive commit. This matters because many files in `stock_ultimate_system/docs/` cross-link to historical plans and some links still point to old absolute paths. Moving files before classification would create broken context and false confidence.
+It only defined the review boundary for a later archive commit. This mattered because many files in `stock_ultimate_system/docs/` cross-link to historical plans and some links still point to old absolute paths. Moving files before classification would create broken context and false confidence.
+
+## Execution Note
+
+Batch 4 archive move was executed after the active keep allowlist test was added.
+
+- Active docs namespace: `stock_ultimate_system/docs/*.md`
+- Archive namespace: `stock_ultimate_system/docs/archive/2026-05-14/`
+- Active keep count: 12 documents
+- Archived count: 43 documents were moved
+- Historical documents were moved without rewriting their content.
 
 ## Decision Standard
 
