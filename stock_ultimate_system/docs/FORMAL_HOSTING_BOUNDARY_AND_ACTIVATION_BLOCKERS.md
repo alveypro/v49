@@ -66,6 +66,10 @@
 
 以上路径已经进入当前阶段正式主链治理范围。
 
+只读运维契约（与控制台 manifest 同源、**不参与主结果门禁**）：
+
+- `/stock/api/top5-trader-brief-health`：**Top5 交易员清单新鲜度** JSON；用于公网/内网展示层 SLA 提示与发布对账，**不替代** primary-result 制度事实。
+
 ### 3.2 已明确为内部验证路径
 
 - `/apex/`
@@ -83,6 +87,8 @@
 - `airivo.online/auth/*`
 - `airivo.online/health`
 - `airivo.online/chat`
+- `airivo.online/api/ai/chat`
+- `airivo.online/T12/`
 - 任何当前 live nginx 中仍由既有线上系统托管、但 repo current 未等价承接的路径
 
 结论：
@@ -103,7 +109,9 @@
 4. formal target topology 声称需要 `8764` 或 `8766`，但线上未实际监听或未正式收口
 5. `stock-ultimate-main-site.service` 或 `stock-ultimate-t12.service` 未真实上线，却被 activation plan 视为必重启服务
 6. live 主站、`/app`、认证、`/health`、`/chat` 的正式归属未书面冻结
-7. domain preflight 只能证明“域名未完全被外部占用”，但不能证明“当前 repo current 可以安全等价替换 live nginx”
+7. live `/api/ai/chat` 的 AI bridge 归属未书面冻结
+8. live `/T12/` 仍是 legacy-preserved 形态，却被 activation plan 强切到 `8766`
+9. domain preflight 只能证明“域名未完全被外部占用”，但不能证明“当前 repo current 可以安全等价替换 live nginx”
 
 命中任一项时，唯一允许的动作是：
 
@@ -151,6 +159,7 @@
 | --- | --- | --- | --- |
 | `/stock/` | 唯一正式股票主链 | 已冻结 | 允许继续强化 |
 | `/stock/api/primary-result` | 正式主结果契约 | 已冻结 | 允许继续强化 |
+| `/stock/api/top5-trader-brief-health` | Top5 清单新鲜度 JSON（展示/对账契约） | 与正式主链对齐、可强化 | 不改变 primary-result 门禁；依赖 `exports` manifest 与调度 |
 | `/apex/` | 内部验证入口 | 已冻结 | 禁止产品化 |
 | `/apex/stock/` | 内部验证股票入口 | 已冻结 | 禁止并列正式化 |
 | `/apex/T12/` | 内部验证治理入口 | 已冻结 | 禁止并列正式化 |
@@ -159,6 +168,8 @@
 | `/auth/*` | 认证链 | 未冻结 | 禁止被当前 activation 越权接管 |
 | `/health` | 线上探针入口 | 未冻结 | 禁止被当前 activation 越权接管 |
 | `/chat` | 线上业务入口 | 未冻结 | 禁止被当前 activation 越权接管 |
+| `/api/ai/chat` | AI bridge 入口 | 未冻结 | 禁止被当前 activation 越权接管 |
+| `/T12/` | legacy live 治理入口 | 未冻结 / legacy-preserved | 禁止在本阶段强切到 `8766` |
 
 当且仅当该表中的“未冻结”项被正式收口后，才允许更新 activation 执行策略。
 
