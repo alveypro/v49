@@ -34,7 +34,7 @@ class FakeStreamlit:
 
 
 def test_build_sidebar_session_caption_freezes_role_label():
-    assert build_sidebar_session_caption({"display_name": "Alice", "role": "admin"}) == "当前会话：Alice · Admin"
+    assert build_sidebar_session_caption({"display_name": "Alice", "role": "admin"}) == "当前会话：Alice · 管理员"
     assert build_sidebar_session_caption({"username": "bob", "role": "unknown"}) == "当前会话：bob · Viewer"
 
 
@@ -70,4 +70,4 @@ def test_render_v49_sidebar_returns_status_and_records_existing_status_facts():
     assert ("header", ("系统状态",), {}) in fake_st.calls
     assert any(call[0] == "metric" and call[1][0] == "活跃股票" for call in fake_st.calls)
     assert any(call[0] == "warning" and call[1][0] == "需更新（2天前）" for call in fake_st.calls)
-    assert any(call[0] == "caption" and call[1][0] == "当前会话：operator · Operator" for call in fake_st.calls)
+    assert any(call[0] == "caption" and call[1][0] == "当前会话：operator · 操作员" for call in fake_st.calls)
